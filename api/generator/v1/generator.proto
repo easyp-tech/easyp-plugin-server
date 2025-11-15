@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package api.generator.v1;
+
+import "google/protobuf/compiler/plugin.proto";
+
+option go_package = "github.com/easyp-tech/service/api/generator/v1;generator";
+
+service ServiceAPI {
+  rpc GenerateCode(GenerateCodeRequest) returns (GenerateCodeResponse);
+}
+
+message GenerateCodeRequest {
+  google.protobuf.compiler.CodeGeneratorRequest code_generator_request = 1;
+  string plugin_name = 2;
+}
+
+message GenerateCodeResponse {
+  google.protobuf.compiler.CodeGeneratorResponse code_generator_response = 1;
+}

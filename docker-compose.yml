@@ -9,7 +9,7 @@ services:
     container_name: "easyp-registry"
     restart: "unless-stopped"
     volumes:
-      - registry-data:/var/lib/registry
+      - "registry-data:/var/lib/registry"
     ports:
       - "127.0.0.1:5005:5000"
 
@@ -40,6 +40,7 @@ services:
     ]
     volumes:
       - "./config.yml:/config.yml"
+      - "/var/run/docker.sock:/var/run/docker.sock"
     ports:
       - "8080:8080" # gRPC
       - "8081:8081" # metric

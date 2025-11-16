@@ -4,6 +4,7 @@ package registry
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/url"
@@ -32,6 +33,7 @@ type (
 		Postgres   connectors.Raw
 		MigrateDir string
 		Driver     string
+		Domain     string
 	}
 	// Registry is a registry for EasyP plugin server.
 	Registry struct {
@@ -75,15 +77,21 @@ func New(ctx context.Context, reg *prometheus.Registry, namespace string, cfg Co
 		return nil, fmt.Errorf("database.NewSQL: %w", err)
 	}
 
+	u, err := url.Parse(cfg.Domain)
+	if err != nil {
+		return nil, fmt.Errorf("url.Parse: %w", err)
+	}
+
 	return &Registry{
-		sql: conn,
+		sql:    conn,
+		domain: u,
 	}, nil
 }
 
 // Get implements core.Registry.
-func (r *Registry) Get(ctx context.Context, pluginName string) (core.Plugin, error) {
-	err := r.sql.NoTx(func(d *sqlx.DB) error {
-		p := plugin{}
+func (r *Registry) Get(ctx context.Context, pluginName string) (p core.Plugin, err error) {
+	err = r.sql.NoTx(func(d *sqlx.DB) error {
+		dbFormat := plugin{}
 
 		query := "select id, name, created_at from plugins where name=$1"
 
@@ -95,20 +103,24 @@ func (r *Registry) Get(ctx context.Context, pluginName string) (core.Plugin, err
 			query = "select id, name, created_at from plugins where name = $1 order by created_at desc limit 1"
 		}
 
-		err := d.GetContext(ctx, &p, query, pluginName)
-		if err != nil {
+		err := d.GetContext(ctx, &dbFormat, query, pluginName)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return fmt.Errorf("d.GetContext: %w", core.ErrNotFound)
+		case err != nil:
 			return fmt.Errorf("d.GetContext: %w", err)
 		}
 
-		p.domain = r.domain
+		dbFormat.domain = r.domain
 
+		p = &dbFormat
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("sql.NoTx: %w", err)
 	}
 
-	return nil, nil
+	return p, nil
 }
 
 // Close database connection.
@@ -129,7 +141,7 @@ func (p *plugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorReques
 	}
 
 	imageName := p.domain.String() + "/" + p.Name
-
+	
 	cmd := exec.CommandContext(ctx,
 		"docker",
 		"run",

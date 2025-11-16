@@ -8,3 +8,5 @@ db:
   migrate_dir: "migrate"
   driver: "postgres"
   postgres: "postgres://easyp_svc:easyp_pass@postgres:5432/easyp_db?sslmode=disable"
+registry:
+  domain: "localhost:5005"

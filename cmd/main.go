@@ -38,8 +38,9 @@ const (
 
 type (
 	config struct {
-		Server server   `yaml:"server" env:", prefix=SERVER_"`
-		DB     dbConfig `yaml:"db" env:", prefix=DB_"`
+		Server   server         `yaml:"server" env:", prefix=SERVER_"`
+		DB       dbConfig       `yaml:"db" env:", prefix=DB_"`
+		Registry registryConfig `yaml:"registry" env:", prefix=REGISTRY_"`
 	}
 	server struct {
 		Host string `yaml:"host" env:"HOST, default=0.0.0.0"`
@@ -54,6 +55,9 @@ type (
 		MigrateDir string `yaml:"migrate_dir" env:"MIGRATE_DIR, default=migrate"`
 		Driver     string `yaml:"driver" env:"DRIVER, default=postgres"`
 		Postgres   string `yaml:"postgres" env:"POSTGRES_DSN"`
+	}
+	registryConfig struct {
+		Domain string `yaml:"domain" env:"DOMAIN, default=localhost:5005"`
 	}
 )
 
@@ -115,6 +119,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 		},
 		MigrateDir: cfg.DB.MigrateDir,
 		Driver:     cfg.DB.Driver,
+		Domain:     cfg.Registry.Domain,
 	})
 	if err != nil {
 		return fmt.Errorf("repo.New: %w", err)

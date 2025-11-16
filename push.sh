@@ -21,7 +21,7 @@ for dockerfile in $(find registry -name Dockerfile | sort); do
         version="${BASH_REMATCH[3]}"
         echo "Version: ${version}"
 
-        tag="${REGISTRY}/${type}-${lang}:${version}"
+        tag="${REGISTRY}/${type}/${lang}:${version}"
 
         echo "Building ${tag}..."
 

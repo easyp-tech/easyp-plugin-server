@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/url"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
@@ -43,9 +42,12 @@ type (
 	// plugin is a plugin in the registry.
 	plugin struct {
 		ID        uuid.UUID `db:"id"`
+		GroupName string    `db:"group_name"`
 		Name      string    `db:"name"`
+		Version   string    `db:"version"`
 		CreatedAt time.Time `db:"created_at"`
-		domain    *url.URL  `db:"-"`
+
+		domain *url.URL `db:"-"`
 	}
 )
 
@@ -89,22 +91,19 @@ func New(ctx context.Context, reg *prometheus.Registry, namespace string, cfg Co
 }
 
 // Get implements core.Registry.
-func (r *Registry) Get(ctx context.Context, pluginName string) (p core.Plugin, err error) {
+func (r *Registry) Get(ctx context.Context, pluginGroup, pluginName, pluginVersion string) (p core.Plugin, err error) {
 	err = r.sql.NoTx(func(d *sqlx.DB) error {
 		dbFormat := plugin{}
 
-		query := "select id, name, created_at from plugins where name=$1"
+		query := "select id, group_name, name, version, created_at from plugins where group_name = $1 and name = $2 and version = $3"
+		args := []interface{}{pluginGroup, pluginName, pluginVersion}
 
-		strs := strings.Split(pluginName, ":")
-		if len(strs) > 2 || len(strs) == 0 {
-			return fmt.Errorf("%w: %s", core.ErrInvalidPluginName, pluginName)
-		}
-		if strs[1] == "latest" {
-			query = "SELECT id, name, created_at FROM plugins WHERE name LIKE $1 || '%' ORDER BY created_at DESC LIMIT 1"
-			pluginName = strs[0]
+		if pluginVersion == "latest" {
+			query = "select id, group_name, name, version, created_at from plugins where group_name = $1 and name = $2 order by created_at desc limit 1"
+			args = []interface{}{pluginGroup, pluginName}
 		}
 
-		err := d.GetContext(ctx, &dbFormat, query, pluginName)
+		err := d.GetContext(ctx, &dbFormat, query, args...)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
 			return fmt.Errorf("d.GetContext: %w", core.ErrNotFound)
@@ -141,7 +140,7 @@ func (p *plugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorReques
 		return nil, fmt.Errorf("proto.Marshal: %w", err)
 	}
 
-	imageName := p.domain.String() + "/" + p.Name
+	imageName := p.domain.String() + "/" + p.GroupName + "/" + p.Name + ":" + p.Version
 
 	cmd := exec.CommandContext(ctx,
 		"docker",
@@ -172,4 +171,15 @@ func (p *plugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorReques
 	}
 
 	return &response, nil
+}
+
+// Info implements core.Plugin.
+func (p *plugin) Info(_ context.Context) *core.PluginInfo {
+	return &core.PluginInfo{
+		ID:        p.ID,
+		Group:     p.GroupName,
+		Name:      p.Name,
+		Version:   p.Version,
+		CreatedAt: p.CreatedAt,
+	}
 }

@@ -9,13 +9,7 @@ import (
 	"github.com/easyp-tech/service/internal/core"
 )
 
-var _ core.Metrics = NoMetrics{}
-
-// NoMetrics is a nil metrics adapter for the EasyP plugin server.
-type NoMetrics struct{}
-
-// GenerateCode implements the core.Metrics interface.
-func (NoMetrics) GenerateCode(context.Context, string) error { return nil }
+var _ core.Metrics = Metrics{}
 
 // Metrics is the metrics adapter for the EasyP plugin server.
 type Metrics struct {
@@ -41,7 +35,8 @@ func New(reg *prometheus.Registry, namespace string) *Metrics {
 }
 
 // GenerateCode implements the core.Metrics interface.
-func (m Metrics) GenerateCode(ctx context.Context, plugin string) error {
+func (m Metrics) GenerateCode(_ context.Context, info core.PluginInfo) error {
+	plugin := info.Group + "/" + info.Name + ":" + info.Version
 	m.generated.WithLabelValues(plugin).Inc()
 	return nil
 }

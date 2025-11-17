@@ -1,0 +1,1285 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "api/generator/v1/generator.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "ServiceAPI"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {},
+  "definitions": {
+    "AnnotationSemantic": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "SET",
+        "ALIAS"
+      ],
+      "default": "NONE",
+      "description": "Represents the identified object's effect on the element in the original\n.proto file.\n\n - NONE: There is no effect or the effect is indescribable.\n - SET: The element is set or otherwise mutated.\n - ALIAS: An alias to the element is returned."
+    },
+    "CodeGeneratorResponseFile": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The file name, relative to the output directory.  The name must not\ncontain \".\" or \"..\" components and must be relative, not be absolute (so,\nthe file cannot lie outside the output directory).  \"/\" must be used as\nthe path separator, not \"\\\".\n\nIf the name is omitted, the content will be appended to the previous\nfile.  This allows the generator to break large files into small chunks,\nand allows the generated text to be streamed back to protoc so that large\nfiles need not reside completely in memory at one time.  Note that as of\nthis writing protoc does not optimize for this -- it will read the entire\nCodeGeneratorResponse before writing files to disk."
+        },
+        "insertionPoint": {
+          "type": "string",
+          "description": "If non-empty, indicates that the named file should already exist, and the\ncontent here is to be inserted into that file at a defined insertion\npoint.  This feature allows a code generator to extend the output\nproduced by another code generator.  The original generator may provide\ninsertion points by placing special annotations in the file that look\nlike:\n  @@protoc_insertion_point(NAME)\nThe annotation can have arbitrary text before and after it on the line,\nwhich allows it to be placed in a comment.  NAME should be replaced with\nan identifier naming the point -- this is what other generators will use\nas the insertion_point.  Code inserted at this point will be placed\nimmediately above the line containing the insertion point (thus multiple\ninsertions to the same point will come out in the order they were added).\nThe double-@ is intended to make it unlikely that the generated code\ncould contain things that look like insertion points by accident.\n\nFor example, the C++ code generator places the following line in the\n.pb.h files that it generates:\n  // @@protoc_insertion_point(namespace_scope)\nThis line appears within the scope of the file's package namespace, but\noutside of any particular class.  Another plugin can then specify the\ninsertion_point \"namespace_scope\" to generate additional classes or\nother declarations that should be placed in this scope.\n\nNote that if the line containing the insertion point begins with\nwhitespace, the same whitespace will be added to every line of the\ninserted text.  This is useful for languages like Python, where\nindentation matters.  In these languages, the insertion point comment\nshould be indented the same amount as any inserted code will need to be\nin order to work correctly in that context.\n\nThe code generator that generates the initial file and the one which\ninserts into it must both run as part of a single invocation of protoc.\nCode generators are executed in the order in which they appear on the\ncommand line.\n\nIf |insertion_point| is present, |name| must also be present."
+        },
+        "content": {
+          "type": "string",
+          "description": "The file contents."
+        },
+        "generatedCodeInfo": {
+          "$ref": "#/definitions/protobufGeneratedCodeInfo",
+          "description": "Information describing the file content being inserted. If an insertion\npoint is used, this information will be appropriately offset and inserted\ninto the code generation metadata for the generated files."
+        }
+      },
+      "description": "Represents a single generated file."
+    },
+    "DescriptorProtoExtensionRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Inclusive."
+        },
+        "end": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Exclusive."
+        },
+        "options": {
+          "$ref": "#/definitions/protobufExtensionRangeOptions"
+        }
+      }
+    },
+    "DescriptorProtoReservedRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Inclusive."
+        },
+        "end": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Exclusive."
+        }
+      },
+      "description": "Range of reserved tag numbers. Reserved tag numbers may not be used by\nfields or extension ranges in the same message. Reserved ranges may\nnot overlap."
+    },
+    "EnumDescriptorProtoEnumReservedRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Inclusive."
+        },
+        "end": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Inclusive."
+        }
+      },
+      "description": "Range of reserved numeric values. Reserved values may not be used by\nentries in the same enum. Reserved ranges may not overlap.\n\nNote that this is distinct from DescriptorProto.ReservedRange in that it\nis inclusive such that it can appropriately represent the entire int32\ndomain."
+    },
+    "ExtensionRangeOptionsDeclaration": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The extension number declared within the extension range."
+        },
+        "fullName": {
+          "type": "string",
+          "description": "The fully-qualified name of the extension field. There must be a leading\ndot in front of the full name."
+        },
+        "type": {
+          "type": "string",
+          "description": "The fully-qualified type name of the extension field. Unlike\nMetadata.type, Declaration.type must have a leading dot for messages\nand enums."
+        },
+        "reserved": {
+          "type": "boolean",
+          "description": "If true, indicates that the number is reserved in the extension range,\nand any extension field with the number will fail to compile. Set this\nwhen a declared extension field is deleted."
+        },
+        "repeated": {
+          "type": "boolean",
+          "description": "If true, indicates that the extension must be defined as repeated.\nOtherwise the extension must be defined as optional."
+        }
+      }
+    },
+    "ExtensionRangeOptionsVerificationState": {
+      "type": "string",
+      "enum": [
+        "DECLARATION",
+        "UNVERIFIED"
+      ],
+      "default": "DECLARATION",
+      "description": "The verification state of the extension range.\n\n - DECLARATION: All the extensions of the range must be declared."
+    },
+    "FeatureSetEnumType": {
+      "type": "string",
+      "enum": [
+        "ENUM_TYPE_UNKNOWN",
+        "OPEN",
+        "CLOSED"
+      ],
+      "default": "ENUM_TYPE_UNKNOWN"
+    },
+    "FeatureSetFieldPresence": {
+      "type": "string",
+      "enum": [
+        "FIELD_PRESENCE_UNKNOWN",
+        "EXPLICIT",
+        "IMPLICIT",
+        "LEGACY_REQUIRED"
+      ],
+      "default": "FIELD_PRESENCE_UNKNOWN"
+    },
+    "FeatureSetJsonFormat": {
+      "type": "string",
+      "enum": [
+        "JSON_FORMAT_UNKNOWN",
+        "ALLOW",
+        "LEGACY_BEST_EFFORT"
+      ],
+      "default": "JSON_FORMAT_UNKNOWN"
+    },
+    "FeatureSetMessageEncoding": {
+      "type": "string",
+      "enum": [
+        "MESSAGE_ENCODING_UNKNOWN",
+        "LENGTH_PREFIXED",
+        "DELIMITED"
+      ],
+      "default": "MESSAGE_ENCODING_UNKNOWN"
+    },
+    "FeatureSetRepeatedFieldEncoding": {
+      "type": "string",
+      "enum": [
+        "REPEATED_FIELD_ENCODING_UNKNOWN",
+        "PACKED",
+        "EXPANDED"
+      ],
+      "default": "REPEATED_FIELD_ENCODING_UNKNOWN"
+    },
+    "FeatureSetUtf8Validation": {
+      "type": "string",
+      "enum": [
+        "UTF8_VALIDATION_UNKNOWN",
+        "VERIFY",
+        "NONE"
+      ],
+      "default": "UTF8_VALIDATION_UNKNOWN"
+    },
+    "FieldDescriptorProtoLabel": {
+      "type": "string",
+      "enum": [
+        "LABEL_OPTIONAL",
+        "LABEL_REPEATED",
+        "LABEL_REQUIRED"
+      ],
+      "description": " - LABEL_OPTIONAL: 0 is reserved for errors\n - LABEL_REQUIRED: The required label is only allowed in google.protobuf.  In proto3 and Editions\nit's explicitly prohibited.  In Editions, the `field_presence` feature\ncan be used to get this behavior."
+    },
+    "FieldDescriptorProtoType": {
+      "type": "string",
+      "enum": [
+        "TYPE_DOUBLE",
+        "TYPE_FLOAT",
+        "TYPE_INT64",
+        "TYPE_UINT64",
+        "TYPE_INT32",
+        "TYPE_FIXED64",
+        "TYPE_FIXED32",
+        "TYPE_BOOL",
+        "TYPE_STRING",
+        "TYPE_GROUP",
+        "TYPE_MESSAGE",
+        "TYPE_BYTES",
+        "TYPE_UINT32",
+        "TYPE_ENUM",
+        "TYPE_SFIXED32",
+        "TYPE_SFIXED64",
+        "TYPE_SINT32",
+        "TYPE_SINT64"
+      ],
+      "description": " - TYPE_DOUBLE: 0 is reserved for errors.\nOrder is weird for historical reasons.\n - TYPE_INT64: Not ZigZag encoded.  Negative numbers take 10 bytes.  Use TYPE_SINT64 if\nnegative values are likely.\n - TYPE_INT32: Not ZigZag encoded.  Negative numbers take 10 bytes.  Use TYPE_SINT32 if\nnegative values are likely.\n - TYPE_GROUP: Tag-delimited aggregate.\nGroup type is deprecated and not supported after google.protobuf. However, Proto3\nimplementations should still be able to parse the group wire format and\ntreat group fields as unknown fields.  In Editions, the group wire format\ncan be enabled via the `message_encoding` feature.\n - TYPE_MESSAGE: Length-delimited aggregate.\n - TYPE_BYTES: New in version 2.\n - TYPE_SINT32: Uses ZigZag encoding.\n - TYPE_SINT64: Uses ZigZag encoding."
+    },
+    "FieldOptionsCType": {
+      "type": "string",
+      "enum": [
+        "STRING",
+        "CORD",
+        "STRING_PIECE"
+      ],
+      "default": "STRING",
+      "description": " - STRING: Default mode.\n - CORD: The option [ctype=CORD] may be applied to a non-repeated field of type\n\"bytes\". It indicates that in C++, the data should be stored in a Cord\ninstead of a string.  For very large strings, this may reduce memory\nfragmentation. It may also allow better performance when parsing from a\nCord, or when parsing with aliasing enabled, as the parsed Cord may then\nalias the original buffer."
+    },
+    "FieldOptionsEditionDefault": {
+      "type": "object",
+      "properties": {
+        "edition": {
+          "$ref": "#/definitions/protobufEdition"
+        },
+        "value": {
+          "type": "string",
+          "description": "Textproto value."
+        }
+      }
+    },
+    "FieldOptionsFeatureSupport": {
+      "type": "object",
+      "properties": {
+        "editionIntroduced": {
+          "$ref": "#/definitions/protobufEdition",
+          "description": "The edition that this feature was first available in.  In editions\nearlier than this one, the default assigned to EDITION_LEGACY will be\nused, and proto files will not be able to override it."
+        },
+        "editionDeprecated": {
+          "$ref": "#/definitions/protobufEdition",
+          "description": "The edition this feature becomes deprecated in.  Using this after this\nedition may trigger warnings."
+        },
+        "deprecationWarning": {
+          "type": "string",
+          "description": "The deprecation warning text if this feature is used after the edition it\nwas marked deprecated in."
+        },
+        "editionRemoved": {
+          "$ref": "#/definitions/protobufEdition",
+          "description": "The edition this feature is no longer available in.  In editions after\nthis one, the last default assigned will be used, and proto files will\nnot be able to override it."
+        }
+      },
+      "description": "Information about the support window of a feature."
+    },
+    "FieldOptionsJSType": {
+      "type": "string",
+      "enum": [
+        "JS_NORMAL",
+        "JS_STRING",
+        "JS_NUMBER"
+      ],
+      "default": "JS_NORMAL",
+      "description": " - JS_NORMAL: Use the default type.\n - JS_STRING: Use JavaScript strings.\n - JS_NUMBER: Use JavaScript numbers."
+    },
+    "FieldOptionsOptionRetention": {
+      "type": "string",
+      "enum": [
+        "RETENTION_UNKNOWN",
+        "RETENTION_RUNTIME",
+        "RETENTION_SOURCE"
+      ],
+      "default": "RETENTION_UNKNOWN",
+      "description": "If set to RETENTION_SOURCE, the option will be omitted from the binary.\nNote: as of January 2023, support for this is in progress and does not yet\nhave an effect (b/264593489)."
+    },
+    "FieldOptionsOptionTargetType": {
+      "type": "string",
+      "enum": [
+        "TARGET_TYPE_UNKNOWN",
+        "TARGET_TYPE_FILE",
+        "TARGET_TYPE_EXTENSION_RANGE",
+        "TARGET_TYPE_MESSAGE",
+        "TARGET_TYPE_FIELD",
+        "TARGET_TYPE_ONEOF",
+        "TARGET_TYPE_ENUM",
+        "TARGET_TYPE_ENUM_ENTRY",
+        "TARGET_TYPE_SERVICE",
+        "TARGET_TYPE_METHOD"
+      ],
+      "default": "TARGET_TYPE_UNKNOWN",
+      "description": "This indicates the types of entities that the field may apply to when used\nas an option. If it is unset, then the field may be freely used as an\noption on any kind of entity. Note: as of January 2023, support for this is\nin progress and does not yet have an effect (b/264593489)."
+    },
+    "FileOptionsOptimizeMode": {
+      "type": "string",
+      "enum": [
+        "SPEED",
+        "CODE_SIZE",
+        "LITE_RUNTIME"
+      ],
+      "description": "Generated classes can be optimized for speed or code size.\n\n - SPEED: Generate complete code for parsing, serialization,\n - CODE_SIZE: etc.\n\nUse ReflectionOps to implement these methods.\n - LITE_RUNTIME: Generate code using MessageLite and the lite runtime."
+    },
+    "GeneratedCodeInfoAnnotation": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "description": "Identifies the element in the original source .proto file. This field\nis formatted the same as SourceCodeInfo.Location.path."
+        },
+        "sourceFile": {
+          "type": "string",
+          "description": "Identifies the filesystem path to the original source .proto."
+        },
+        "begin": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Identifies the starting offset in bytes in the generated code\nthat relates to the identified object."
+        },
+        "end": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Identifies the ending offset in bytes in the generated code that\nrelates to the identified object. The end offset should be one past\nthe last relevant byte (so the length of the text = end - begin)."
+        },
+        "semantic": {
+          "$ref": "#/definitions/AnnotationSemantic"
+        }
+      }
+    },
+    "MethodOptionsIdempotencyLevel": {
+      "type": "string",
+      "enum": [
+        "IDEMPOTENCY_UNKNOWN",
+        "NO_SIDE_EFFECTS",
+        "IDEMPOTENT"
+      ],
+      "default": "IDEMPOTENCY_UNKNOWN",
+      "description": "Is this method side-effect-free (or safe in HTTP parlance), or idempotent,\nor neither? HTTP based RPC implementation may choose GET verb for safe\nmethods, and PUT verb for idempotent methods instead of the default POST.\n\n - NO_SIDE_EFFECTS: implies idempotent\n - IDEMPOTENT: idempotent, but may have side effects"
+    },
+    "SourceCodeInfoLocation": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "description": "Identifies which part of the FileDescriptorProto was defined at this\nlocation.\n\nEach element is a field number or an index.  They form a path from\nthe root FileDescriptorProto to the place where the definition appears.\nFor example, this path:\n  [ 4, 3, 2, 7, 1 ]\nrefers to:\n  file.message_type(3)  // 4, 3\n      .field(7)         // 2, 7\n      .name()           // 1\nThis is because FileDescriptorProto.message_type has field number 4:\n  repeated DescriptorProto message_type = 4;\nand DescriptorProto.field has field number 2:\n  repeated FieldDescriptorProto field = 2;\nand FieldDescriptorProto.name has field number 1:\n  optional string name = 1;\n\nThus, the above path gives the location of a field name.  If we removed\nthe last element:\n  [ 4, 3, 2, 7 ]\nthis path refers to the whole field declaration (from the beginning\nof the label to the terminating semicolon)."
+        },
+        "span": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "description": "Always has exactly three or four elements: start line, start column,\nend line (optional, otherwise assumed same as start line), end column.\nThese are packed into a single field for efficiency.  Note that line\nand column numbers are zero-based -- typically you will want to add\n1 to each before displaying to a user."
+        },
+        "leadingComments": {
+          "type": "string",
+          "description": "If this SourceCodeInfo represents a complete declaration, these are any\ncomments appearing before and after the declaration which appear to be\nattached to the declaration.\n\nA series of line comments appearing on consecutive lines, with no other\ntokens appearing on those lines, will be treated as a single comment.\n\nleading_detached_comments will keep paragraphs of comments that appear\nbefore (but not connected to) the current element. Each paragraph,\nseparated by empty lines, will be one comment element in the repeated\nfield.\n\nOnly the comment content is provided; comment markers (e.g. //) are\nstripped out.  For block comments, leading whitespace and an asterisk\nwill be stripped from the beginning of each line other than the first.\nNewlines are included in the output.\n\nExamples:\n\n  optional int32 foo = 1;  // Comment attached to foo.\n  // Comment attached to bar.\n  optional int32 bar = 2;\n\n  optional string baz = 3;\n  // Comment attached to baz.\n  // Another line attached to baz.\n\n  // Comment attached to moo.\n  //\n  // Another line attached to moo.\n  optional double moo = 4;\n\n  // Detached comment for corge. This is not leading or trailing comments\n  // to moo or corge because there are blank lines separating it from\n  // both.\n\n  // Detached comment for corge paragraph 2.\n\n  optional string corge = 5;\n  /* Block comment attached\n   * to corge.  Leading asterisks\n   * will be removed. */\n  /* Block comment attached to\n   * grault. */\n  optional int32 grault = 6;\n\n  // ignored detached comments."
+        },
+        "trailingComments": {
+          "type": "string"
+        },
+        "leadingDetachedComments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "UninterpretedOptionNamePart": {
+      "type": "object",
+      "properties": {
+        "namePart": {
+          "type": "string"
+        },
+        "isExtension": {
+          "type": "boolean"
+        }
+      },
+      "description": "The name of the uninterpreted option.  Each string represents a segment in\na dot-separated name.  is_extension is true iff a segment represents an\nextension (denoted with parentheses in options specs in .proto files).\nE.g.,{ [\"foo\", false], [\"bar.baz\", true], [\"moo\", false] } represents\n\"foo.(bar.baz).moo\"."
+    },
+    "compilerCodeGeneratorRequest": {
+      "type": "object",
+      "properties": {
+        "fileToGenerate": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The .proto files that were explicitly listed on the command-line.  The\ncode generator should generate code only for these files.  Each file's\ndescriptor will be included in proto_file, below."
+        },
+        "parameter": {
+          "type": "string",
+          "description": "The generator parameter passed on the command-line."
+        },
+        "protoFile": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufFileDescriptorProto"
+          },
+          "description": "FileDescriptorProtos for all files in files_to_generate and everything\nthey import.  The files will appear in topological order, so each file\nappears before any file that imports it.\n\nNote: the files listed in files_to_generate will include runtime-retention\noptions only, but all other files will include source-retention options.\nThe source_file_descriptors field below is available in case you need\nsource-retention options for files_to_generate.\n\nprotoc guarantees that all proto_files will be written after\nthe fields above, even though this is not technically guaranteed by the\nprotobuf wire format.  This theoretically could allow a plugin to stream\nin the FileDescriptorProtos and handle them one by one rather than read\nthe entire set into memory at once.  However, as of this writing, this\nis not similarly optimized on protoc's end -- it will store all fields in\nmemory at once before sending them to the plugin.\n\nType names of fields and extensions in the FileDescriptorProto are always\nfully qualified."
+        },
+        "sourceFileDescriptors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufFileDescriptorProto"
+          },
+          "description": "File descriptors with all options, including source-retention options.\nThese descriptors are only provided for the files listed in\nfiles_to_generate."
+        },
+        "compilerVersion": {
+          "$ref": "#/definitions/compilerVersion",
+          "description": "The version number of protocol compiler."
+        }
+      },
+      "description": "An encoded CodeGeneratorRequest is written to the plugin's stdin."
+    },
+    "compilerCodeGeneratorResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string",
+          "description": "Error message.  If non-empty, code generation failed.  The plugin process\nshould exit with status code zero even if it reports an error in this way.\n\nThis should be used to indicate errors in .proto files which prevent the\ncode generator from generating correct code.  Errors which indicate a\nproblem in protoc itself -- such as the input CodeGeneratorRequest being\nunparseable -- should be reported by writing a message to stderr and\nexiting with a non-zero status code."
+        },
+        "supportedFeatures": {
+          "type": "string",
+          "format": "uint64",
+          "description": "A bitmask of supported features that the code generator supports.\nThis is a bitwise \"or\" of values from the Feature enum."
+        },
+        "minimumEdition": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The minimum edition this plugin supports.  This will be treated as an\nEdition enum, but we want to allow unknown values.  It should be specified\naccording the edition enum value, *not* the edition number.  Only takes\neffect for plugins that have FEATURE_SUPPORTS_EDITIONS set."
+        },
+        "maximumEdition": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The maximum edition this plugin supports.  This will be treated as an\nEdition enum, but we want to allow unknown values.  It should be specified\naccording the edition enum value, *not* the edition number.  Only takes\neffect for plugins that have FEATURE_SUPPORTS_EDITIONS set."
+        },
+        "file": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/CodeGeneratorResponseFile"
+          }
+        }
+      },
+      "description": "The plugin writes an encoded CodeGeneratorResponse to stdout."
+    },
+    "compilerVersion": {
+      "type": "object",
+      "properties": {
+        "major": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "minor": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "patch": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "suffix": {
+          "type": "string",
+          "description": "A suffix for alpha, beta or rc release, e.g., \"alpha-1\", \"rc2\". It should\nbe empty for mainline stable releases."
+        }
+      },
+      "description": "The version number of protocol compiler."
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "protobufDescriptorProto": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "field": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufFieldDescriptorProto"
+          }
+        },
+        "extension": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufFieldDescriptorProto"
+          }
+        },
+        "nestedType": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufDescriptorProto"
+          }
+        },
+        "enumType": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufEnumDescriptorProto"
+          }
+        },
+        "extensionRange": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/DescriptorProtoExtensionRange"
+          }
+        },
+        "oneofDecl": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufOneofDescriptorProto"
+          }
+        },
+        "options": {
+          "$ref": "#/definitions/protobufMessageOptions"
+        },
+        "reservedRange": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/DescriptorProtoReservedRange"
+          }
+        },
+        "reservedName": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Reserved field names, which may not be used by fields in the same message.\nA given name may only be reserved once."
+        }
+      },
+      "description": "Describes a message type."
+    },
+    "protobufEdition": {
+      "type": "string",
+      "enum": [
+        "EDITION_UNKNOWN",
+        "EDITION_LEGACY",
+        "EDITION_PROTO2",
+        "EDITION_PROTO3",
+        "EDITION_2023",
+        "EDITION_2024",
+        "EDITION_1_TEST_ONLY",
+        "EDITION_2_TEST_ONLY",
+        "EDITION_99997_TEST_ONLY",
+        "EDITION_99998_TEST_ONLY",
+        "EDITION_99999_TEST_ONLY",
+        "EDITION_MAX"
+      ],
+      "default": "EDITION_UNKNOWN",
+      "description": "The full set of known editions.\n\n - EDITION_UNKNOWN: A placeholder for an unknown edition value.\n - EDITION_LEGACY: A placeholder edition for specifying default behaviors *before* a feature\nwas first introduced.  This is effectively an \"infinite past\".\n - EDITION_PROTO2: Legacy syntax \"editions\".  These pre-date editions, but behave much like\ndistinct editions.  These can't be used to specify the edition of proto\nfiles, but feature definitions must supply proto2/proto3 defaults for\nbackwards compatibility.\n - EDITION_2023: Editions that have been released.  The specific values are arbitrary and\nshould not be depended on, but they will always be time-ordered for easy\ncomparison.\n - EDITION_1_TEST_ONLY: Placeholder editions for testing feature resolution.  These should not be\nused or relyed on outside of tests.\n - EDITION_MAX: Placeholder for specifying unbounded edition support.  This should only\never be used by plugins that can expect to never require any changes to\nsupport a new edition."
+    },
+    "protobufEnumDescriptorProto": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufEnumValueDescriptorProto"
+          }
+        },
+        "options": {
+          "$ref": "#/definitions/protobufEnumOptions"
+        },
+        "reservedRange": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/EnumDescriptorProtoEnumReservedRange"
+          },
+          "description": "Range of reserved numeric values. Reserved numeric values may not be used\nby enum values in the same enum declaration. Reserved ranges may not\noverlap."
+        },
+        "reservedName": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Reserved enum value names, which may not be reused. A given name may only\nbe reserved once."
+        }
+      },
+      "description": "Describes an enum type."
+    },
+    "protobufEnumOptions": {
+      "type": "object",
+      "properties": {
+        "allowAlias": {
+          "type": "boolean",
+          "description": "Set this option to true to allow mapping different tag names to the same\nvalue."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "Is this enum deprecated?\nDepending on the target platform, this can emit Deprecated annotations\nfor the enum, or it will be completely ignored; in the very least, this\nis a formalization for deprecating enums."
+        },
+        "deprecatedLegacyJsonFieldConflicts": {
+          "type": "boolean",
+          "description": "Enable the legacy handling of JSON field name conflicts.  This lowercases\nand strips underscored from the fields before comparison in proto3 only.\nThe new behavior takes `json_name` into account and applies to proto2 as\nwell.\nTODO Remove this legacy behavior once downstream teams have\nhad time to migrate."
+        },
+        "features": {
+          "$ref": "#/definitions/protobufFeatureSet",
+          "description": "Any features defined in the specific edition."
+        },
+        "uninterpretedOption": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufUninterpretedOption"
+          },
+          "description": "The parser stores options it doesn't recognize here. See above."
+        }
+      }
+    },
+    "protobufEnumValueDescriptorProto": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "options": {
+          "$ref": "#/definitions/protobufEnumValueOptions"
+        }
+      },
+      "description": "Describes a value within an enum."
+    },
+    "protobufEnumValueOptions": {
+      "type": "object",
+      "properties": {
+        "deprecated": {
+          "type": "boolean",
+          "description": "Is this enum value deprecated?\nDepending on the target platform, this can emit Deprecated annotations\nfor the enum value, or it will be completely ignored; in the very least,\nthis is a formalization for deprecating enum values."
+        },
+        "features": {
+          "$ref": "#/definitions/protobufFeatureSet",
+          "description": "Any features defined in the specific edition."
+        },
+        "debugRedact": {
+          "type": "boolean",
+          "description": "Indicate that fields annotated with this enum value should not be printed\nout when using debug formats, e.g. when the field contains sensitive\ncredentials."
+        },
+        "featureSupport": {
+          "$ref": "#/definitions/FieldOptionsFeatureSupport",
+          "description": "Information about the support window of a feature value."
+        },
+        "uninterpretedOption": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufUninterpretedOption"
+          },
+          "description": "The parser stores options it doesn't recognize here. See above."
+        }
+      }
+    },
+    "protobufExtensionRangeOptions": {
+      "type": "object",
+      "properties": {
+        "uninterpretedOption": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufUninterpretedOption"
+          },
+          "description": "The parser stores options it doesn't recognize here. See above."
+        },
+        "declaration": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/ExtensionRangeOptionsDeclaration"
+          },
+          "description": "For external users: DO NOT USE. We are in the process of open sourcing\nextension declaration and executing internal cleanups before it can be\nused externally."
+        },
+        "features": {
+          "$ref": "#/definitions/protobufFeatureSet",
+          "description": "Any features defined in the specific edition."
+        },
+        "verification": {
+          "$ref": "#/definitions/ExtensionRangeOptionsVerificationState",
+          "description": "The verification state of the range.\nTODO: flip the default to DECLARATION once all empty ranges\nare marked as UNVERIFIED."
+        }
+      }
+    },
+    "protobufFeatureSet": {
+      "type": "object",
+      "properties": {
+        "fieldPresence": {
+          "$ref": "#/definitions/FeatureSetFieldPresence"
+        },
+        "enumType": {
+          "$ref": "#/definitions/FeatureSetEnumType"
+        },
+        "repeatedFieldEncoding": {
+          "$ref": "#/definitions/FeatureSetRepeatedFieldEncoding"
+        },
+        "utf8Validation": {
+          "$ref": "#/definitions/FeatureSetUtf8Validation"
+        },
+        "messageEncoding": {
+          "$ref": "#/definitions/FeatureSetMessageEncoding"
+        },
+        "jsonFormat": {
+          "$ref": "#/definitions/FeatureSetJsonFormat"
+        }
+      },
+      "description": "TODO Enums in C++ gencode (and potentially other languages) are\nnot well scoped.  This means that each of the feature enums below can clash\nwith each other.  The short names we've chosen maximize call-site\nreadability, but leave us very open to this scenario.  A future feature will\nbe designed and implemented to handle this, hopefully before we ever hit a\nconflict here."
+    },
+    "protobufFieldDescriptorProto": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "label": {
+          "$ref": "#/definitions/FieldDescriptorProtoLabel"
+        },
+        "type": {
+          "$ref": "#/definitions/FieldDescriptorProtoType",
+          "description": "If type_name is set, this need not be set.  If both this and type_name\nare set, this must be one of TYPE_ENUM, TYPE_MESSAGE or TYPE_GROUP."
+        },
+        "typeName": {
+          "type": "string",
+          "description": "For message and enum types, this is the name of the type.  If the name\nstarts with a '.', it is fully-qualified.  Otherwise, C++-like scoping\nrules are used to find the type (i.e. first the nested types within this\nmessage are searched, then within the parent, on up to the root\nnamespace)."
+        },
+        "extendee": {
+          "type": "string",
+          "description": "For extensions, this is the name of the type being extended.  It is\nresolved in the same manner as type_name."
+        },
+        "defaultValue": {
+          "type": "string",
+          "description": "For numeric types, contains the original text representation of the value.\nFor booleans, \"true\" or \"false\".\nFor strings, contains the default text contents (not escaped in any way).\nFor bytes, contains the C escaped value.  All bytes \u003e= 128 are escaped."
+        },
+        "oneofIndex": {
+          "type": "integer",
+          "format": "int32",
+          "description": "If set, gives the index of a oneof in the containing type's oneof_decl\nlist.  This field is a member of that oneof."
+        },
+        "jsonName": {
+          "type": "string",
+          "description": "JSON name of this field. The value is set by protocol compiler. If the\nuser has set a \"json_name\" option on this field, that option's value\nwill be used. Otherwise, it's deduced from the field's name by converting\nit to camelCase."
+        },
+        "options": {
+          "$ref": "#/definitions/protobufFieldOptions"
+        },
+        "proto3Optional": {
+          "type": "boolean",
+          "description": "If true, this is a proto3 \"optional\". When a proto3 field is optional, it\ntracks presence regardless of field type.\n\nWhen proto3_optional is true, this field must belong to a oneof to signal\nto old proto3 clients that presence is tracked for this field. This oneof\nis known as a \"synthetic\" oneof, and this field must be its sole member\n(each proto3 optional field gets its own synthetic oneof). Synthetic oneofs\nexist in the descriptor only, and do not generate any API. Synthetic oneofs\nmust be ordered after all \"real\" oneofs.\n\nFor message fields, proto3_optional doesn't create any semantic change,\nsince non-repeated message fields always track presence. However it still\nindicates the semantic detail of whether the user wrote \"optional\" or not.\nThis can be useful for round-tripping the .proto file. For consistency we\ngive message fields a synthetic oneof also, even though it is not required\nto track presence. This is especially important because the parser can't\ntell if a field is a message or an enum, so it must always create a\nsynthetic oneof.\n\nProto2 optional fields do not set this flag, because they already indicate\noptional with `LABEL_OPTIONAL`."
+        }
+      },
+      "description": "Describes a field within a message."
+    },
+    "protobufFieldOptions": {
+      "type": "object",
+      "properties": {
+        "ctype": {
+          "$ref": "#/definitions/FieldOptionsCType",
+          "title": "The ctype option instructs the C++ code generator to use a different\nrepresentation of the field than it normally would.  See the specific\noptions below.  This option is only implemented to support use of\n[ctype=CORD] and [ctype=STRING] (the default) on non-repeated fields of\ntype \"bytes\" in the open source release -- sorry, we'll try to include\nother types in a future version!"
+        },
+        "packed": {
+          "type": "boolean",
+          "description": "The packed option can be enabled for repeated primitive fields to enable\na more efficient representation on the wire. Rather than repeatedly\nwriting the tag and type for each element, the entire array is encoded as\na single length-delimited blob. In proto3, only explicit setting it to\nfalse will avoid using packed encoding.  This option is prohibited in\nEditions, but the `repeated_field_encoding` feature can be used to control\nthe behavior."
+        },
+        "jstype": {
+          "$ref": "#/definitions/FieldOptionsJSType",
+          "description": "The jstype option determines the JavaScript type used for values of the\nfield.  The option is permitted only for 64 bit integral and fixed types\n(int64, uint64, sint64, fixed64, sfixed64).  A field with jstype JS_STRING\nis represented as JavaScript string, which avoids loss of precision that\ncan happen when a large value is converted to a floating point JavaScript.\nSpecifying JS_NUMBER for the jstype causes the generated JavaScript code to\nuse the JavaScript \"number\" type.  The behavior of the default option\nJS_NORMAL is implementation dependent.\n\nThis option is an enum to permit additional types to be added, e.g.\ngoog.math.Integer."
+        },
+        "lazy": {
+          "type": "boolean",
+          "description": "Should this field be parsed lazily?  Lazy applies only to message-type\nfields.  It means that when the outer message is initially parsed, the\ninner message's contents will not be parsed but instead stored in encoded\nform.  The inner message will actually be parsed when it is first accessed.\n\nThis is only a hint.  Implementations are free to choose whether to use\neager or lazy parsing regardless of the value of this option.  However,\nsetting this option true suggests that the protocol author believes that\nusing lazy parsing on this field is worth the additional bookkeeping\noverhead typically needed to implement it.\n\nThis option does not affect the public interface of any generated code;\nall method signatures remain the same.  Furthermore, thread-safety of the\ninterface is not affected by this option; const methods remain safe to\ncall from multiple threads concurrently, while non-const methods continue\nto require exclusive access.\n\nNote that lazy message fields are still eagerly verified to check\nill-formed wireformat or missing required fields. Calling IsInitialized()\non the outer message would fail if the inner message has missing required\nfields. Failed verification would result in parsing failure (except when\nuninitialized messages are acceptable)."
+        },
+        "unverifiedLazy": {
+          "type": "boolean",
+          "description": "unverified_lazy does no correctness checks on the byte stream. This should\nonly be used where lazy with verification is prohibitive for performance\nreasons."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "Is this field deprecated?\nDepending on the target platform, this can emit Deprecated annotations\nfor accessors, or it will be completely ignored; in the very least, this\nis a formalization for deprecating fields."
+        },
+        "weak": {
+          "type": "boolean",
+          "description": "For Google-internal migration only. Do not use."
+        },
+        "debugRedact": {
+          "type": "boolean",
+          "description": "Indicate that the field value should not be printed out when using debug\nformats, e.g. when the field contains sensitive credentials."
+        },
+        "retention": {
+          "$ref": "#/definitions/FieldOptionsOptionRetention"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FieldOptionsOptionTargetType"
+          }
+        },
+        "editionDefaults": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/FieldOptionsEditionDefault"
+          }
+        },
+        "features": {
+          "$ref": "#/definitions/protobufFeatureSet",
+          "description": "Any features defined in the specific edition."
+        },
+        "featureSupport": {
+          "$ref": "#/definitions/FieldOptionsFeatureSupport"
+        },
+        "uninterpretedOption": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufUninterpretedOption"
+          },
+          "description": "The parser stores options it doesn't recognize here. See above."
+        }
+      }
+    },
+    "protobufFileDescriptorProto": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "file name, relative to root of source tree"
+        },
+        "package": {
+          "type": "string",
+          "description": "e.g. \"foo\", \"foo.bar\", etc."
+        },
+        "dependency": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names of files imported by this file."
+        },
+        "publicDependency": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "description": "Indexes of the public imported files in the dependency list above."
+        },
+        "weakDependency": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "description": "Indexes of the weak imported files in the dependency list.\nFor Google-internal migration only. Do not use."
+        },
+        "messageType": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufDescriptorProto"
+          },
+          "description": "All top-level definitions in this file."
+        },
+        "enumType": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufEnumDescriptorProto"
+          }
+        },
+        "service": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufServiceDescriptorProto"
+          }
+        },
+        "extension": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufFieldDescriptorProto"
+          }
+        },
+        "options": {
+          "$ref": "#/definitions/protobufFileOptions"
+        },
+        "sourceCodeInfo": {
+          "$ref": "#/definitions/protobufSourceCodeInfo",
+          "description": "This field contains optional information about the original source code.\nYou may safely remove this entire field without harming runtime\nfunctionality of the descriptors -- the information is needed only by\ndevelopment tools."
+        },
+        "syntax": {
+          "type": "string",
+          "description": "The syntax of the proto file.\nThe supported values are \"proto2\", \"proto3\", and \"editions\".\n\nIf `edition` is present, this value must be \"editions\"."
+        },
+        "edition": {
+          "$ref": "#/definitions/protobufEdition",
+          "description": "The edition of the proto file."
+        }
+      },
+      "description": "Describes a complete .proto file."
+    },
+    "protobufFileOptions": {
+      "type": "object",
+      "properties": {
+        "javaPackage": {
+          "type": "string",
+          "description": "Sets the Java package where classes generated from this .proto will be\nplaced.  By default, the proto package is used, but this is often\ninappropriate because proto packages do not normally start with backwards\ndomain names."
+        },
+        "javaOuterClassname": {
+          "type": "string",
+          "description": "Controls the name of the wrapper Java class generated for the .proto file.\nThat class will always contain the .proto file's getDescriptor() method as\nwell as any top-level extensions defined in the .proto file.\nIf java_multiple_files is disabled, then all the other classes from the\n.proto file will be nested inside the single wrapper outer class."
+        },
+        "javaMultipleFiles": {
+          "type": "boolean",
+          "description": "If enabled, then the Java code generator will generate a separate .java\nfile for each top-level message, enum, and service defined in the .proto\nfile.  Thus, these types will *not* be nested inside the wrapper class\nnamed by java_outer_classname.  However, the wrapper class will still be\ngenerated to contain the file's getDescriptor() method as well as any\ntop-level extensions defined in the file."
+        },
+        "javaGenerateEqualsAndHash": {
+          "type": "boolean",
+          "description": "This option does nothing."
+        },
+        "javaStringCheckUtf8": {
+          "type": "boolean",
+          "description": "A proto2 file can set this to true to opt in to UTF-8 checking for Java,\nwhich will throw an exception if invalid UTF-8 is parsed from the wire or\nassigned to a string field.\n\nTODO: clarify exactly what kinds of field types this option\napplies to, and update these docs accordingly.\n\nProto3 files already perform these checks. Setting the option explicitly to\nfalse has no effect: it cannot be used to opt proto3 files out of UTF-8\nchecks."
+        },
+        "optimizeFor": {
+          "$ref": "#/definitions/FileOptionsOptimizeMode"
+        },
+        "goPackage": {
+          "type": "string",
+          "description": "Sets the Go package where structs generated from this .proto will be\nplaced. If omitted, the Go package will be derived from the following:\n  - The basename of the package import path, if provided.\n  - Otherwise, the package statement in the .proto file, if present.\n  - Otherwise, the basename of the .proto file, without extension."
+        },
+        "ccGenericServices": {
+          "type": "boolean",
+          "description": "Should generic services be generated in each language?  \"Generic\" services\nare not specific to any particular RPC system.  They are generated by the\nmain code generators in each language (without additional plugins).\nGeneric services were the only kind of service generation supported by\nearly versions of google.protobuf.\n\nGeneric services are now considered deprecated in favor of using plugins\nthat generate code specific to your particular RPC system.  Therefore,\nthese default to false.  Old code which depends on generic services should\nexplicitly set them to true."
+        },
+        "javaGenericServices": {
+          "type": "boolean"
+        },
+        "pyGenericServices": {
+          "type": "boolean"
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "Is this file deprecated?\nDepending on the target platform, this can emit Deprecated annotations\nfor everything in the file, or it will be completely ignored; in the very\nleast, this is a formalization for deprecating files."
+        },
+        "ccEnableArenas": {
+          "type": "boolean",
+          "description": "Enables the use of arenas for the proto messages in this file. This applies\nonly to generated classes for C++."
+        },
+        "objcClassPrefix": {
+          "type": "string",
+          "description": "Sets the objective c class prefix which is prepended to all objective c\ngenerated classes from this .proto. There is no default."
+        },
+        "csharpNamespace": {
+          "type": "string",
+          "description": "Namespace for generated classes; defaults to the package."
+        },
+        "swiftPrefix": {
+          "type": "string",
+          "description": "By default Swift generators will take the proto package and CamelCase it\nreplacing '.' with underscore and use that to prefix the types/symbols\ndefined. When this options is provided, they will use this value instead\nto prefix the types/symbols defined."
+        },
+        "phpClassPrefix": {
+          "type": "string",
+          "description": "Sets the php class prefix which is prepended to all php generated classes\nfrom this .proto. Default is empty."
+        },
+        "phpNamespace": {
+          "type": "string",
+          "description": "Use this option to change the namespace of php generated classes. Default\nis empty. When this option is empty, the package name will be used for\ndetermining the namespace."
+        },
+        "phpMetadataNamespace": {
+          "type": "string",
+          "description": "Use this option to change the namespace of php generated metadata classes.\nDefault is empty. When this option is empty, the proto file name will be\nused for determining the namespace."
+        },
+        "rubyPackage": {
+          "type": "string",
+          "description": "Use this option to change the package of ruby generated classes. Default\nis empty. When this option is not set, the package name will be used for\ndetermining the ruby package."
+        },
+        "features": {
+          "$ref": "#/definitions/protobufFeatureSet",
+          "description": "Any features defined in the specific edition."
+        },
+        "uninterpretedOption": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufUninterpretedOption"
+          },
+          "description": "The parser stores options it doesn't recognize here.\nSee the documentation for the \"Options\" section above."
+        }
+      }
+    },
+    "protobufGeneratedCodeInfo": {
+      "type": "object",
+      "properties": {
+        "annotation": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/GeneratedCodeInfoAnnotation"
+          },
+          "description": "An Annotation connects some span of text in generated code to an element\nof its generating .proto file."
+        }
+      },
+      "description": "Describes the relationship between generated code and its original source\nfile. A GeneratedCodeInfo message is associated with only one generated\nsource file, but may contain references to different source .proto files."
+    },
+    "protobufMessageOptions": {
+      "type": "object",
+      "properties": {
+        "messageSetWireFormat": {
+          "type": "boolean",
+          "description": "Set true to use the old proto1 MessageSet wire format for extensions.\nThis is provided for backwards-compatibility with the MessageSet wire\nformat.  You should not use this for any other reason:  It's less\nefficient, has fewer features, and is more complicated.\n\nThe message must be defined exactly as follows:\n  message Foo {\n    option message_set_wire_format = true;\n    extensions 4 to max;\n  }\nNote that the message cannot have any defined fields; MessageSets only\nhave extensions.\n\nAll extensions of your type must be singular messages; e.g. they cannot\nbe int32s, enums, or repeated messages.\n\nBecause this is an option, the above two restrictions are not enforced by\nthe protocol compiler."
+        },
+        "noStandardDescriptorAccessor": {
+          "type": "boolean",
+          "description": "Disables the generation of the standard \"descriptor()\" accessor, which can\nconflict with a field of the same name.  This is meant to make migration\nfrom proto1 easier; new code should avoid fields named \"descriptor\"."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "Is this message deprecated?\nDepending on the target platform, this can emit Deprecated annotations\nfor the message, or it will be completely ignored; in the very least,\nthis is a formalization for deprecating messages."
+        },
+        "mapEntry": {
+          "type": "boolean",
+          "description": "Whether the message is an automatically generated map entry type for the\nmaps field.\n\nFor maps fields:\n    map\u003cKeyType, ValueType\u003e map_field = 1;\nThe parsed descriptor looks like:\n    message MapFieldEntry {\n        option map_entry = true;\n        optional KeyType key = 1;\n        optional ValueType value = 2;\n    }\n    repeated MapFieldEntry map_field = 1;\n\nImplementations may choose not to generate the map_entry=true message, but\nuse a native map in the target language to hold the keys and values.\nThe reflection APIs in such implementations still need to work as\nif the field is a repeated message field.\n\nNOTE: Do not set the option in .proto files. Always use the maps syntax\ninstead. The option should only be implicitly set by the proto compiler\nparser."
+        },
+        "deprecatedLegacyJsonFieldConflicts": {
+          "type": "boolean",
+          "description": "Enable the legacy handling of JSON field name conflicts.  This lowercases\nand strips underscored from the fields before comparison in proto3 only.\nThe new behavior takes `json_name` into account and applies to proto2 as\nwell.\n\nThis should only be used as a temporary measure against broken builds due\nto the change in behavior for JSON field name conflicts.\n\nTODO This is legacy behavior we plan to remove once downstream\nteams have had time to migrate."
+        },
+        "features": {
+          "$ref": "#/definitions/protobufFeatureSet",
+          "description": "Any features defined in the specific edition."
+        },
+        "uninterpretedOption": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufUninterpretedOption"
+          },
+          "description": "The parser stores options it doesn't recognize here. See above."
+        }
+      }
+    },
+    "protobufMethodDescriptorProto": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "inputType": {
+          "type": "string",
+          "description": "Input and output type names.  These are resolved in the same way as\nFieldDescriptorProto.type_name, but must refer to a message type."
+        },
+        "outputType": {
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/definitions/protobufMethodOptions"
+        },
+        "clientStreaming": {
+          "type": "boolean",
+          "title": "Identifies if client streams multiple client messages"
+        },
+        "serverStreaming": {
+          "type": "boolean",
+          "title": "Identifies if server streams multiple server messages"
+        }
+      },
+      "description": "Describes a method of a service."
+    },
+    "protobufMethodOptions": {
+      "type": "object",
+      "properties": {
+        "deprecated": {
+          "type": "boolean",
+          "description": "Is this method deprecated?\nDepending on the target platform, this can emit Deprecated annotations\nfor the method, or it will be completely ignored; in the very least,\nthis is a formalization for deprecating methods."
+        },
+        "idempotencyLevel": {
+          "$ref": "#/definitions/MethodOptionsIdempotencyLevel"
+        },
+        "features": {
+          "$ref": "#/definitions/protobufFeatureSet",
+          "description": "Any features defined in the specific edition."
+        },
+        "uninterpretedOption": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufUninterpretedOption"
+          },
+          "description": "The parser stores options it doesn't recognize here. See above."
+        }
+      }
+    },
+    "protobufOneofDescriptorProto": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/definitions/protobufOneofOptions"
+        }
+      },
+      "description": "Describes a oneof."
+    },
+    "protobufOneofOptions": {
+      "type": "object",
+      "properties": {
+        "features": {
+          "$ref": "#/definitions/protobufFeatureSet",
+          "description": "Any features defined in the specific edition."
+        },
+        "uninterpretedOption": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufUninterpretedOption"
+          },
+          "description": "The parser stores options it doesn't recognize here. See above."
+        }
+      }
+    },
+    "protobufServiceDescriptorProto": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "method": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufMethodDescriptorProto"
+          }
+        },
+        "options": {
+          "$ref": "#/definitions/protobufServiceOptions"
+        }
+      },
+      "description": "Describes a service."
+    },
+    "protobufServiceOptions": {
+      "type": "object",
+      "properties": {
+        "features": {
+          "$ref": "#/definitions/protobufFeatureSet",
+          "description": "Any features defined in the specific edition."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "Is this service deprecated?\nDepending on the target platform, this can emit Deprecated annotations\nfor the service, or it will be completely ignored; in the very least,\nthis is a formalization for deprecating services."
+        },
+        "uninterpretedOption": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufUninterpretedOption"
+          },
+          "description": "The parser stores options it doesn't recognize here. See above."
+        }
+      }
+    },
+    "protobufSourceCodeInfo": {
+      "type": "object",
+      "properties": {
+        "location": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/SourceCodeInfoLocation"
+          },
+          "description": "A Location identifies a piece of source code in a .proto file which\ncorresponds to a particular definition.  This information is intended\nto be useful to IDEs, code indexers, documentation generators, and similar\ntools.\n\nFor example, say we have a file like:\n  message Foo {\n    optional string foo = 1;\n  }\nLet's look at just the field definition:\n  optional string foo = 1;\n  ^       ^^     ^^  ^  ^^^\n  a       bc     de  f  ghi\nWe have the following locations:\n  span   path               represents\n  [a,i)  [ 4, 0, 2, 0 ]     The whole field definition.\n  [a,b)  [ 4, 0, 2, 0, 4 ]  The label (optional).\n  [c,d)  [ 4, 0, 2, 0, 5 ]  The type (string).\n  [e,f)  [ 4, 0, 2, 0, 1 ]  The name (foo).\n  [g,h)  [ 4, 0, 2, 0, 3 ]  The number (1).\n\nNotes:\n- A location may refer to a repeated field itself (i.e. not to any\n  particular index within it).  This is used whenever a set of elements are\n  logically enclosed in a single code segment.  For example, an entire\n  extend block (possibly containing multiple extension definitions) will\n  have an outer location whose path refers to the \"extensions\" repeated\n  field without an index.\n- Multiple locations may have the same path.  This happens when a single\n  logical declaration is spread out across multiple places.  The most\n  obvious example is the \"extend\" block again -- there may be multiple\n  extend blocks in the same scope, each of which will have the same path.\n- A location's span is not always a subset of its parent's span.  For\n  example, the \"extendee\" of an extension declaration appears at the\n  beginning of the \"extend\" block and is shared by all extensions within\n  the block.\n- Just because a location's span is a subset of some other location's span\n  does not mean that it is a descendant.  For example, a \"group\" defines\n  both a type and a field in a single declaration.  Thus, the locations\n  corresponding to the type and field and their components will overlap.\n- Code which tries to interpret locations should probably be designed to\n  ignore those that it doesn't understand, as more types of locations could\n  be recorded in the future."
+        }
+      },
+      "description": "Encapsulates information about the original source file from which a\nFileDescriptorProto was generated."
+    },
+    "protobufUninterpretedOption": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/UninterpretedOptionNamePart"
+          }
+        },
+        "identifierValue": {
+          "type": "string",
+          "description": "The value of the uninterpreted option, in whatever type the tokenizer\nidentified it as during parsing. Exactly one of these should be set."
+        },
+        "positiveIntValue": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "negativeIntValue": {
+          "type": "string",
+          "format": "int64"
+        },
+        "doubleValue": {
+          "type": "number",
+          "format": "double"
+        },
+        "stringValue": {
+          "type": "string",
+          "format": "byte"
+        },
+        "aggregateValue": {
+          "type": "string"
+        }
+      },
+      "description": "A message representing a option the parser does not recognize. This only\nappears in options protos created by the compiler::Parser class.\nDescriptorPool resolves these when building Descriptor objects. Therefore,\noptions protos in descriptor objects (e.g. returned by Descriptor::options(),\nor produced by Descriptor::CopyTo()) will never have UninterpretedOptions\nin them."
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1GenerateCodeResponse": {
+      "type": "object",
+      "properties": {
+        "codeGeneratorResponse": {
+          "$ref": "#/definitions/compilerCodeGeneratorResponse"
+        }
+      }
+    }
+  }
+}

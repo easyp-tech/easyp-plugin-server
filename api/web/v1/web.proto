@@ -2,14 +2,30 @@ syntax = "proto3";
 
 package api.web.v1;
 
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/easyp-tech/service/api/web/v1;web";
 
 service ServiceAPI {
-  rpc Plugins(PluginsRequest) returns (PluginsResponse);
+  rpc Plugins(PluginsRequest) returns (PluginsResponse) {
+    option (google.api.http) = {
+      get: "/v1/plugins"
+    };
+  };
 }
 
 message PluginsRequest {}
 
 message PluginsResponse {
-  repeated string plugin_names = 1;
+  repeated PluginInfo plugins = 1;
+}
+
+// PluginInfo message represents information about a plugin.
+message PluginInfo {
+  string id = 1; // Unique identifier for the plugin
+  string group = 2; // Group to which the plugin belongs
+  string name = 3; // Name of the plugin
+  string version = 4; // Version of the plugin
+  google.protobuf.Timestamp created_at = 5; // Timestamp when the plugin was installed
 }

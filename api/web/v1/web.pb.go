@@ -7,8 +7,10 @@
 package web
 
 import (
+	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -59,7 +61,7 @@ func (*PluginsRequest) Descriptor() ([]byte, []int) {
 
 type PluginsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PluginNames   []string               `protobuf:"bytes,1,rep,name=plugin_names,json=pluginNames,proto3" json:"plugin_names,omitempty"`
+	Plugins       []*PluginInfo          `protobuf:"bytes,1,rep,name=plugins,proto3" json:"plugins,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -94,9 +96,86 @@ func (*PluginsResponse) Descriptor() ([]byte, []int) {
 	return file_api_web_v1_web_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *PluginsResponse) GetPluginNames() []string {
+func (x *PluginsResponse) GetPlugins() []*PluginInfo {
 	if x != nil {
-		return x.PluginNames
+		return x.Plugins
+	}
+	return nil
+}
+
+// PluginInfo message represents information about a plugin.
+type PluginInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                // Unique identifier for the plugin
+	Group         string                 `protobuf:"bytes,2,opt,name=group,proto3" json:"group,omitempty"`                          // Group to which the plugin belongs
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                            // Name of the plugin
+	Version       string                 `protobuf:"bytes,4,opt,name=version,proto3" json:"version,omitempty"`                      // Version of the plugin
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // Timestamp when the plugin was installed
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PluginInfo) Reset() {
+	*x = PluginInfo{}
+	mi := &file_api_web_v1_web_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PluginInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PluginInfo) ProtoMessage() {}
+
+func (x *PluginInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_api_web_v1_web_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PluginInfo.ProtoReflect.Descriptor instead.
+func (*PluginInfo) Descriptor() ([]byte, []int) {
+	return file_api_web_v1_web_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PluginInfo) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PluginInfo) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
+func (x *PluginInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PluginInfo) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *PluginInfo) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
 	}
 	return nil
 }
@@ -106,13 +185,21 @@ var File_api_web_v1_web_proto protoreflect.FileDescriptor
 const file_api_web_v1_web_proto_rawDesc = "" +
 	"\n" +
 	"\x14api/web/v1/web.proto\x12\n" +
-	"api.web.v1\"\x10\n" +
-	"\x0ePluginsRequest\"4\n" +
-	"\x0fPluginsResponse\x12!\n" +
-	"\fplugin_names\x18\x01 \x03(\tR\vpluginNames2P\n" +
+	"api.web.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x10\n" +
+	"\x0ePluginsRequest\"C\n" +
+	"\x0fPluginsResponse\x120\n" +
+	"\aplugins\x18\x01 \x03(\v2\x16.api.web.v1.PluginInfoR\aplugins\"\x9b\x01\n" +
 	"\n" +
-	"ServiceAPI\x12B\n" +
-	"\aPlugins\x12\x1a.api.web.v1.PluginsRequest\x1a\x1b.api.web.v1.PluginsResponseB.Z,github.com/easyp-tech/service/api/web/v1;webb\x06proto3"
+	"PluginInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05group\x18\x02 \x01(\tR\x05group\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x18\n" +
+	"\aversion\x18\x04 \x01(\tR\aversion\x129\n" +
+	"\n" +
+	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt2e\n" +
+	"\n" +
+	"ServiceAPI\x12W\n" +
+	"\aPlugins\x12\x1a.api.web.v1.PluginsRequest\x1a\x1b.api.web.v1.PluginsResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/v1/pluginsB.Z,github.com/easyp-tech/service/api/web/v1;webb\x06proto3"
 
 var (
 	file_api_web_v1_web_proto_rawDescOnce sync.Once
@@ -126,19 +213,23 @@ func file_api_web_v1_web_proto_rawDescGZIP() []byte {
 	return file_api_web_v1_web_proto_rawDescData
 }
 
-var file_api_web_v1_web_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_api_web_v1_web_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_api_web_v1_web_proto_goTypes = []any{
-	(*PluginsRequest)(nil),  // 0: api.web.v1.PluginsRequest
-	(*PluginsResponse)(nil), // 1: api.web.v1.PluginsResponse
+	(*PluginsRequest)(nil),        // 0: api.web.v1.PluginsRequest
+	(*PluginsResponse)(nil),       // 1: api.web.v1.PluginsResponse
+	(*PluginInfo)(nil),            // 2: api.web.v1.PluginInfo
+	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
 }
 var file_api_web_v1_web_proto_depIdxs = []int32{
-	0, // 0: api.web.v1.ServiceAPI.Plugins:input_type -> api.web.v1.PluginsRequest
-	1, // 1: api.web.v1.ServiceAPI.Plugins:output_type -> api.web.v1.PluginsResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	2, // 0: api.web.v1.PluginsResponse.plugins:type_name -> api.web.v1.PluginInfo
+	3, // 1: api.web.v1.PluginInfo.created_at:type_name -> google.protobuf.Timestamp
+	0, // 2: api.web.v1.ServiceAPI.Plugins:input_type -> api.web.v1.PluginsRequest
+	1, // 3: api.web.v1.ServiceAPI.Plugins:output_type -> api.web.v1.PluginsResponse
+	3, // [3:4] is the sub-list for method output_type
+	2, // [2:3] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_api_web_v1_web_proto_init() }
@@ -152,7 +243,7 @@ func file_api_web_v1_web_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_web_v1_web_proto_rawDesc), len(file_api_web_v1_web_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

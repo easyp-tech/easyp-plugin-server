@@ -1,6 +1,7 @@
-deps:
-  - github.com/googleapis/googleapis
-
+deps: [
+  github.com/googleapis/googleapis,
+  github.com/grpc-ecosystem/grpc-gateway,
+]
 lint:
 
   use:
@@ -73,3 +74,12 @@ generate:
       opts:
         paths: source_relative
         require_unimplemented_servers: false
+    - remote: "localhost:8080/grpc-ecosystem/openapiv2:v2.27.3"
+      out: .
+      opts:
+        simple_operation_ids: false
+        generate_unbound_methods: false
+    - remote: "localhost:8080/grpc-ecosystem/gateway:v2.27.3"
+      out: .
+      opts:
+        paths: source_relative

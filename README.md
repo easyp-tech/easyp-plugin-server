@@ -99,7 +99,7 @@ The service runs plugins as Docker containers, passing protobuf data through std
 │   └── flags/                         # CLI flag processing
 ├── migrate/                           # SQL migrations
 │   └── 1.init.sql
-├── registry/                          # Plugin Dockerfiles
+├── registry/                          # Plugin Dockerfiles examples
 │   ├── protobuf/go/v1.36.10/
 │   ├── grpc/go/v1.5.1/
 │   ├── grpc-ecosystem/gateway/v2.27.3/

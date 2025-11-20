@@ -2,6 +2,7 @@ deps: [
   github.com/googleapis/googleapis,
   github.com/grpc-ecosystem/grpc-gateway,
 ]
+
 lint:
 
   use:
@@ -61,8 +62,11 @@ lint:
   service_suffix: API
 
 generate:
+
   inputs:
-    - directory: api
+    - directory:
+        path: api
+        root: "."
 
   plugins:
     - remote: "localhost:8080/protobuf/go"

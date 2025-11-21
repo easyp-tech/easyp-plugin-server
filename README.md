@@ -623,19 +623,16 @@ SELECT * FROM plugins;
 - [ ] Web interface for plugin management
 - [ ] Result caching  
 - [ ] Automatic plugin updates
-- [ ] Private registry support
-- [ ] Rate limiting and quotas
 - [ ] Audit logging
 
 ### Architectural Improvements
 
-- [ ] Migration to Clean Architecture
 - [ ] Integration tests
 - [ ] CI/CD pipeline setup
 - [ ] Kubernetes manifests
 - [ ] Helm charts
 
-## Available Plugins
+## Available Plugins for testing and example
 
 ### Core Plugins
 - `protobuf/go:v1.36.10` - Go Protocol Buffers compiler

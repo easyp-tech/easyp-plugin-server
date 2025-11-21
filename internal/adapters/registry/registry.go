@@ -72,8 +72,8 @@ type (
 		Config    json.RawMessage `db:"config"`
 		CreatedAt time.Time       `db:"created_at"`
 
-		domain       *url.URL      `db:"-"`
-		pluginConfig PluginConfig  `db:"-"`
+		domain       *url.URL     `db:"-"`
+		pluginConfig PluginConfig `db:"-"`
 	}
 )
 
@@ -125,7 +125,7 @@ func (r *Registry) Get(ctx context.Context, pluginGroup, pluginName, pluginVersi
 		args := []any{pluginGroup, pluginName, pluginVersion}
 
 		if pluginVersion == "latest" {
-			query = "select id, group_name, name, version, config, created_at from plugins where group_name = $1 and name = $2 order by created_at desc limit 1"
+			query = "select id, group_name, name, version, config, created_at from plugins where group_name = $1 and name = $2 order by version desc limit 1"
 			args = []any{pluginGroup, pluginName}
 		}
 

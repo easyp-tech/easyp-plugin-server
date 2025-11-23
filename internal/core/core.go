@@ -53,6 +53,16 @@ func (c *Core) Generate(ctx context.Context, req GenerateCodeRequest) (*Generate
 	}, nil
 }
 
+// ListPlugins retrieves a list of plugins matching the filter.
+func (c *Core) ListPlugins(ctx context.Context, filter PluginFilter) ([]PluginInfo, error) {
+	plugins, err := c.registry.List(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("c.registry.List: %w", err)
+	}
+
+	return plugins, nil
+}
+
 func getGroup(pluginName string) (string, error) {
 	splitArray := strings.Split(pluginName, "/")
 	if len(splitArray) != 2 {

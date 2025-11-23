@@ -31,6 +31,8 @@ type (
 		// The pluginName parameter specifies the plugin to retrieve (e.g., "protobuf/go:v1.36.9").
 		// Returns an error if the plugin is not found or cannot be loaded.
 		Get(ctx context.Context, pluginGroup, pluginName, pluginVersion string) (Plugin, error)
+		// List retrieves a list of plugins matching the filter.
+		List(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
 	}
 
 	// Plugin represents a code generator plugin that processes protobuf definitions.
@@ -65,5 +67,12 @@ type (
 		Name      string
 		Version   string
 		CreatedAt time.Time
+	}
+
+	// PluginFilter represents a filter for listing plugins.
+	PluginFilter struct {
+		Group   string
+		Name    string
+		Version string
 	}
 )

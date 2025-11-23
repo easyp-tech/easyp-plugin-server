@@ -16,7 +16,7 @@
     "application/json"
   ],
   "paths": {
-    "/v1/plugins": {
+    "/api/v1/plugins": {
       "get": {
         "operationId": "ServiceAPI_Plugins",
         "responses": {

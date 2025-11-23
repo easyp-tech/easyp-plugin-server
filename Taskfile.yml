@@ -1,46 +1,32 @@
-version: '3'
+version: "3"
 
 tasks:
-
   up:
-    dir: '{{.USER_WORKING_DIR}}'
+    dir: "{{.USER_WORKING_DIR}}"
     preconditions:
       - "test -f docker-compose.yml"
     cmds:
       - "docker compose up --build --remove-orphans --detach"
 
   down:
-    dir: '{{.USER_WORKING_DIR}}'
+    dir: "{{.USER_WORKING_DIR}}"
     preconditions:
       - "test -f docker-compose.yml"
     cmds:
       - "docker compose down --volumes"
 
   local-push-registry:
-    dir: '{{.USER_WORKING_DIR}}'
+    dir: "{{.USER_WORKING_DIR}}"
     preconditions:
       - "test -f push.sh"
     cmds:
       - "./push.sh localhost:5005 --push"
 
   run:
-    dir: '{{.USER_WORKING_DIR}}'
+    dir: "{{.USER_WORKING_DIR}}"
     deps:
       - "down"
       - "up"
       - "local-push-registry"
     cmds:
       - "docker compose logs -f service"
-
-  deploy:
-    dir: '{{.USER_WORKING_DIR}}'
-    deps:
-      - "build-linux"
-    preconditions:
-      - "test -f ./cmd/back/docker/Dockerfile"
-    vars:
-      VERSION:
-        sh: git describe --tags --abbrev=0
-    cmds:
-      - "docker build --platform linux/amd64 -f ./cmd/back/docker/Dockerfile -t registry.easyp.tech/service:{{.VERSION}} ."
-      - "docker push registry.easyp.tech/service:{{.VERSION}}"

@@ -14,12 +14,15 @@ import (
 	"google.golang.org/grpc/codes"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/easyp-tech/service/api/generator/v1"
+	"github.com/easyp-tech/service/api/web/v1"
 	"github.com/easyp-tech/service/internal/core"
 )
 
 var _ generator.ServiceAPIServer = (*API)(nil)
+var _ web.ServiceAPIServer = (*API)(nil)
 
 // API provides the API server implementation.
 type API struct {
@@ -43,6 +46,7 @@ func New(ctx context.Context, m metrics.Metrics, applications *core.Core, reg *p
 		app: applications,
 	}
 	generator.RegisterServiceAPIServer(srv, api)
+	web.RegisterServiceAPIServer(srv, api)
 
 	return srv
 }
@@ -60,6 +64,30 @@ func (api *API) GenerateCode(ctx context.Context, request *generator.GenerateCod
 	return &generator.GenerateCodeResponse{
 		CodeGeneratorResponse: resp.Payload,
 	}, nil
+}
+
+// Plugins implements web.ServiceAPIServer.
+func (api *API) Plugins(ctx context.Context, _ *web.PluginsRequest) (*web.PluginsResponse, error) {
+	plugins, err := api.app.ListPlugins(ctx, core.PluginFilter{})
+	if err != nil {
+		return nil, fmt.Errorf("api.app.ListPlugins: %w", err)
+	}
+
+	response := &web.PluginsResponse{
+		Plugins: make([]*web.PluginInfo, 0, len(plugins)),
+	}
+
+	for _, p := range plugins {
+		response.Plugins = append(response.Plugins, &web.PluginInfo{
+			Id:        p.ID.String(),
+			Group:     p.Group,
+			Name:      p.Name,
+			Version:   p.Version,
+			CreatedAt: timestamppb.New(p.CreatedAt),
+		})
+	}
+
+	return response, nil
 }
 
 func apiError(err error) *status.Status {

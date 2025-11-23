@@ -106,8 +106,10 @@ services:
     ]
     volumes:
       - "./config.yml:/config.yml"
+      - "./migrate:/migrate"
       - "/var/run/docker.sock:/var/run/docker.sock"
     ports:
       - "8080:8080" # gRPC
       - "8081:8081" # metric
       - "8082:8082" # health
+      - "8083:8083" # gateway

@@ -1,9 +1,10 @@
-FROM golang:1.25-alpine3.22 AS build
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine3.22 AS build
+
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+
 
 RUN --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=0 \
-    go install -ldflags "-s -w" -trimpath github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1 \
-    && upx --best --lzma /go/bin/protoc-gen-doc
+    go install -ldflags "-s -w" -trimpath github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1
 
 FROM scratch
 

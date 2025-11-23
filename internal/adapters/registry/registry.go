@@ -132,9 +132,9 @@ func (r *Registry) Get(ctx context.Context, pluginGroup, pluginName, pluginVersi
 		err := d.GetContext(ctx, &dbFormat, query, args...)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return fmt.Errorf("d.GetContext: %w", core.ErrNotFound)
+			return fmt.Errorf("d.GetContext: %w (plugin groupd: %s; plugin name: %s; plugin version: %s)", core.ErrNotFound, pluginGroup, pluginName, pluginVersion)
 		case err != nil:
-			return fmt.Errorf("d.GetContext: %w", err)
+			return fmt.Errorf("d.GetContext: %w (plugin groupd: %s; plugin name: %s; plugin version: %s)", err, pluginGroup, pluginName, pluginVersion)
 		}
 
 		// Parse plugin configuration
@@ -153,6 +153,44 @@ func (r *Registry) Get(ctx context.Context, pluginGroup, pluginName, pluginVersi
 	}
 
 	return p, nil
+}
+
+// List implements core.Registry.
+func (r *Registry) List(ctx context.Context, filter core.PluginFilter) ([]core.PluginInfo, error) {
+	var plugins []plugin
+	err := r.sql.NoTx(func(d *sqlx.DB) error {
+		query := "select id, group_name, name, version, created_at from plugins where 1=1"
+		var args []any
+		argID := 1
+
+		if filter.Group != "" {
+			query += fmt.Sprintf(" and group_name = $%d", argID)
+			args = append(args, filter.Group)
+			argID++
+		}
+		if filter.Name != "" {
+			query += fmt.Sprintf(" and name = $%d", argID)
+			args = append(args, filter.Name)
+			argID++
+		}
+		if filter.Version != "" {
+			query += fmt.Sprintf(" and version = $%d", argID)
+			args = append(args, filter.Version)
+			argID++
+		}
+
+		return d.SelectContext(ctx, &plugins, query, args...)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("r.sql.NoTx: %w", err)
+	}
+
+	result := make([]core.PluginInfo, 0, len(plugins))
+	for _, p := range plugins {
+		result = append(result, *p.Info(ctx))
+	}
+
+	return result, nil
 }
 
 // Close database connection.

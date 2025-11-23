@@ -11,6 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	web_pb "github.com/easyp-tech/service/api/web/v1"
+	adapter_metrics "github.com/easyp-tech/service/internal/adapters/metrics"
+	"github.com/easyp-tech/service/internal/adapters/registry"
+	"github.com/easyp-tech/service/internal/api"
+	"github.com/easyp-tech/service/internal/core"
+	"github.com/easyp-tech/service/internal/flags"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/hellofresh/health-go/v5"
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
@@ -21,14 +28,9 @@ import (
 	"github.com/sipki-tech/dev-platform/metrics"
 	"github.com/sipki-tech/dev-platform/serve"
 	"github.com/sipki-tech/dev-platform/version"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"gopkg.in/yaml.v3"
-
-	adapter_metrics "github.com/easyp-tech/service/internal/adapters/metrics"
-	"github.com/easyp-tech/service/internal/adapters/registry"
-	"github.com/easyp-tech/service/internal/api"
-	"github.com/easyp-tech/service/internal/core"
-	"github.com/easyp-tech/service/internal/flags"
 )
 
 const (
@@ -47,9 +49,10 @@ type (
 		Port ports  `yaml:"port" env:", prefix=PORT_"`
 	}
 	ports struct {
-		GRPC   uint16 `yaml:"grpc" env:"GRPC, default=23410"`
-		Metric uint16 `yaml:"metric" env:"METRIC, default=23411"`
-		Health uint16 `yaml:"health" env:"HEALTH, default=23412"`
+		GRPC    uint16 `yaml:"grpc" env:"GRPC, default=23410"`
+		Metric  uint16 `yaml:"metric" env:"METRIC, default=23411"`
+		Health  uint16 `yaml:"health" env:"HEALTH, default=23412"`
+		Gateway uint16 `yaml:"gateway" env:"GATEWAY, default=23413"`
 	}
 	dbConfig struct {
 		MigrateDir string `yaml:"migrate_dir" env:"MIGRATE_DIR, default=migrate"`
@@ -158,11 +161,32 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 		return fmt.Errorf("health.New: %w", err)
 	}
 
+	gwCfg := serve.GateWayConfig{
+		FS:             web_pb.OpenAPI,
+		Spec:           "web.swagger.json",
+		GRPCServerPort: cfg.Server.Port.GRPC,
+		Reg:            reg,
+		Namespace:      namespace,
+		GRPCGWPattern:  "/",
+		DocsUIPattern:  "/api/v1/docs/",
+		Register: func(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
+			err := web_pb.RegisterServiceAPIHandler(ctx, mux, conn)
+			if err != nil {
+				return fmt.Errorf("web_pb.RegisterServiceAPIHandler: %w", err)
+			}
+
+			return nil
+		},
+		Healthcheck: h.Handler(),
+		DevMode:     true,
+	}
+
 	return serve.Start(
 		ctx,
 		serve.Metrics(log.With(slog.String(logger.Module.String(), "metric")), cfg.Server.Host, cfg.Server.Port.Metric, reg),
 		serve.GRPC(log.With(slog.String(logger.Module.String(), "gRPC")), cfg.Server.Host, cfg.Server.Port.GRPC, grpcAPI),
 		serve.HTTP(log.With(slog.String(logger.Module.String(), "health")), cfg.Server.Host, cfg.Server.Port.Health, h.Handler()),
+		serve.GRPCGateWay(log.With(slog.String(logger.Module.String(), "gateway")), cfg.Server.Host, cfg.Server.Port.Gateway, gwCfg),
 	)
 }
 

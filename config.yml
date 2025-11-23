@@ -4,6 +4,7 @@ server:
     grpc: 8080
     metric: 8081
     health: 8082
+    gateway: 8083
 db:
   migrate_dir: "migrate"
   driver: "postgres"

@@ -10,7 +10,7 @@ option go_package = "github.com/easyp-tech/service/api/web/v1;web";
 service ServiceAPI {
   rpc Plugins(PluginsRequest) returns (PluginsResponse) {
     option (google.api.http) = {
-      get: "/v1/plugins"
+      get: "/api/v1/plugins"
     };
   };
 }

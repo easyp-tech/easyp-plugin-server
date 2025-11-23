@@ -6,15 +6,22 @@ import "google/protobuf/compiler/plugin.proto";
 
 option go_package = "github.com/easyp-tech/service/api/generator/v1;generator";
 
+// ServiceAPI defines the public API for the generator service.
 service ServiceAPI {
+  // GenerateCode generates code using the specified plugin.
   rpc GenerateCode(GenerateCodeRequest) returns (GenerateCodeResponse);
 }
 
+// GenerateCodeRequest is the request message for the GenerateCode RPC.
 message GenerateCodeRequest {
+  // code_generator_request is the standard protobuf code generator request.
   google.protobuf.compiler.CodeGeneratorRequest code_generator_request = 1;
+  // plugin_name is the name of the plugin to use for generation.
   string plugin_name = 2;
 }
 
+// GenerateCodeResponse is the response message for the GenerateCode RPC.
 message GenerateCodeResponse {
+  // code_generator_response is the standard protobuf code generator response.
   google.protobuf.compiler.CodeGeneratorResponse code_generator_response = 1;
 }

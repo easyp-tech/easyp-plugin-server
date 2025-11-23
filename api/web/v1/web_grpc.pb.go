@@ -25,7 +25,10 @@ const (
 // ServiceAPIClient is the client API for ServiceAPI service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// ServiceAPI defines the public API for the plugin server.
 type ServiceAPIClient interface {
+	// Plugins retrieves a list of available plugins.
 	Plugins(ctx context.Context, in *PluginsRequest, opts ...grpc.CallOption) (*PluginsResponse, error)
 }
 
@@ -50,7 +53,10 @@ func (c *serviceAPIClient) Plugins(ctx context.Context, in *PluginsRequest, opts
 // ServiceAPIServer is the server API for ServiceAPI service.
 // All implementations should embed UnimplementedServiceAPIServer
 // for forward compatibility.
+//
+// ServiceAPI defines the public API for the plugin server.
 type ServiceAPIServer interface {
+	// Plugins retrieves a list of available plugins.
 	Plugins(context.Context, *PluginsRequest) (*PluginsResponse, error)
 }
 

@@ -1277,9 +1277,11 @@
       "type": "object",
       "properties": {
         "codeGeneratorResponse": {
-          "$ref": "#/definitions/compilerCodeGeneratorResponse"
+          "$ref": "#/definitions/compilerCodeGeneratorResponse",
+          "description": "code_generator_response is the standard protobuf code generator response."
         }
-      }
+      },
+      "description": "GenerateCodeResponse is the response message for the GenerateCode RPC."
     }
   }
 }

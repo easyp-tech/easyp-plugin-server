@@ -7,7 +7,9 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/easyp-tech/service/api/web/v1;web";
 
+// ServiceAPI defines the public API for the plugin server.
 service ServiceAPI {
+  // Plugins retrieves a list of available plugins.
   rpc Plugins(PluginsRequest) returns (PluginsResponse) {
     option (google.api.http) = {
       get: "/api/v1/plugins"
@@ -15,17 +17,29 @@ service ServiceAPI {
   };
 }
 
+// PluginsRequest is the request message for the Plugins RPC.
 message PluginsRequest {}
 
+// PluginsResponse is the response message for the Plugins RPC.
 message PluginsResponse {
+  // plugins is the list of available plugins.
   repeated PluginInfo plugins = 1;
 }
 
 // PluginInfo message represents information about a plugin.
 message PluginInfo {
-  string id = 1; // Unique identifier for the plugin
-  string group = 2; // Group to which the plugin belongs
-  string name = 3; // Name of the plugin
-  string version = 4; // Version of the plugin
-  google.protobuf.Timestamp created_at = 5; // Timestamp when the plugin was installed
+  // id is the unique identifier for the plugin.
+  // Example: "123e4567-e89b-12d3-a456-426614174000"
+  string id = 1;
+  // group is the group to which the plugin belongs.
+  // Example: "protocolbuffers"
+  string group = 2;
+  // name is the name of the plugin.
+  // Example: "go"
+  string name = 3;
+  // version is the version of the plugin.
+  // Example: "v1.5.1"
+  string version = 4;
+  // created_at is the timestamp when the plugin was installed.
+  google.protobuf.Timestamp created_at = 5;
 }

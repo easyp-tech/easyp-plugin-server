@@ -18,6 +18,7 @@
   "paths": {
     "/api/v1/plugins": {
       "get": {
+        "summary": "Plugins retrieves a list of available plugins.",
         "operationId": "ServiceAPI_Plugins",
         "responses": {
           "200": {
@@ -73,24 +74,24 @@
       "properties": {
         "id": {
           "type": "string",
-          "title": "Unique identifier for the plugin"
+          "title": "id is the unique identifier for the plugin.\nExample: \"123e4567-e89b-12d3-a456-426614174000\""
         },
         "group": {
           "type": "string",
-          "title": "Group to which the plugin belongs"
+          "title": "group is the group to which the plugin belongs.\nExample: \"protocolbuffers\""
         },
         "name": {
           "type": "string",
-          "title": "Name of the plugin"
+          "title": "name is the name of the plugin.\nExample: \"go\""
         },
         "version": {
           "type": "string",
-          "title": "Version of the plugin"
+          "title": "version is the version of the plugin.\nExample: \"v1.5.1\""
         },
         "createdAt": {
           "type": "string",
           "format": "date-time",
-          "title": "Timestamp when the plugin was installed"
+          "description": "created_at is the timestamp when the plugin was installed."
         }
       },
       "description": "PluginInfo message represents information about a plugin."
@@ -103,9 +104,11 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1PluginInfo"
-          }
+          },
+          "description": "plugins is the list of available plugins."
         }
-      }
+      },
+      "description": "PluginsResponse is the response message for the Plugins RPC."
     }
   }
 }

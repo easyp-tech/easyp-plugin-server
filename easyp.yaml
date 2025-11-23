@@ -64,7 +64,7 @@ generate:
         root: "."
 
   plugins:
-    - remote: "localhost:8080/protocolbuffers/go:stable"
+    - remote: "localhost:8080/protocolbuffers/go:v1.36.10"
       out: .
       opts:
         paths: source_relative

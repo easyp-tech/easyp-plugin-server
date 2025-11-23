@@ -1,6 +1,6 @@
 -- up
 insert into plugins (id, group_name, name, version, config, created_at)
-values (gen_random_uuid(), 'protobuf', 'go', 'v1.36.10',
+values (gen_random_uuid(), 'protocolbuffers', 'go', 'v1.36.10',
         '{"docker": {"network": "none", "memory": "128m", "cpus": "1.0", "user": "nobody"}}',
         now()),
        (gen_random_uuid(), 'grpc', 'go', 'v1.5.1',

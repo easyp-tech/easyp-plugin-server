@@ -25,7 +25,10 @@ const (
 // ServiceAPIClient is the client API for ServiceAPI service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// ServiceAPI defines the public API for the generator service.
 type ServiceAPIClient interface {
+	// GenerateCode generates code using the specified plugin.
 	GenerateCode(ctx context.Context, in *GenerateCodeRequest, opts ...grpc.CallOption) (*GenerateCodeResponse, error)
 }
 
@@ -50,7 +53,10 @@ func (c *serviceAPIClient) GenerateCode(ctx context.Context, in *GenerateCodeReq
 // ServiceAPIServer is the server API for ServiceAPI service.
 // All implementations should embed UnimplementedServiceAPIServer
 // for forward compatibility.
+//
+// ServiceAPI defines the public API for the generator service.
 type ServiceAPIServer interface {
+	// GenerateCode generates code using the specified plugin.
 	GenerateCode(context.Context, *GenerateCodeRequest) (*GenerateCodeResponse, error)
 }
 

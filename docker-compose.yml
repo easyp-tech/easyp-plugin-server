@@ -96,10 +96,10 @@ services:
     build:
       context: .
       dockerfile: ./docker/Dockerfile
-    container_name: "easyp-service"
+    container_name: "easyp-api-service"
     restart: always
     labels:
-      service: "service-easyp-service"
+      service: "easyp-api-service"
     command: [
       "-cfg=/config.yml",
       "-log_level=debug",

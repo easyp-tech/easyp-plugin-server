@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	ServiceAPI_GenerateCode_FullMethodName = "/api.generator.v1.ServiceAPI/GenerateCode"
+	ServiceAPI_Plugins_FullMethodName      = "/api.generator.v1.ServiceAPI/Plugins"
 )
 
 // ServiceAPIClient is the client API for ServiceAPI service.
@@ -30,6 +31,8 @@ const (
 type ServiceAPIClient interface {
 	// GenerateCode generates code using the specified plugin.
 	GenerateCode(ctx context.Context, in *GenerateCodeRequest, opts ...grpc.CallOption) (*GenerateCodeResponse, error)
+	// Plugins retrieves a list of available plugins.
+	Plugins(ctx context.Context, in *PluginsRequest, opts ...grpc.CallOption) (*PluginsResponse, error)
 }
 
 type serviceAPIClient struct {
@@ -50,6 +53,16 @@ func (c *serviceAPIClient) GenerateCode(ctx context.Context, in *GenerateCodeReq
 	return out, nil
 }
 
+func (c *serviceAPIClient) Plugins(ctx context.Context, in *PluginsRequest, opts ...grpc.CallOption) (*PluginsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PluginsResponse)
+	err := c.cc.Invoke(ctx, ServiceAPI_Plugins_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ServiceAPIServer is the server API for ServiceAPI service.
 // All implementations should embed UnimplementedServiceAPIServer
 // for forward compatibility.
@@ -58,6 +71,8 @@ func (c *serviceAPIClient) GenerateCode(ctx context.Context, in *GenerateCodeReq
 type ServiceAPIServer interface {
 	// GenerateCode generates code using the specified plugin.
 	GenerateCode(context.Context, *GenerateCodeRequest) (*GenerateCodeResponse, error)
+	// Plugins retrieves a list of available plugins.
+	Plugins(context.Context, *PluginsRequest) (*PluginsResponse, error)
 }
 
 // UnimplementedServiceAPIServer should be embedded to have
@@ -69,6 +84,9 @@ type UnimplementedServiceAPIServer struct{}
 
 func (UnimplementedServiceAPIServer) GenerateCode(context.Context, *GenerateCodeRequest) (*GenerateCodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GenerateCode not implemented")
+}
+func (UnimplementedServiceAPIServer) Plugins(context.Context, *PluginsRequest) (*PluginsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Plugins not implemented")
 }
 func (UnimplementedServiceAPIServer) testEmbeddedByValue() {}
 
@@ -108,6 +126,24 @@ func _ServiceAPI_GenerateCode_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ServiceAPI_Plugins_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PluginsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceAPIServer).Plugins(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ServiceAPI_Plugins_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceAPIServer).Plugins(ctx, req.(*PluginsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ServiceAPI_ServiceDesc is the grpc.ServiceDesc for ServiceAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -118,6 +154,10 @@ var ServiceAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GenerateCode",
 			Handler:    _ServiceAPI_GenerateCode_Handler,
+		},
+		{
+			MethodName: "Plugins",
+			Handler:    _ServiceAPI_Plugins_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

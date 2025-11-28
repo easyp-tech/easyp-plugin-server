@@ -4,7 +4,7 @@
       {
         "datasource": "${DS_PROMETHEUS}",
         "enable": true,
-        "expr": "sum(changes(back_api_grpc_server_started_total{instance=~\"$instance\"}[10m])) by (instance)",
+        "expr": "sum(changes(easyp_api_grpc_server_started_total{instance=~\"$instance\"}[10m])) by (instance)",
         "hide": false,
         "iconColor": "rgb(0, 96, 19)",
         "limit": 100,
@@ -118,7 +118,7 @@
       "targets": [
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "rate(back_api_grpc_server_started_total{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m])",
+          "expr": "rate(easyp_api_grpc_server_started_total{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m])",
           "legendFormat": "{{grpc_method}}",
           "refId": "A"
         }
@@ -177,7 +177,7 @@
       "targets": [
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "sum(rate(back_api_grpc_server_handled_total{instance=~\"$instance\",job=~\"$job\",grpc_code=\"OK\"}[5m])) / sum(rate(back_api_grpc_server_handled_total{instance=~\"$instance\",job=~\"$job\"}[5m])) * 100",
+          "expr": "sum(rate(easyp_api_grpc_server_handled_total{instance=~\"$instance\",job=~\"$job\",grpc_code=\"OK\"}[5m])) / sum(rate(easyp_api_grpc_server_handled_total{instance=~\"$instance\",job=~\"$job\"}[5m])) * 100",
           "refId": "A"
         }
       ],
@@ -227,7 +227,7 @@
       "targets": [
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "sum(back_api_grpc_server_started_total{instance=~\"$instance\",job=~\"$job\"}) - sum(back_api_grpc_server_handled_total{instance=~\"$instance\",job=~\"$job\"})",
+          "expr": "sum(easyp_api_grpc_server_started_total{instance=~\"$instance\",job=~\"$job\"}) - sum(easyp_api_grpc_server_handled_total{instance=~\"$instance\",job=~\"$job\"})",
           "refId": "A"
         }
       ],
@@ -353,19 +353,19 @@
       "targets": [
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "histogram_quantile(0.50, rate(back_api_grpc_server_handling_seconds_bucket{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m]))",
+          "expr": "histogram_quantile(0.50, rate(easyp_api_grpc_server_handling_seconds_bucket{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m]))",
           "legendFormat": "p50 - {{grpc_method}}",
           "refId": "A"
         },
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "histogram_quantile(0.95, rate(back_api_grpc_server_handling_seconds_bucket{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m]))",
+          "expr": "histogram_quantile(0.95, rate(easyp_api_grpc_server_handling_seconds_bucket{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m]))",
           "legendFormat": "p95 - {{grpc_method}}",
           "refId": "B"
         },
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "histogram_quantile(0.99, rate(back_api_grpc_server_handling_seconds_bucket{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m]))",
+          "expr": "histogram_quantile(0.99, rate(easyp_api_grpc_server_handling_seconds_bucket{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m]))",
           "legendFormat": "p99 - {{grpc_method}}",
           "refId": "C"
         }
@@ -446,13 +446,13 @@
       "targets": [
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "rate(back_api_grpc_server_msg_received_total{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m])",
+          "expr": "rate(easyp_api_grpc_server_msg_received_total{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m])",
           "legendFormat": "Received - {{grpc_method}}",
           "refId": "A"
         },
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "rate(back_api_grpc_server_msg_sent_total{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m])",
+          "expr": "rate(easyp_api_grpc_server_msg_sent_total{instance=~\"$instance\",job=~\"$job\",grpc_method=~\"$method\"}[5m])",
           "legendFormat": "Sent - {{grpc_method}}",
           "refId": "B"
         }
@@ -501,7 +501,7 @@
       "targets": [
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "back_generated_plugin_code_total{instance=~\"$instance\",job=~\"$job\"}",
+          "expr": "easyp_generated_plugin_code_total{instance=~\"$instance\",job=~\"$job\"}",
           "legendFormat": "{{plugin}}",
           "refId": "A"
         }
@@ -582,7 +582,7 @@
       "targets": [
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "rate(back_generated_plugin_code_total{instance=~\"$instance\",job=~\"$job\"}[5m])",
+          "expr": "rate(easyp_generated_plugin_code_total{instance=~\"$instance\",job=~\"$job\"}[5m])",
           "legendFormat": "{{plugin}}",
           "refId": "A"
         }
@@ -663,19 +663,19 @@
       "targets": [
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "histogram_quantile(0.50, rate(back_repo_call_duration_seconds_bucket{instance=~\"$instance\",job=~\"$job\"}[5m]))",
+          "expr": "histogram_quantile(0.50, rate(easyp_repo_call_duration_seconds_bucket{instance=~\"$instance\",job=~\"$job\"}[5m]))",
           "legendFormat": "p50 - {{func}}",
           "refId": "A"
         },
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "histogram_quantile(0.95, rate(back_repo_call_duration_seconds_bucket{instance=~\"$instance\",job=~\"$job\"}[5m]))",
+          "expr": "histogram_quantile(0.95, rate(easyp_repo_call_duration_seconds_bucket{instance=~\"$instance\",job=~\"$job\"}[5m]))",
           "legendFormat": "p95 - {{func}}",
           "refId": "B"
         },
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "histogram_quantile(0.99, rate(back_repo_call_duration_seconds_bucket{instance=~\"$instance\",job=~\"$job\"}[5m]))",
+          "expr": "histogram_quantile(0.99, rate(easyp_repo_call_duration_seconds_bucket{instance=~\"$instance\",job=~\"$job\"}[5m]))",
           "legendFormat": "p99 - {{func}}",
           "refId": "C"
         }
@@ -756,7 +756,7 @@
       "targets": [
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "rate(back_repo_call_duration_seconds_count{instance=~\"$instance\",job=~\"$job\"}[5m])",
+          "expr": "rate(easyp_repo_call_duration_seconds_count{instance=~\"$instance\",job=~\"$job\"}[5m])",
           "legendFormat": "{{func}}",
           "refId": "A"
         }
@@ -841,7 +841,7 @@
       "targets": [
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "rate(back_repo_errors_total{instance=~\"$instance\",job=~\"$job\"}[5m])",
+          "expr": "rate(easyp_repo_errors_total{instance=~\"$instance\",job=~\"$job\"}[5m])",
           "legendFormat": "{{func}}",
           "refId": "A"
         }
@@ -896,7 +896,7 @@
       "targets": [
         {
           "datasource": "${DS_PROMETHEUS}",
-          "expr": "back_standard_panics_total{instance=~\"$instance\",job=~\"$job\"}",
+          "expr": "easyp_standard_panics_total{instance=~\"$instance\",job=~\"$job\"}",
           "refId": "A"
         }
       ],
@@ -1081,7 +1081,7 @@
           "value": "$__all"
         },
         "datasource": "${DS_PROMETHEUS}",
-        "definition": "label_values(back_api_grpc_server_started_total, instance)",
+        "definition": "label_values(easyp_api_grpc_server_started_total, instance)",
         "hide": 0,
         "includeAll": true,
         "label": "Instance",
@@ -1089,7 +1089,7 @@
         "name": "instance",
         "options": [],
         "query": {
-          "query": "label_values(back_api_grpc_server_started_total, instance)",
+          "query": "label_values(easyp_api_grpc_server_started_total, instance)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -1105,7 +1105,7 @@
           "value": "$__all"
         },
         "datasource": "${DS_PROMETHEUS}",
-        "definition": "label_values(back_api_grpc_server_started_total, job)",
+        "definition": "label_values(easyp_api_grpc_server_started_total, job)",
         "hide": 0,
         "includeAll": true,
         "label": "Job",
@@ -1113,7 +1113,7 @@
         "name": "job",
         "options": [],
         "query": {
-          "query": "label_values(back_api_grpc_server_started_total, job)",
+          "query": "label_values(easyp_api_grpc_server_started_total, job)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -1129,7 +1129,7 @@
           "value": "$__all"
         },
         "datasource": "${DS_PROMETHEUS}",
-        "definition": "label_values(back_api_grpc_server_started_total, grpc_method)",
+        "definition": "label_values(easyp_api_grpc_server_started_total, grpc_method)",
         "hide": 0,
         "includeAll": true,
         "label": "gRPC Method",
@@ -1137,7 +1137,7 @@
         "name": "method",
         "options": [],
         "query": {
-          "query": "label_values(back_api_grpc_server_started_total, grpc_method)",
+          "query": "label_values(easyp_api_grpc_server_started_total, grpc_method)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,

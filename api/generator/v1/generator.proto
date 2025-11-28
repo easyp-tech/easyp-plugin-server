@@ -3,6 +3,7 @@ syntax = "proto3";
 package api.generator.v1;
 
 import "google/protobuf/compiler/plugin.proto";
+import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/easyp-tech/service/api/generator/v1;generator";
 
@@ -10,6 +11,9 @@ option go_package = "github.com/easyp-tech/service/api/generator/v1;generator";
 service ServiceAPI {
   // GenerateCode generates code using the specified plugin.
   rpc GenerateCode(GenerateCodeRequest) returns (GenerateCodeResponse);
+
+  // Plugins retrieves a list of available plugins.
+  rpc Plugins(PluginsRequest) returns (PluginsResponse);
 }
 
 // GenerateCodeRequest is the request message for the GenerateCode RPC.
@@ -24,4 +28,31 @@ message GenerateCodeRequest {
 message GenerateCodeResponse {
   // code_generator_response is the standard protobuf code generator response.
   google.protobuf.compiler.CodeGeneratorResponse code_generator_response = 1;
+}
+
+// PluginsRequest is the request message for the Plugins RPC.
+message PluginsRequest {}
+
+// PluginsResponse is the response message for the Plugins RPC.
+message PluginsResponse {
+  // plugins is the list of available plugins.
+  repeated PluginInfo plugins = 1;
+}
+
+// PluginInfo message represents information about a plugin.
+message PluginInfo {
+  // id is the unique identifier for the plugin.
+  // Example: "123e4567-e89b-12d3-a456-426614174000"
+  string id = 1;
+  // group is the group to which the plugin belongs.
+  // Example: "protocolbuffers"
+  string group = 2;
+  // name is the name of the plugin.
+  // Example: "go"
+  string name = 3;
+  // version is the version of the plugin.
+  // Example: "v1.5.1"
+  string version = 4;
+  // created_at is the timestamp when the plugin was installed.
+  google.protobuf.Timestamp created_at = 5;
 }

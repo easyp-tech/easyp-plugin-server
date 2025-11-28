@@ -58,27 +58,19 @@ lint:
   service_suffix: API
 
 generate:
+
   inputs:
     - directory:
         path: api
         root: "."
 
   plugins:
-    - remote: "localhost:8080/protocolbuffers/go:v1.36.10"
+    - remote: "api.beta.easyp.tech/protocolbuffers/go"
       out: .
       opts:
         paths: source_relative
-    - remote: "localhost:8080/grpc/go:v1.5.1"
+    - remote: "api.beta.easyp.tech/grpc/go"
       out: .
       opts:
         paths: source_relative
         require_unimplemented_servers: false
-    - remote: "localhost:8080/grpc-ecosystem/openapiv2:v2.27.3"
-      out: .
-      opts:
-        simple_operation_ids: false
-        generate_unbound_methods: false
-    - remote: "localhost:8080/grpc-ecosystem/gateway:v2.27.3"
-      out: .
-      opts:
-        paths: source_relative

@@ -1,0 +1,78 @@
+version: 2
+
+project_name: easyp-plugin-server
+
+builds:
+  - skip: true
+
+snapshot:
+  version_template: SNAPSHOT-{{ .Commit }}
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '(?i)^docs?:'
+      - '(?i)^docs\([^:]+\):'
+      - '(?i)^docs\[[^:]+\]:'
+      - '^tests?:'
+      - '(?i)^dev:'
+      - '(?i)^chore:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  skip_upload: false
+  github:
+    owner: easyp-tech
+    name: service
+  header: |
+    `easyp-plugin-server` is a free and open-source project built by volunteers.
+
+dockers:
+  - image_templates:
+      - "ghcr.io/easyp-tech/service:{{ .Tag }}-amd64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/easyp-tech/service"
+    extra_files:
+      - go.mod
+      - go.sum
+      - cmd
+      - internal
+      - api
+      - registry
+      - migrate
+
+  - image_templates:
+      - "ghcr.io/easyp-tech/service:{{ .Tag }}-arm64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/easyp-tech/service"
+    extra_files:
+      - go.mod
+      - go.sum
+      - cmd
+      - internal
+      - api
+      - registry
+      - migrate
+
+docker_manifests:
+  - name_template: "ghcr.io/easyp-tech/service:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/easyp-tech/service:{{ .Tag }}-amd64"
+      - "ghcr.io/easyp-tech/service:{{ .Tag }}-arm64"
+
+  - name_template: "ghcr.io/easyp-tech/service:latest"
+    image_templates:
+      - "ghcr.io/easyp-tech/service:{{ .Tag }}-amd64"
+      - "ghcr.io/easyp-tech/service:{{ .Tag }}-arm64"

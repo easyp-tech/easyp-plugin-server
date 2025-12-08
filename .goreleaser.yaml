@@ -1,6 +1,6 @@
 version: 2
 
-project_name: easyp-plugin-server
+project_name: easyp-api-service
 
 builds:
   - skip: true
@@ -27,7 +27,7 @@ release:
     owner: easyp-tech
     name: service
   header: |
-    `easyp-plugin-server` is a free and open-source project built by volunteers.
+    `easyp-api-service` is a free and open-source project built by volunteers.
 
 dockers:
   - image_templates:

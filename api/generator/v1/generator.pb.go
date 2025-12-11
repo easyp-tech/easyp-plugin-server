@@ -7,6 +7,7 @@
 package generator
 
 import (
+	_ "github.com/easyp-tech/protoc-gen-easydoc/doc/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -23,12 +24,22 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// GenerateCodeRequest is the request message for the GenerateCode RPC.
+// Request message for code generation.
 type GenerateCodeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// code_generator_request is the standard protobuf code generator request.
+	// Standard protobuf code generator request.
+	//
+	// This should contain the proto files to process and any plugin-specific parameters.
+	// The request is passed directly to the plugin's stdin.
 	CodeGeneratorRequest *pluginpb.CodeGeneratorRequest `protobuf:"bytes,1,opt,name=code_generator_request,json=codeGeneratorRequest,proto3" json:"code_generator_request,omitempty"`
-	// plugin_name is the name of the plugin to use for generation.
+	// Name of the plugin to use for generation.
+	//
+	// Format: `<group>/<name>:<version>`
+	//
+	// Examples:
+	// - `protocolbuffers/go:v1.36.10`
+	// - `grpc/go:v1.5.1`
+	// - `grpc-ecosystem/gateway:latest`
 	PluginName    string `protobuf:"bytes,2,opt,name=plugin_name,json=pluginName,proto3" json:"plugin_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -78,10 +89,13 @@ func (x *GenerateCodeRequest) GetPluginName() string {
 	return ""
 }
 
-// GenerateCodeResponse is the response message for the GenerateCode RPC.
+// Response message for code generation.
 type GenerateCodeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// code_generator_response is the standard protobuf code generator response.
+	// Standard protobuf code generator response.
+	//
+	// Contains the generated files and any error messages from the plugin.
+	// Check the `error` field in the response for plugin-level errors.
 	CodeGeneratorResponse *pluginpb.CodeGeneratorResponse `protobuf:"bytes,1,opt,name=code_generator_response,json=codeGeneratorResponse,proto3" json:"code_generator_response,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
@@ -124,7 +138,9 @@ func (x *GenerateCodeResponse) GetCodeGeneratorResponse() *pluginpb.CodeGenerato
 	return nil
 }
 
-// PluginsRequest is the request message for the Plugins RPC.
+// Request message for listing plugins.
+//
+// Currently accepts no parameters. Future versions may add filtering options.
 type PluginsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -161,10 +177,12 @@ func (*PluginsRequest) Descriptor() ([]byte, []int) {
 	return file_api_generator_v1_generator_proto_rawDescGZIP(), []int{2}
 }
 
-// PluginsResponse is the response message for the Plugins RPC.
+// Response message for listing plugins.
 type PluginsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// plugins is the list of available plugins.
+	// List of available plugins.
+	//
+	// Plugins are sorted by group, name, and version.
 	Plugins       []*PluginInfo `protobuf:"bytes,1,rep,name=plugins,proto3" json:"plugins,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -207,22 +225,34 @@ func (x *PluginsResponse) GetPlugins() []*PluginInfo {
 	return nil
 }
 
-// PluginInfo message represents information about a plugin.
+// Information about a registered plugin.
 type PluginInfo struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// id is the unique identifier for the plugin.
-	// Example: "123e4567-e89b-12d3-a456-426614174000"
+	// Unique identifier for the plugin.
+	//
+	// This is an internal UUID assigned when the plugin is registered.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// group is the group to which the plugin belongs.
-	// Example: "protocolbuffers"
+	// Group to which the plugin belongs.
+	//
+	// Groups organize plugins by maintainer or ecosystem.
+	//
+	// Common groups:
+	// - `protocolbuffers` — Official Google protobuf plugins
+	// - `grpc` — Official gRPC plugins
+	// - `grpc-ecosystem` — gRPC ecosystem plugins (gateway, openapi)
+	// - `community` — Community-maintained plugins
 	Group string `protobuf:"bytes,2,opt,name=group,proto3" json:"group,omitempty"`
-	// name is the name of the plugin.
-	// Example: "go"
+	// Name of the plugin.
+	//
+	// This is the plugin's identifier within its group.
+	//
+	// Examples: `go`, `python`, `gateway`, `openapiv2`
 	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	// version is the version of the plugin.
-	// Example: "v1.5.1"
+	// Version of the plugin.
+	//
+	// Follows semantic versioning (semver) format.
 	Version string `protobuf:"bytes,4,opt,name=version,proto3" json:"version,omitempty"`
-	// created_at is the timestamp when the plugin was installed.
+	// Timestamp when the plugin was registered.
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -297,24 +327,24 @@ var File_api_generator_v1_generator_proto protoreflect.FileDescriptor
 
 const file_api_generator_v1_generator_proto_rawDesc = "" +
 	"\n" +
-	" api/generator/v1/generator.proto\x12\x10api.generator.v1\x1a%google/protobuf/compiler/plugin.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9c\x01\n" +
-	"\x13GenerateCodeRequest\x12d\n" +
-	"\x16code_generator_request\x18\x01 \x01(\v2..google.protobuf.compiler.CodeGeneratorRequestR\x14codeGeneratorRequest\x12\x1f\n" +
-	"\vplugin_name\x18\x02 \x01(\tR\n" +
-	"pluginName\"\x7f\n" +
-	"\x14GenerateCodeResponse\x12g\n" +
-	"\x17code_generator_response\x18\x01 \x01(\v2/.google.protobuf.compiler.CodeGeneratorResponseR\x15codeGeneratorResponse\"\x10\n" +
-	"\x0ePluginsRequest\"I\n" +
-	"\x0fPluginsResponse\x126\n" +
-	"\aplugins\x18\x01 \x03(\v2\x1c.api.generator.v1.PluginInfoR\aplugins\"\x9b\x01\n" +
+	" api/generator/v1/generator.proto\x12\x10api.generator.v1\x1a\x10doc/v1/doc.proto\x1a%google/protobuf/compiler/plugin.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x8e\x02\n" +
+	"\x13GenerateCodeRequest\x12k\n" +
+	"\x16code_generator_request\x18\x01 \x01(\v2..google.protobuf.compiler.CodeGeneratorRequestB\x05\xdaI\x02\b\x01R\x14codeGeneratorRequest\x12\x89\x01\n" +
+	"\vplugin_name\x18\x02 \x01(\tBh\xdaIe\b\x01\xa2\x01\x1bprotocolbuffers/go:v1.36.10\x92\x02B^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*:(v[0-9]+\\.[0-9]+\\.[0-9]+|latest)$R\n" +
+	"pluginName\"\x86\x01\n" +
+	"\x14GenerateCodeResponse\x12n\n" +
+	"\x17code_generator_response\x18\x01 \x01(\v2/.google.protobuf.compiler.CodeGeneratorResponseB\x05\xdaI\x02\x10\x01R\x15codeGeneratorResponse\"\x10\n" +
+	"\x0ePluginsRequest\"P\n" +
+	"\x0fPluginsResponse\x12=\n" +
+	"\aplugins\x18\x01 \x03(\v2\x1c.api.generator.v1.PluginInfoB\x05\xdaI\x02\x10\x01R\aplugins\"\xa6\x02\n" +
 	"\n" +
-	"PluginInfo\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
-	"\x05group\x18\x02 \x01(\tR\x05group\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\x12\x18\n" +
-	"\aversion\x18\x04 \x01(\tR\aversion\x129\n" +
+	"PluginInfo\x12\x17\n" +
+	"\x02id\x18\x01 \x01(\tB\a\xdaI\x04\x10\x01P\x01R\x02id\x12A\n" +
+	"\x05group\x18\x02 \x01(\tB+\xdaI(\x10\x01\xa2\x01\x0fprotocolbuffers\x92\x02\x11^[a-z][a-z0-9-]*$R\x05group\x122\n" +
+	"\x04name\x18\x03 \x01(\tB\x1e\xdaI\x1b\x10\x01\xa2\x01\x02go\x92\x02\x11^[a-z][a-z0-9-]*$R\x04name\x12F\n" +
+	"\aversion\x18\x04 \x01(\tB,\xdaI)\x10\x01\xa2\x01\bv1.36.10\x92\x02\x19^v[0-9]+\\.[0-9]+\\.[0-9]+$R\aversion\x12@\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt2\xbb\x01\n" +
+	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampB\x05\xdaI\x02\x10\x01R\tcreatedAt2\xbb\x01\n" +
 	"\n" +
 	"ServiceAPI\x12]\n" +
 	"\fGenerateCode\x12%.api.generator.v1.GenerateCodeRequest\x1a&.api.generator.v1.GenerateCodeResponse\x12N\n" +

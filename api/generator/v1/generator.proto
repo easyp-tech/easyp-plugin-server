@@ -2,57 +2,167 @@ syntax = "proto3";
 
 package api.generator.v1;
 
+import "doc/v1/doc.proto";
 import "google/protobuf/compiler/plugin.proto";
 import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/easyp-tech/service/api/generator/v1;generator";
 
-// ServiceAPI defines the public API for the generator service.
+// EasyP Code Generation Service
+//
+// This service provides a centralized API for executing protobuf/gRPC code generation plugins.
+// Plugins run as isolated Docker containers, ensuring version consistency across development teams.
+//
+// ## Benefits
+//
+// - **Version Control**: All developers use the same plugin versions
+// - **Zero Setup**: No local plugin installation required
+// - **Security**: Plugins run in sandboxed containers with resource limits
+// - **Auditability**: Centralized logging of all generation requests
+//
+// ## Quick Start
+//
+// 1. Call `Plugins` to list available plugins
+// 2. Build a `CodeGeneratorRequest` with your proto files
+// 3. Call `GenerateCode` with the plugin name and request
+// 4. Process the `CodeGeneratorResponse` with generated files
+//
+// ## Plugin Naming Convention
+//
+// Plugins are identified using the format: `<group>/<name>:<version>`
+//
+// Examples:
+// - `protocolbuffers/go:v1.36.10` — Official Go protobuf plugin
+// - `grpc/go:v1.5.1` — Official gRPC Go plugin
+// - `grpc-ecosystem/gateway:v2.27.3` — gRPC-Gateway plugin
+//
+// Use `latest` as version to get the most recent version:
+// - `protocolbuffers/go:latest`
 service ServiceAPI {
-  // GenerateCode generates code using the specified plugin.
+  // Generate code using a specified plugin.
+  //
+  // This method executes a protobuf code generation plugin and returns the generated files.
+  // The plugin runs in an isolated Docker container with the following default limits:
+  //
+  // - **Network**: Disabled (no external access)
+  // - **Memory**: 128MB
+  // - **CPU**: 1.0 core
+  //
+  // ## Error Codes
+  //
+  // | Code | Description |
+  // |------|-------------|
+  // | `NOT_FOUND` | Plugin not found in registry |
+  // | `INVALID_ARGUMENT` | Invalid plugin name format |
+  // | `INTERNAL` | Plugin execution failed |
+  // | `DEADLINE_EXCEEDED` | Plugin execution timeout |
   rpc GenerateCode(GenerateCodeRequest) returns (GenerateCodeResponse);
 
-  // Plugins retrieves a list of available plugins.
+  // List available plugins.
+  //
+  // Returns a list of all plugins registered in the service.
+  // Use this to discover available plugins and their versions.
   rpc Plugins(PluginsRequest) returns (PluginsResponse);
 }
 
-// GenerateCodeRequest is the request message for the GenerateCode RPC.
+// Request message for code generation.
 message GenerateCodeRequest {
-  // code_generator_request is the standard protobuf code generator request.
-  google.protobuf.compiler.CodeGeneratorRequest code_generator_request = 1;
-  // plugin_name is the name of the plugin to use for generation.
-  string plugin_name = 2;
+  // Standard protobuf code generator request.
+  //
+  // This should contain the proto files to process and any plugin-specific parameters.
+  // The request is passed directly to the plugin's stdin.
+  google.protobuf.compiler.CodeGeneratorRequest code_generator_request = 1 [(doc.v1.field) = {
+    required: true
+  }];
+
+  // Name of the plugin to use for generation.
+  //
+  // Format: `<group>/<name>:<version>`
+  //
+  // Examples:
+  // - `protocolbuffers/go:v1.36.10`
+  // - `grpc/go:v1.5.1`
+  // - `grpc-ecosystem/gateway:latest`
+  string plugin_name = 2 [(doc.v1.field) = {
+    required: true
+    pattern: "^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*:(v[0-9]+\\.[0-9]+\\.[0-9]+|latest)$"
+    example: "protocolbuffers/go:v1.36.10"
+  }];
 }
 
-// GenerateCodeResponse is the response message for the GenerateCode RPC.
+// Response message for code generation.
 message GenerateCodeResponse {
-  // code_generator_response is the standard protobuf code generator response.
-  google.protobuf.compiler.CodeGeneratorResponse code_generator_response = 1;
+  // Standard protobuf code generator response.
+  //
+  // Contains the generated files and any error messages from the plugin.
+  // Check the `error` field in the response for plugin-level errors.
+  google.protobuf.compiler.CodeGeneratorResponse code_generator_response = 1 [(doc.v1.field) = {
+    output_only: true
+  }];
 }
 
-// PluginsRequest is the request message for the Plugins RPC.
+// Request message for listing plugins.
+//
+// Currently accepts no parameters. Future versions may add filtering options.
 message PluginsRequest {}
 
-// PluginsResponse is the response message for the Plugins RPC.
+// Response message for listing plugins.
 message PluginsResponse {
-  // plugins is the list of available plugins.
-  repeated PluginInfo plugins = 1;
+  // List of available plugins.
+  //
+  // Plugins are sorted by group, name, and version.
+  repeated PluginInfo plugins = 1 [(doc.v1.field) = {
+    output_only: true
+  }];
 }
 
-// PluginInfo message represents information about a plugin.
+// Information about a registered plugin.
 message PluginInfo {
-  // id is the unique identifier for the plugin.
-  // Example: "123e4567-e89b-12d3-a456-426614174000"
-  string id = 1;
-  // group is the group to which the plugin belongs.
-  // Example: "protocolbuffers"
-  string group = 2;
-  // name is the name of the plugin.
-  // Example: "go"
-  string name = 3;
-  // version is the version of the plugin.
-  // Example: "v1.5.1"
-  string version = 4;
-  // created_at is the timestamp when the plugin was installed.
-  google.protobuf.Timestamp created_at = 5;
+  // Unique identifier for the plugin.
+  //
+  // This is an internal UUID assigned when the plugin is registered.
+  string id = 1 [(doc.v1.field) = {
+    output_only: true
+    format: FORMAT_UUID
+  }];
+
+  // Group to which the plugin belongs.
+  //
+  // Groups organize plugins by maintainer or ecosystem.
+  //
+  // Common groups:
+  // - `protocolbuffers` — Official Google protobuf plugins
+  // - `grpc` — Official gRPC plugins
+  // - `grpc-ecosystem` — gRPC ecosystem plugins (gateway, openapi)
+  // - `community` — Community-maintained plugins
+  string group = 2 [(doc.v1.field) = {
+    output_only: true
+    pattern: "^[a-z][a-z0-9-]*$"
+    example: "protocolbuffers"
+  }];
+
+  // Name of the plugin.
+  //
+  // This is the plugin's identifier within its group.
+  //
+  // Examples: `go`, `python`, `gateway`, `openapiv2`
+  string name = 3 [(doc.v1.field) = {
+    output_only: true
+    pattern: "^[a-z][a-z0-9-]*$"
+    example: "go"
+  }];
+
+  // Version of the plugin.
+  //
+  // Follows semantic versioning (semver) format.
+  string version = 4 [(doc.v1.field) = {
+    output_only: true
+    pattern: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    example: "v1.36.10"
+  }];
+
+  // Timestamp when the plugin was registered.
+  google.protobuf.Timestamp created_at = 5 [(doc.v1.field) = {
+    output_only: true
+  }];
 }

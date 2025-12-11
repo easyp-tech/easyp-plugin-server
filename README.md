@@ -168,6 +168,8 @@ open http://localhost:3000
 
 ## API
 
+📖 **[Full API Documentation](docs/api/generator/v1/generator.md)**
+
 ### Generator API (Primary)
 
 **Endpoint:** `localhost:8080` (gRPC)

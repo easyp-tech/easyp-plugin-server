@@ -1,8 +1,9 @@
 module github.com/easyp-tech/service
 
-go 1.24.0
+go 1.25
 
 require (
+	github.com/easyp-tech/protoc-gen-easydoc v0.3.0
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/hellofresh/health-go/v5 v5.5.5
 	github.com/jmoiron/sqlx v1.4.0
@@ -43,6 +44,6 @@ require (
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250929231259-57b25ae835d4 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250929231259-57b25ae835d4 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251124214823-79d6a2a48846 // indirect
 )

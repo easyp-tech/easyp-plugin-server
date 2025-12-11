@@ -27,11 +27,59 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// ServiceAPI defines the public API for the generator service.
+// # EasyP Code Generation Service
+//
+// This service provides a centralized API for executing protobuf/gRPC code generation plugins.
+// Plugins run as isolated Docker containers, ensuring version consistency across development teams.
+//
+// ## Benefits
+//
+// - **Version Control**: All developers use the same plugin versions
+// - **Zero Setup**: No local plugin installation required
+// - **Security**: Plugins run in sandboxed containers with resource limits
+// - **Auditability**: Centralized logging of all generation requests
+//
+// ## Quick Start
+//
+// 1. Call `Plugins` to list available plugins
+// 2. Build a `CodeGeneratorRequest` with your proto files
+// 3. Call `GenerateCode` with the plugin name and request
+// 4. Process the `CodeGeneratorResponse` with generated files
+//
+// ## Plugin Naming Convention
+//
+// Plugins are identified using the format: `<group>/<name>:<version>`
+//
+// Examples:
+// - `protocolbuffers/go:v1.36.10` — Official Go protobuf plugin
+// - `grpc/go:v1.5.1` — Official gRPC Go plugin
+// - `grpc-ecosystem/gateway:v2.27.3` — gRPC-Gateway plugin
+//
+// Use `latest` as version to get the most recent version:
+// - `protocolbuffers/go:latest`
 type ServiceAPIClient interface {
-	// GenerateCode generates code using the specified plugin.
+	// Generate code using a specified plugin.
+	//
+	// This method executes a protobuf code generation plugin and returns the generated files.
+	// The plugin runs in an isolated Docker container with the following default limits:
+	//
+	// - **Network**: Disabled (no external access)
+	// - **Memory**: 128MB
+	// - **CPU**: 1.0 core
+	//
+	// ## Error Codes
+	//
+	// | Code | Description |
+	// |------|-------------|
+	// | `NOT_FOUND` | Plugin not found in registry |
+	// | `INVALID_ARGUMENT` | Invalid plugin name format |
+	// | `INTERNAL` | Plugin execution failed |
+	// | `DEADLINE_EXCEEDED` | Plugin execution timeout |
 	GenerateCode(ctx context.Context, in *GenerateCodeRequest, opts ...grpc.CallOption) (*GenerateCodeResponse, error)
-	// Plugins retrieves a list of available plugins.
+	// List available plugins.
+	//
+	// Returns a list of all plugins registered in the service.
+	// Use this to discover available plugins and their versions.
 	Plugins(ctx context.Context, in *PluginsRequest, opts ...grpc.CallOption) (*PluginsResponse, error)
 }
 
@@ -67,11 +115,59 @@ func (c *serviceAPIClient) Plugins(ctx context.Context, in *PluginsRequest, opts
 // All implementations should embed UnimplementedServiceAPIServer
 // for forward compatibility.
 //
-// ServiceAPI defines the public API for the generator service.
+// # EasyP Code Generation Service
+//
+// This service provides a centralized API for executing protobuf/gRPC code generation plugins.
+// Plugins run as isolated Docker containers, ensuring version consistency across development teams.
+//
+// ## Benefits
+//
+// - **Version Control**: All developers use the same plugin versions
+// - **Zero Setup**: No local plugin installation required
+// - **Security**: Plugins run in sandboxed containers with resource limits
+// - **Auditability**: Centralized logging of all generation requests
+//
+// ## Quick Start
+//
+// 1. Call `Plugins` to list available plugins
+// 2. Build a `CodeGeneratorRequest` with your proto files
+// 3. Call `GenerateCode` with the plugin name and request
+// 4. Process the `CodeGeneratorResponse` with generated files
+//
+// ## Plugin Naming Convention
+//
+// Plugins are identified using the format: `<group>/<name>:<version>`
+//
+// Examples:
+// - `protocolbuffers/go:v1.36.10` — Official Go protobuf plugin
+// - `grpc/go:v1.5.1` — Official gRPC Go plugin
+// - `grpc-ecosystem/gateway:v2.27.3` — gRPC-Gateway plugin
+//
+// Use `latest` as version to get the most recent version:
+// - `protocolbuffers/go:latest`
 type ServiceAPIServer interface {
-	// GenerateCode generates code using the specified plugin.
+	// Generate code using a specified plugin.
+	//
+	// This method executes a protobuf code generation plugin and returns the generated files.
+	// The plugin runs in an isolated Docker container with the following default limits:
+	//
+	// - **Network**: Disabled (no external access)
+	// - **Memory**: 128MB
+	// - **CPU**: 1.0 core
+	//
+	// ## Error Codes
+	//
+	// | Code | Description |
+	// |------|-------------|
+	// | `NOT_FOUND` | Plugin not found in registry |
+	// | `INVALID_ARGUMENT` | Invalid plugin name format |
+	// | `INTERNAL` | Plugin execution failed |
+	// | `DEADLINE_EXCEEDED` | Plugin execution timeout |
 	GenerateCode(context.Context, *GenerateCodeRequest) (*GenerateCodeResponse, error)
-	// Plugins retrieves a list of available plugins.
+	// List available plugins.
+	//
+	// Returns a list of all plugins registered in the service.
+	// Use this to discover available plugins and their versions.
 	Plugins(context.Context, *PluginsRequest) (*PluginsResponse, error)
 }
 

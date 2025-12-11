@@ -1,0 +1,3521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>api/generator/v1/generator.proto - API Documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <style>
+/* ===== CSS Variables - GitHub Dark Dimmed Theme ===== */
+:root {
+    /* Base Palette */
+    --bg-body: #0d1117;
+    --bg-surface: #161b22;
+    --bg-surface-2: #21262d;
+    --bg-surface-3: #30363d;
+
+    --color-primary: #58a6ff;
+    --color-primary-bright: #a5d6ff;
+    --color-primary-dim: rgba(56, 139, 253, 0.15);
+    --color-secondary: #79c0ff;
+    --color-accent: #d2a8ff;
+    --color-success: #3fb950;
+    --color-warning: #d29922;
+    --color-error: #f85149;
+
+    --text-main: #c9d1d9;
+    --text-muted: #8b949e;
+    --text-code: #e6edf3;
+
+    --border-color: #30363d;
+    --border-color-light: #21262d;
+
+    /* Badge Colors */
+    --badge-unary-bg: rgba(56, 139, 253, 0.15);
+    --badge-unary-text: #58a6ff;
+    --badge-unary-border: rgba(56, 139, 253, 0.3);
+
+    --badge-stream-bg: rgba(210, 168, 255, 0.15);
+    --badge-stream-text: #d2a8ff;
+    --badge-stream-border: rgba(210, 168, 255, 0.3);
+
+    --badge-deprecated-bg: rgba(248, 81, 73, 0.15);
+    --badge-deprecated-text: #f85149;
+    --badge-deprecated-border: rgba(248, 81, 73, 0.3);
+
+    --badge-required-bg: rgba(248, 81, 73, 0.15);
+    --badge-required-text: #f85149;
+
+    --badge-repeated-bg: rgba(121, 192, 255, 0.1);
+    --badge-repeated-text: #79c0ff;
+
+    --badge-optional-bg: rgba(139, 148, 158, 0.1);
+    --badge-optional-text: #8b949e;
+
+    /* Validation Colors */
+    --validation-bg: rgba(56, 139, 253, 0.08);
+    --validation-border: rgba(56, 139, 253, 0.3);
+    --validation-text: #58a6ff;
+
+    /* Reserved Colors */
+    --reserved-bg: rgba(210, 153, 34, 0.1);
+    --reserved-border: rgba(210, 153, 34, 0.3);
+    --reserved-text: #d29922;
+
+    /* Dimensions */
+    --nav-width: 300px;
+    --radius-card: 8px;
+    --radius-sm: 6px;
+    --radius-xs: 4px;
+
+    /* Typography */
+    --font-ui: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-code: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+/* ===== Reset & Base ===== */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    background-color: var(--bg-body);
+    color: var(--text-main);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.6;
+    display: flex;
+    min-height: 100vh;
+}
+
+a {
+    text-decoration: none;
+    color: var(--color-primary);
+    transition: color 0.2s ease;
+}
+
+a:hover {
+    color: var(--color-primary-bright);
+    text-decoration: underline;
+}
+
+code, .font-mono {
+    font-family: var(--font-code);
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-surface-3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* ===== Navigation Drawer ===== */
+.nav-drawer {
+    width: var(--nav-width);
+    height: 100vh;
+    position: fixed;
+    left: 0;
+    top: 0;
+    background-color: var(--bg-surface);
+    border-right: 1px solid var(--border-color);
+    overflow-y: auto;
+    z-index: 100;
+}
+
+.nav-content {
+    padding: 20px;
+}
+
+/* Nav Header */
+.nav-header {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.nav-header h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-code);
+}
+
+.nav-header .subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-family: var(--font-code);
+}
+
+/* Search Box */
+.nav-search {
+    margin-bottom: 20px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 8px 12px 8px 36px;
+    background: var(--bg-surface-2);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-main);
+    font-size: 0.85rem;
+    font-family: var(--font-ui);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.search-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-dim);
+}
+
+.search-wrapper {
+    position: relative;
+}
+
+.search-wrapper .material-symbols-rounded {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+/* Nav Sections */
+.nav-section {
+    margin-bottom: 24px;
+}
+
+.nav-section h3 {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin: 0 0 8px 0;
+    padding: 0 8px;
+    font-weight: 600;
+}
+
+/* Nav Links */
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin-bottom: 2px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    transition: all 0.15s ease;
+}
+
+.nav-link:hover {
+    background-color: var(--bg-surface-2);
+    color: var(--text-main);
+    text-decoration: none;
+}
+
+.nav-link.active {
+    background-color: var(--color-primary-dim);
+    color: var(--color-primary);
+}
+
+.nav-link .material-symbols-rounded {
+    font-size: 18px;
+    opacity: 0.7;
+}
+
+.nav-link.deprecated {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+/* Nested Nav Items */
+.nav-nested {
+    margin-left: 20px;
+    padding-left: 12px;
+    border-left: 1px solid var(--border-color);
+}
+
+.nav-nested .nav-link {
+    font-size: 0.8rem;
+    padding: 4px 8px;
+}
+
+/* Method Nav Items */
+.nav-link-method {
+    font-family: var(--font-code);
+    font-size: 0.75rem;
+}
+
+.nav-link-method .material-symbols-rounded {
+    font-size: 14px;
+}
+
+.nav-method-badge {
+    margin-left: auto;
+    font-size: 0.55rem;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(97, 175, 239, 0.15);
+    color: #61afef;
+    text-transform: uppercase;
+}
+
+/* ===== Main Content ===== */
+.main-content {
+    margin-left: var(--nav-width);
+    flex: 1;
+    padding: 40px 48px;
+    max-width: calc(100% - var(--nav-width));
+}
+
+/* Page Header */
+.page-header {
+    margin-bottom: 40px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.page-header h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-code);
+    margin: 0 0 8px 0;
+}
+
+.page-header .proto-path {
+    display: inline-block;
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--bg-surface-2);
+    padding: 4px 12px;
+    border-radius: 100px;
+}
+
+/* ===== Cards ===== */
+.card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-card);
+    margin-bottom: 32px;
+    overflow: hidden;
+}
+
+.card.deprecated {
+    opacity: 0.7;
+    border-left: 3px solid var(--badge-deprecated-text);
+}
+
+/* Card Header */
+.card-header {
+    padding: 16px 20px;
+    background-color: var(--bg-surface-2);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.card-title .material-symbols-rounded {
+    font-size: 22px;
+    color: var(--color-primary);
+}
+
+.card-title h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-code);
+}
+
+.card-title .deprecated-badge {
+    margin-left: 8px;
+}
+
+.card-subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: var(--font-code);
+}
+
+/* Card Body */
+.card-body {
+    padding: 20px;
+}
+
+.description {
+    color: var(--text-main);
+    margin: 0 0 20px 0;
+    line-height: 1.7;
+}
+
+/* ===== Service Methods ===== */
+.method-block {
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-body);
+    overflow: hidden;
+}
+
+.method-block.deprecated {
+    border-left: 3px solid var(--badge-deprecated-text);
+    opacity: 0.8;
+}
+
+.method-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-surface);
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+    transition: background-color 0.15s;
+    list-style: none;
+}
+
+.method-header::-webkit-details-marker {
+    display: none;
+}
+
+.method-block[open] .method-header {
+    border-bottom-color: var(--border-color);
+    background: var(--bg-surface-2);
+}
+
+.method-header:hover {
+    background: var(--bg-surface-2);
+}
+
+/* Method Badges */
+.badge {
+    font-family: var(--font-code);
+    font-weight: 600;
+    font-size: 0.65rem;
+    padding: 3px 8px;
+    border-radius: var(--radius-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.badge-unary {
+    background: var(--badge-unary-bg);
+    color: var(--badge-unary-text);
+    border: 1px solid var(--badge-unary-border);
+}
+
+.badge-stream {
+    background: var(--badge-stream-bg);
+    color: var(--badge-stream-text);
+    border: 1px solid var(--badge-stream-border);
+}
+
+.badge-deprecated {
+    background: var(--badge-deprecated-bg);
+    color: var(--badge-deprecated-text);
+    border: 1px solid var(--badge-deprecated-border);
+}
+
+.method-name {
+    font-family: var(--font-code);
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-code);
+    flex: 1;
+}
+
+.method-desc-short {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 40%;
+}
+
+.method-chevron {
+    font-size: 18px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+}
+
+.method-block[open] .method-chevron {
+    transform: rotate(180deg);
+}
+
+/* Method Details */
+.method-details {
+    padding: 16px 20px;
+    background: var(--bg-body);
+}
+
+.method-details .description {
+    margin-bottom: 16px;
+}
+
+/* I/O Grid */
+.io-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.io-box {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+}
+
+.io-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    display: block;
+    font-weight: 600;
+}
+
+.type-pill {
+    font-family: var(--font-code);
+    color: var(--color-primary);
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.type-pill .material-symbols-rounded {
+    font-size: 16px;
+    opacity: 0.6;
+}
+
+.type-pill.streaming::before {
+    content: 'stream';
+    font-size: 0.7rem;
+    font-style: italic;
+    color: var(--color-accent);
+    margin-right: 4px;
+}
+
+/* ===== Protocol Tabs (gRPC/REST) ===== */
+.protocol-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0;
+}
+
+.protocol-tab {
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: -1px;
+}
+
+.protocol-tab:hover {
+    color: var(--text-main);
+    background: var(--bg-surface);
+}
+
+.protocol-tab.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+}
+
+.protocol-content {
+    display: none;
+}
+
+.protocol-content.active {
+    display: block;
+}
+
+/* ===== REST Styles ===== */
+.rest-endpoint {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+}
+
+.rest-endpoint.additional {
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    background: var(--bg-surface-2);
+}
+
+.rest-method {
+    font-family: var(--font-code);
+    font-weight: 700;
+    font-size: 0.7rem;
+    padding: 4px 10px;
+    border-radius: var(--radius-xs);
+    text-transform: uppercase;
+}
+
+.rest-method-get {
+    background: rgba(97, 175, 239, 0.15);
+    color: #61afef;
+    border: 1px solid rgba(97, 175, 239, 0.3);
+}
+
+.rest-method-post {
+    background: rgba(152, 195, 121, 0.15);
+    color: #98c379;
+    border: 1px solid rgba(152, 195, 121, 0.3);
+}
+
+.rest-method-put {
+    background: rgba(229, 192, 123, 0.15);
+    color: #e5c07b;
+    border: 1px solid rgba(229, 192, 123, 0.3);
+}
+
+.rest-method-patch {
+    background: rgba(198, 120, 221, 0.15);
+    color: #c678dd;
+    border: 1px solid rgba(198, 120, 221, 0.3);
+}
+
+.rest-method-delete {
+    background: rgba(224, 108, 117, 0.15);
+    color: #e06c75;
+    border: 1px solid rgba(224, 108, 117, 0.3);
+}
+
+.rest-pattern {
+    font-family: var(--font-code);
+    font-size: 0.9rem;
+    color: var(--text-code);
+    background: none;
+    padding: 0;
+}
+
+.rest-section {
+    margin-bottom: 20px;
+}
+
+.rest-section:last-child {
+    margin-bottom: 0;
+}
+
+.rest-section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin: 0 0 10px 0;
+}
+
+/* HTTP Method Badge in header */
+.badge-http {
+    font-size: 0.6rem;
+    padding: 2px 6px;
+}
+
+.badge-get {
+    background: rgba(97, 175, 239, 0.15);
+    color: #61afef;
+    border: 1px solid rgba(97, 175, 239, 0.3);
+}
+
+.badge-post {
+    background: rgba(152, 195, 121, 0.15);
+    color: #98c379;
+    border: 1px solid rgba(152, 195, 121, 0.3);
+}
+
+.badge-put {
+    background: rgba(229, 192, 123, 0.15);
+    color: #e5c07b;
+    border: 1px solid rgba(229, 192, 123, 0.3);
+}
+
+.badge-patch {
+    background: rgba(198, 120, 221, 0.15);
+    color: #c678dd;
+    border: 1px solid rgba(198, 120, 221, 0.3);
+}
+
+.badge-delete {
+    background: rgba(224, 108, 117, 0.15);
+    color: #e06c75;
+    border: 1px solid rgba(224, 108, 117, 0.3);
+}
+
+/* ===== Markdown Styles ===== */
+.md-paragraph {
+    margin: 0 0 12px 0;
+}
+
+.md-paragraph:last-child {
+    margin-bottom: 0;
+}
+
+.md-inline-code {
+    background: var(--bg-surface-2);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--font-code);
+    font-size: 0.85em;
+    color: var(--text-code);
+}
+
+.md-code-block {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    margin: 12px 0;
+    overflow-x: auto;
+}
+
+.md-code-block code {
+    font-family: var(--font-code);
+    font-size: 0.85rem;
+    color: var(--text-code);
+}
+
+.md-link {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.md-link:hover {
+    text-decoration: underline;
+}
+
+/* Markdown Headers */
+.md-h2 {
+    margin: 20px 0 12px 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-main);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+}
+
+.md-h3 {
+    margin: 16px 0 10px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.md-h4 {
+    margin: 12px 0 8px 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+/* Markdown Lists */
+.md-ul, .md-ol {
+    margin: 12px 0;
+    padding-left: 24px;
+}
+
+.md-ul li, .md-ol li {
+    margin: 6px 0;
+    color: var(--text-main);
+    line-height: 1.6;
+}
+
+.md-ul {
+    list-style-type: disc;
+}
+
+.md-ol {
+    list-style-type: decimal;
+}
+
+/* Markdown Tables */
+.md-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.9rem;
+}
+
+.md-table th,
+.md-table td {
+    padding: 10px 14px;
+    text-align: left;
+    border: 1px solid var(--border-color);
+}
+
+.md-table th {
+    background: var(--bg-surface-2);
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.md-table td {
+    background: var(--bg-surface);
+    color: var(--text-main);
+}
+
+.md-table tbody tr:hover td {
+    background: var(--bg-surface-2);
+}
+
+.md-table code {
+    background: var(--bg-surface-3);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--font-code);
+    font-size: 0.85em;
+}
+
+/* Legacy classes for compatibility */
+.md-header {
+    margin: 16px 0 8px 0;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+h3.md-header { font-size: 1.1rem; }
+h4.md-header { font-size: 1rem; }
+h5.md-header { font-size: 0.9rem; }
+
+.md-list {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+.md-list-item {
+    margin: 4px 0;
+    color: var(--text-main);
+}
+
+/* ===== Response Body Notice ===== */
+.rest-response-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(229, 192, 123, 0.1);
+    border: 1px solid rgba(229, 192, 123, 0.3);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+    font-size: 0.8rem;
+    color: #e5c07b;
+}
+
+.rest-response-notice .material-symbols-rounded {
+    font-size: 18px;
+}
+
+.rest-response-notice code {
+    background: rgba(229, 192, 123, 0.15);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--font-code);
+    font-size: 0.75rem;
+}
+
+/* ===== Streaming Notices (REST) ===== */
+.rest-streaming-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+}
+
+.rest-streaming-notice .material-symbols-rounded {
+    font-size: 20px;
+    margin-top: 2px;
+}
+
+.rest-streaming-notice div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.rest-streaming-notice strong {
+    font-weight: 600;
+}
+
+.rest-streaming-notice span {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.rest-streaming-websocket {
+    background: rgba(198, 120, 221, 0.1);
+    border: 1px solid rgba(198, 120, 221, 0.3);
+    color: #c678dd;
+}
+
+.rest-streaming-websocket .material-symbols-rounded {
+    color: #c678dd;
+}
+
+.rest-streaming-sse {
+    background: rgba(97, 175, 239, 0.1);
+    border: 1px solid rgba(97, 175, 239, 0.3);
+    color: #61afef;
+}
+
+.rest-streaming-sse .material-symbols-rounded {
+    color: #61afef;
+}
+
+.badge-websocket {
+    background: rgba(198, 120, 221, 0.15);
+    color: #c678dd;
+    border: 1px solid rgba(198, 120, 221, 0.3);
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    margin-left: auto;
+}
+
+.badge-sse {
+    background: rgba(97, 175, 239, 0.15);
+    color: #61afef;
+    border: 1px solid rgba(97, 175, 239, 0.3);
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    margin-left: auto;
+}
+
+/* ===== JSON Example Blocks ===== */
+.example-section {
+    margin-top: 16px;
+}
+
+.example-block {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.example-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg-surface-2);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.example-title {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xs);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.copy-btn:hover {
+    background: var(--bg-surface-3);
+    color: var(--text-main);
+    border-color: var(--text-muted);
+}
+
+.copy-btn.copied {
+    color: var(--color-success);
+    border-color: var(--color-success);
+}
+
+.copy-btn .material-symbols-rounded {
+    font-size: 14px;
+}
+
+.example-code {
+    padding: 12px 16px;
+    margin: 0;
+    overflow-x: auto;
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-code);
+    white-space: pre;
+}
+
+/* JSON Syntax Highlighting */
+.json-key {
+    color: #79c0ff;
+}
+
+.json-string {
+    color: #a5d6ff;
+}
+
+.json-number {
+    color: #79c0ff;
+}
+
+.json-boolean {
+    color: #ff7b72;
+}
+
+.json-null {
+    color: #ff7b72;
+}
+
+/* Collapsible example blocks */
+.example-block.collapsed .example-code {
+    display: none;
+}
+
+.example-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xs);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-right: 8px;
+}
+
+.example-toggle:hover {
+    background: var(--bg-surface-3);
+    color: var(--text-main);
+    border-color: var(--text-muted);
+}
+
+.example-toggle .material-symbols-rounded {
+    font-size: 14px;
+    transition: transform 0.2s;
+}
+
+.example-block.collapsed .example-toggle .material-symbols-rounded {
+    transform: rotate(-90deg);
+}
+
+.example-header-actions {
+    display: flex;
+    align-items: center;
+}
+
+/* ===== Schema Tables ===== */
+.schema-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.schema-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--bg-surface-2);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.schema-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: top;
+}
+
+.schema-table tr:last-child td {
+    border-bottom: none;
+}
+
+.schema-table tr:hover {
+    background: var(--bg-surface-2);
+}
+
+.schema-table tr.deprecated {
+    opacity: 0.6;
+}
+
+.schema-table tr.deprecated .field-name {
+    text-decoration: line-through;
+}
+
+/* Field Styling */
+.field-name {
+    font-family: var(--font-code);
+    font-weight: 600;
+    color: var(--text-code);
+}
+
+.field-number {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.field-type {
+    font-family: var(--font-code);
+    color: var(--color-secondary);
+    font-size: 0.8rem;
+}
+
+.field-type a {
+    color: var(--color-secondary);
+}
+
+.field-type a:hover {
+    color: var(--color-primary-bright);
+}
+
+/* Field Meta Tags */
+.field-meta {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.meta-tag {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    font-weight: 500;
+}
+
+.meta-tag.required {
+    background: var(--badge-required-bg);
+    color: var(--badge-required-text);
+}
+
+.meta-tag.repeated {
+    background: var(--badge-repeated-bg);
+    color: var(--badge-repeated-text);
+}
+
+.meta-tag.optional {
+    background: var(--badge-optional-bg);
+    color: var(--badge-optional-text);
+}
+
+.meta-tag.deprecated {
+    background: var(--badge-deprecated-bg);
+    color: var(--badge-deprecated-text);
+}
+
+.meta-tag.map {
+    background: rgba(210, 168, 255, 0.1);
+    color: var(--color-accent);
+}
+
+/* Validation Tags */
+.validation-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.validation-tag {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: var(--radius-xs);
+    background: var(--validation-bg);
+    color: var(--validation-text);
+    border: 1px solid var(--validation-border);
+    font-family: var(--font-code);
+}
+
+/* ===== OneOf Groups ===== */
+.oneof-group {
+    margin: 16px 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    overflow: hidden;
+}
+
+.oneof-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg-surface-2);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.oneof-indicator {
+    width: 3px;
+    height: 18px;
+    background: linear-gradient(180deg, var(--color-primary), var(--color-accent));
+    border-radius: 2px;
+}
+
+.oneof-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-accent);
+    font-weight: 600;
+}
+
+.oneof-name {
+    font-family: var(--font-code);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-code);
+}
+
+.oneof-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.oneof-fields {
+    padding: 0;
+}
+
+.oneof-fields .schema-table {
+    margin: 0;
+}
+
+.oneof-field-row {
+    position: relative;
+}
+
+.oneof-field-row td:first-child {
+    padding-left: 28px !important;
+}
+
+.oneof-field-row td:first-child::before {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, var(--color-primary), var(--color-accent));
+    opacity: 0.3;
+}
+
+.oneof-field-row:last-child td:first-child::before {
+    bottom: 50%;
+}
+
+/* ===== Reserved Section ===== */
+.reserved-section {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--reserved-bg);
+    border-top: 1px solid var(--reserved-border);
+    font-size: 0.8rem;
+}
+
+.reserved-section .material-symbols-rounded {
+    font-size: 18px;
+    color: var(--reserved-text);
+}
+
+.reserved-label {
+    font-weight: 600;
+    color: var(--reserved-text);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.7rem;
+    margin-right: 8px;
+}
+
+.reserved-values {
+    color: var(--text-muted);
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+}
+
+/* ===== Enum Values ===== */
+.enum-value-name {
+    font-family: var(--font-code);
+    color: var(--color-accent);
+    font-weight: 500;
+}
+
+.enum-value-number {
+    font-family: var(--font-code);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* ===== Message Example Section ===== */
+.message-example {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.message-example-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+}
+
+.empty-state .material-symbols-rounded {
+    font-size: 48px;
+    opacity: 0.3;
+    margin-bottom: 12px;
+}
+
+/* ===== No Results ===== */
+.no-results {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 1024px) {
+    body {
+        flex-direction: column;
+    }
+
+    .nav-drawer {
+        position: relative;
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .main-content {
+        margin-left: 0;
+        max-width: 100%;
+        padding: 24px;
+    }
+
+    .io-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .method-desc-short {
+        display: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .page-header h1 {
+        font-size: 1.25rem;
+    }
+
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .method-header {
+        flex-wrap: wrap;
+    }
+
+    .schema-table {
+        font-size: 0.8rem;
+    }
+
+    .schema-table th,
+    .schema-table td {
+        padding: 8px 10px;
+    }
+}
+
+/* ===== Utility Classes ===== */
+.hidden {
+    display: none !important;
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
+
+.font-mono {
+    font-family: var(--font-code);
+}
+
+/* ===== Selection ===== */
+::selection {
+    background: var(--color-primary-dim);
+    color: var(--text-code);
+}
+
+    </style>
+</head>
+<body>
+    <nav class="nav-drawer">
+        <div class="nav-content">
+            
+<div class="nav-header">
+    <h2>API Reference</h2>
+    <div class="subtitle">api.generator.v1</div>
+</div>
+
+<div class="nav-search">
+    <div class="search-wrapper">
+        <span class="material-symbols-rounded">search</span>
+        <input type="text" class="search-input" id="nav-search" placeholder="Search...">
+    </div>
+</div>
+
+
+<div class="nav-section" data-section="services">
+    <h3>Services</h3>
+    
+    <a href="#api-generator-v1-serviceapi" class="nav-link" data-name="serviceapi">
+        <span class="material-symbols-rounded">hub</span>
+        ServiceAPI
+    </a>
+    
+    <div class="nav-nested">
+        
+        <a href="#api-generator-v1-serviceapi-generatecode" class="nav-link nav-link-method" data-name="generatecode">
+            <span class="material-symbols-rounded">arrow_forward</span>
+            GenerateCode
+            
+        </a>
+        
+        <a href="#api-generator-v1-serviceapi-plugins" class="nav-link nav-link-method" data-name="plugins">
+            <span class="material-symbols-rounded">arrow_forward</span>
+            Plugins
+            
+        </a>
+        
+    </div>
+    
+    
+</div>
+
+
+
+<div class="nav-section" data-section="messages">
+    <h3>Messages</h3>
+    
+    
+<a href="#api-generator-v1-generatecoderequest" class="nav-link" data-name="generatecoderequest">
+    <span class="material-symbols-rounded">data_object</span>
+    GenerateCodeRequest
+</a>
+
+
+    
+    
+<a href="#api-generator-v1-generatecoderesponse" class="nav-link" data-name="generatecoderesponse">
+    <span class="material-symbols-rounded">data_object</span>
+    GenerateCodeResponse
+</a>
+
+
+    
+    
+<a href="#api-generator-v1-pluginsrequest" class="nav-link" data-name="pluginsrequest">
+    <span class="material-symbols-rounded">data_object</span>
+    PluginsRequest
+</a>
+
+
+    
+    
+<a href="#api-generator-v1-pluginsresponse" class="nav-link" data-name="pluginsresponse">
+    <span class="material-symbols-rounded">data_object</span>
+    PluginsResponse
+</a>
+
+
+    
+    
+<a href="#api-generator-v1-plugininfo" class="nav-link" data-name="plugininfo">
+    <span class="material-symbols-rounded">data_object</span>
+    PluginInfo
+</a>
+
+
+    
+</div>
+
+
+
+
+        </div>
+    </nav>
+    <main class="main-content">
+        
+<header class="page-header">
+    <h1>api/generator/v1/generator.proto</h1>
+    <span class="proto-path">package api.generator.v1</span>
+</header>
+
+
+
+<section class="card" id="api-generator-v1-serviceapi">
+    <div class="card-header">
+        <div class="card-title">
+            <span class="material-symbols-rounded">hub</span>
+            <h2>ServiceAPI</h2>
+            
+        </div>
+        <span class="card-subtitle">api.generator.v1.ServiceAPI</span>
+    </div>
+    <div class="card-body">
+        <div class="description"><p class="md-paragraph">EasyP Code Generation Service</p><p class="md-paragraph">This service provides a centralized API for executing protobuf/gRPC code generation plugins.</p><p class="md-paragraph">Plugins run as isolated Docker containers, ensuring version consistency across development teams.</p><h3 class="md-h3">Benefits</h3><ul class="md-ul"><li><strong>Version Control</strong>: All developers use the same plugin versions</li><li><strong>Zero Setup</strong>: No local plugin installation required</li><li><strong>Security</strong>: Plugins run in sandboxed containers with resource limits</li><li><strong>Auditability</strong>: Centralized logging of all generation requests</li></ul><h3 class="md-h3">Quick Start</h3><ol class="md-ol"><li>Call <code class="md-inline-code">Plugins</code> to list available plugins</li><li>Build a <code class="md-inline-code">CodeGeneratorRequest</code> with your proto files</li><li>Call <code class="md-inline-code">GenerateCode</code> with the plugin name and request</li><li>Process the <code class="md-inline-code">CodeGeneratorResponse</code> with generated files</li></ol><h3 class="md-h3">Plugin Naming Convention</h3><p class="md-paragraph">Plugins are identified using the format: <code class="md-inline-code">&lt;group&gt;/&lt;name&gt;:&lt;version&gt;</code></p><p class="md-paragraph">Examples:</p><ul class="md-ul"><li><code class="md-inline-code">protocolbuffers/go:v1.36.10</code> — Official Go protobuf plugin</li><li><code class="md-inline-code">grpc/go:v1.5.1</code> — Official gRPC Go plugin</li><li><code class="md-inline-code">grpc-ecosystem/gateway:v2.27.3</code> — gRPC-Gateway plugin</li></ul><p class="md-paragraph">Use <code class="md-inline-code">latest</code> as version to get the most recent version:</p><ul class="md-ul"><li><code class="md-inline-code">protocolbuffers/go:latest</code></li></ul></div>
+        
+        
+
+
+<details class="method-block" id="api-generator-v1-serviceapi-generatecode" open>
+    <summary class="method-header">
+        <span class="badge badge-unary">UNARY</span>
+        
+        <span class="method-name">GenerateCode</span>
+        <span class="method-desc-short">Generate code using a specified plugin.
+
+This method execute...</span>
+        
+        <span class="material-symbols-rounded method-chevron">expand_more</span>
+    </summary>
+    <div class="method-details">
+        <div class="description"><p class="md-paragraph">Generate code using a specified plugin.</p><p class="md-paragraph">This method executes a protobuf code generation plugin and returns the generated files.</p><p class="md-paragraph">The plugin runs in an isolated Docker container with the following default limits:</p><ul class="md-ul"><li><strong>Network</strong>: Disabled (no external access)</li><li><strong>Memory</strong>: 128MB</li><li><strong>CPU</strong>: 1.0 core</li></ul><h3 class="md-h3">Error Codes</h3><table class="md-table"><thead><tr><th>Code</th><th>Description</th></tr></thead><tbody><tr><td><code class="md-inline-code">NOT_FOUND</code></td><td>Plugin not found in registry</td></tr><tr><td><code class="md-inline-code">INVALID_ARGUMENT</code></td><td>Invalid plugin name format</td></tr><tr><td><code class="md-inline-code">INTERNAL</code></td><td>Plugin execution failed</td></tr><tr><td><code class="md-inline-code">DEADLINE_EXCEEDED</code></td><td>Plugin execution timeout</td></tr></tbody></table></div>
+
+        
+        
+<div class="io-grid">
+    <div class="io-box">
+        <span class="io-label">Request</span>
+        <div class="type-pill">
+            <span class="material-symbols-rounded">arrow_forward</span>
+            <a href="#api-generator-v1-generatecoderequest">GenerateCodeRequest</a>
+        </div>
+    </div>
+    <div class="io-box">
+        <span class="io-label">Response</span>
+        <div class="type-pill">
+            <span class="material-symbols-rounded">arrow_back</span>
+            <a href="#api-generator-v1-generatecoderesponse">GenerateCodeResponse</a>
+        </div>
+    </div>
+</div>
+
+
+
+
+<div class="example-section">
+    <div class="example-block collapsed" data-example-id="grpc-request-GenerateCode">
+        <div class="example-header">
+            <span class="example-title">Request Example</span>
+            <div class="example-header-actions">
+                <button class="example-toggle" data-toggle-target="grpc-request-GenerateCode">
+                    <span class="material-symbols-rounded">expand_more</span>
+                    Show
+                </button>
+                <button class="copy-btn" data-copy-target="grpc-request-GenerateCode">
+                    <span class="material-symbols-rounded">content_copy</span>
+                    Copy
+                </button>
+            </div>
+        </div>
+        <pre class="example-code" id="grpc-request-GenerateCode">{
+  <span class="json-key">"codeGeneratorRequest"</span>: {
+    <span class="json-key">"compilerVersion"</span>: {
+      <span class="json-key">"major"</span>: <span class="json-number">0</span>,
+      <span class="json-key">"minor"</span>: <span class="json-number">0</span>,
+      <span class="json-key">"patch"</span>: <span class="json-number">0</span>,
+      <span class="json-key">"suffix"</span>: <span class="json-string">"string"</span>
+    },
+    <span class="json-key">"fileToGenerate"</span>: [],
+    <span class="json-key">"parameter"</span>: <span class="json-string">"string"</span>,
+    <span class="json-key">"protoFile"</span>: [
+      {
+        <span class="json-key">"dependency"</span>: [],
+        <span class="json-key">"edition"</span>: <span class="json-string">"Edition_VALUE"</span>,
+        <span class="json-key">"enumType"</span>: [
+          {
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"allowAlias"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecatedLegacyJsonFieldConflicts"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            },
+            <span class="json-key">"reservedName"</span>: [],
+            <span class="json-key">"reservedRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ],
+            <span class="json-key">"value"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cEnumValueOptions\u003e"</span>
+              }
+            ]
+          }
+        ],
+        <span class="json-key">"extension"</span>: [
+          {
+            <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+            <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"ctype"</span>: <span class="json-string">"CType_VALUE"</span>,
+              <span class="json-key">"debugRedact"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"editionDefaults"</span>: [
+                <span class="json-string">"\u003cEditionDefault\u003e"</span>
+              ],
+              <span class="json-key">"featureSupport"</span>: <span class="json-string">"\u003cFeatureSupport\u003e"</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"jstype"</span>: <span class="json-string">"JSType_VALUE"</span>,
+              <span class="json-key">"lazy"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"packed"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"retention"</span>: <span class="json-string">"OptionRetention_VALUE"</span>,
+              <span class="json-key">"targets"</span>: [],
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ],
+              <span class="json-key">"unverifiedLazy"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"weak"</span>: <span class="json-boolean">true</span>
+            },
+            <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+            <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+            <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+          }
+        ],
+        <span class="json-key">"messageType"</span>: [
+          {
+            <span class="json-key">"enumType"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cEnumOptions\u003e"</span>,
+                <span class="json-key">"reservedName"</span>: [],
+                <span class="json-key">"reservedRange"</span>: [
+                  <span class="json-string">"\u003cEnumReservedRange\u003e"</span>
+                ],
+                <span class="json-key">"value"</span>: [
+                  <span class="json-string">"\u003cEnumValueDescriptorProto\u003e"</span>
+                ]
+              }
+            ],
+            <span class="json-key">"extension"</span>: [
+              {
+                <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cFieldOptions\u003e"</span>,
+                <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+                <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+              }
+            ],
+            <span class="json-key">"extensionRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cExtensionRangeOptions\u003e"</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ],
+            <span class="json-key">"field"</span>: [
+              {
+                <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cFieldOptions\u003e"</span>,
+                <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+                <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+              }
+            ],
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"nestedType"</span>: [
+              {
+                <span class="json-key">"enumType"</span>: [
+                  <span class="json-string">"\u003cEnumDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"extension"</span>: [
+                  <span class="json-string">"\u003cFieldDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"extensionRange"</span>: [
+                  <span class="json-string">"\u003cExtensionRange\u003e"</span>
+                ],
+                <span class="json-key">"field"</span>: [
+                  <span class="json-string">"\u003cFieldDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"nestedType"</span>: [
+                  <span class="json-string">"\u003cDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"oneofDecl"</span>: [
+                  <span class="json-string">"\u003cOneofDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cMessageOptions\u003e"</span>,
+                <span class="json-key">"reservedName"</span>: [],
+                <span class="json-key">"reservedRange"</span>: [
+                  <span class="json-string">"\u003cReservedRange\u003e"</span>
+                ]
+              }
+            ],
+            <span class="json-key">"oneofDecl"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cOneofOptions\u003e"</span>
+              }
+            ],
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecatedLegacyJsonFieldConflicts"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"mapEntry"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"messageSetWireFormat"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"noStandardDescriptorAccessor"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            },
+            <span class="json-key">"reservedName"</span>: [],
+            <span class="json-key">"reservedRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ]
+          }
+        ],
+        <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"options"</span>: {
+          <span class="json-key">"ccEnableArenas"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"ccGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"csharpNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"features"</span>: {
+            <span class="json-key">"enumType"</span>: <span class="json-string">"EnumType_VALUE"</span>,
+            <span class="json-key">"fieldPresence"</span>: <span class="json-string">"FieldPresence_VALUE"</span>,
+            <span class="json-key">"jsonFormat"</span>: <span class="json-string">"JsonFormat_VALUE"</span>,
+            <span class="json-key">"messageEncoding"</span>: <span class="json-string">"MessageEncoding_VALUE"</span>,
+            <span class="json-key">"repeatedFieldEncoding"</span>: <span class="json-string">"RepeatedFieldEncoding_VALUE"</span>,
+            <span class="json-key">"utf8Validation"</span>: <span class="json-string">"Utf8Validation_VALUE"</span>
+          },
+          <span class="json-key">"goPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaGenerateEqualsAndHash"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaMultipleFiles"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaOuterClassname"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaStringCheckUtf8"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"objcClassPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"optimizeFor"</span>: <span class="json-string">"OptimizeMode_VALUE"</span>,
+          <span class="json-key">"phpClassPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"phpMetadataNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"phpNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"pyGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"rubyPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"swiftPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"uninterpretedOption"</span>: [
+            {
+              <span class="json-key">"aggregateValue"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"doubleValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"identifierValue"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"name"</span>: [
+                <span class="json-string">"\u003cNamePart\u003e"</span>
+              ],
+              <span class="json-key">"negativeIntValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"positiveIntValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"stringValue"</span>: <span class="json-string">"base64..."</span>
+            }
+          ]
+        },
+        <span class="json-key">"package"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"publicDependency"</span>: [],
+        <span class="json-key">"service"</span>: [
+          {
+            <span class="json-key">"method"</span>: [
+              {
+                <span class="json-key">"clientStreaming"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"inputType"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cMethodOptions\u003e"</span>,
+                <span class="json-key">"outputType"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"serverStreaming"</span>: <span class="json-boolean">true</span>
+              }
+            ],
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            }
+          }
+        ],
+        <span class="json-key">"sourceCodeInfo"</span>: {
+          <span class="json-key">"location"</span>: [
+            {
+              <span class="json-key">"leadingComments"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"leadingDetachedComments"</span>: [],
+              <span class="json-key">"path"</span>: [],
+              <span class="json-key">"span"</span>: [],
+              <span class="json-key">"trailingComments"</span>: <span class="json-string">"string"</span>
+            }
+          ]
+        },
+        <span class="json-key">"syntax"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"weakDependency"</span>: []
+      }
+    ],
+    <span class="json-key">"sourceFileDescriptors"</span>: [
+      {
+        <span class="json-key">"dependency"</span>: [],
+        <span class="json-key">"edition"</span>: <span class="json-string">"Edition_VALUE"</span>,
+        <span class="json-key">"enumType"</span>: [
+          {
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"allowAlias"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecatedLegacyJsonFieldConflicts"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            },
+            <span class="json-key">"reservedName"</span>: [],
+            <span class="json-key">"reservedRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ],
+            <span class="json-key">"value"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cEnumValueOptions\u003e"</span>
+              }
+            ]
+          }
+        ],
+        <span class="json-key">"extension"</span>: [
+          {
+            <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+            <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"ctype"</span>: <span class="json-string">"CType_VALUE"</span>,
+              <span class="json-key">"debugRedact"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"editionDefaults"</span>: [
+                <span class="json-string">"\u003cEditionDefault\u003e"</span>
+              ],
+              <span class="json-key">"featureSupport"</span>: <span class="json-string">"\u003cFeatureSupport\u003e"</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"jstype"</span>: <span class="json-string">"JSType_VALUE"</span>,
+              <span class="json-key">"lazy"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"packed"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"retention"</span>: <span class="json-string">"OptionRetention_VALUE"</span>,
+              <span class="json-key">"targets"</span>: [],
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ],
+              <span class="json-key">"unverifiedLazy"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"weak"</span>: <span class="json-boolean">true</span>
+            },
+            <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+            <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+            <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+          }
+        ],
+        <span class="json-key">"messageType"</span>: [
+          {
+            <span class="json-key">"enumType"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cEnumOptions\u003e"</span>,
+                <span class="json-key">"reservedName"</span>: [],
+                <span class="json-key">"reservedRange"</span>: [
+                  <span class="json-string">"\u003cEnumReservedRange\u003e"</span>
+                ],
+                <span class="json-key">"value"</span>: [
+                  <span class="json-string">"\u003cEnumValueDescriptorProto\u003e"</span>
+                ]
+              }
+            ],
+            <span class="json-key">"extension"</span>: [
+              {
+                <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cFieldOptions\u003e"</span>,
+                <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+                <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+              }
+            ],
+            <span class="json-key">"extensionRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cExtensionRangeOptions\u003e"</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ],
+            <span class="json-key">"field"</span>: [
+              {
+                <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cFieldOptions\u003e"</span>,
+                <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+                <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+              }
+            ],
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"nestedType"</span>: [
+              {
+                <span class="json-key">"enumType"</span>: [
+                  <span class="json-string">"\u003cEnumDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"extension"</span>: [
+                  <span class="json-string">"\u003cFieldDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"extensionRange"</span>: [
+                  <span class="json-string">"\u003cExtensionRange\u003e"</span>
+                ],
+                <span class="json-key">"field"</span>: [
+                  <span class="json-string">"\u003cFieldDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"nestedType"</span>: [
+                  <span class="json-string">"\u003cDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"oneofDecl"</span>: [
+                  <span class="json-string">"\u003cOneofDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cMessageOptions\u003e"</span>,
+                <span class="json-key">"reservedName"</span>: [],
+                <span class="json-key">"reservedRange"</span>: [
+                  <span class="json-string">"\u003cReservedRange\u003e"</span>
+                ]
+              }
+            ],
+            <span class="json-key">"oneofDecl"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cOneofOptions\u003e"</span>
+              }
+            ],
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecatedLegacyJsonFieldConflicts"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"mapEntry"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"messageSetWireFormat"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"noStandardDescriptorAccessor"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            },
+            <span class="json-key">"reservedName"</span>: [],
+            <span class="json-key">"reservedRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ]
+          }
+        ],
+        <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"options"</span>: {
+          <span class="json-key">"ccEnableArenas"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"ccGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"csharpNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"features"</span>: {
+            <span class="json-key">"enumType"</span>: <span class="json-string">"EnumType_VALUE"</span>,
+            <span class="json-key">"fieldPresence"</span>: <span class="json-string">"FieldPresence_VALUE"</span>,
+            <span class="json-key">"jsonFormat"</span>: <span class="json-string">"JsonFormat_VALUE"</span>,
+            <span class="json-key">"messageEncoding"</span>: <span class="json-string">"MessageEncoding_VALUE"</span>,
+            <span class="json-key">"repeatedFieldEncoding"</span>: <span class="json-string">"RepeatedFieldEncoding_VALUE"</span>,
+            <span class="json-key">"utf8Validation"</span>: <span class="json-string">"Utf8Validation_VALUE"</span>
+          },
+          <span class="json-key">"goPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaGenerateEqualsAndHash"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaMultipleFiles"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaOuterClassname"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaStringCheckUtf8"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"objcClassPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"optimizeFor"</span>: <span class="json-string">"OptimizeMode_VALUE"</span>,
+          <span class="json-key">"phpClassPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"phpMetadataNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"phpNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"pyGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"rubyPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"swiftPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"uninterpretedOption"</span>: [
+            {
+              <span class="json-key">"aggregateValue"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"doubleValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"identifierValue"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"name"</span>: [
+                <span class="json-string">"\u003cNamePart\u003e"</span>
+              ],
+              <span class="json-key">"negativeIntValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"positiveIntValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"stringValue"</span>: <span class="json-string">"base64..."</span>
+            }
+          ]
+        },
+        <span class="json-key">"package"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"publicDependency"</span>: [],
+        <span class="json-key">"service"</span>: [
+          {
+            <span class="json-key">"method"</span>: [
+              {
+                <span class="json-key">"clientStreaming"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"inputType"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cMethodOptions\u003e"</span>,
+                <span class="json-key">"outputType"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"serverStreaming"</span>: <span class="json-boolean">true</span>
+              }
+            ],
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            }
+          }
+        ],
+        <span class="json-key">"sourceCodeInfo"</span>: {
+          <span class="json-key">"location"</span>: [
+            {
+              <span class="json-key">"leadingComments"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"leadingDetachedComments"</span>: [],
+              <span class="json-key">"path"</span>: [],
+              <span class="json-key">"span"</span>: [],
+              <span class="json-key">"trailingComments"</span>: <span class="json-string">"string"</span>
+            }
+          ]
+        },
+        <span class="json-key">"syntax"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"weakDependency"</span>: []
+      }
+    ]
+  },
+  <span class="json-key">"pluginName"</span>: <span class="json-string">"protocolbuffers/go:v1.36.10"</span>
+}</pre>
+    </div>
+</div>
+
+
+
+
+
+
+
+<div class="example-section">
+    <div class="example-block collapsed" data-example-id="grpc-response-GenerateCode">
+        <div class="example-header">
+            <span class="example-title">Response Example</span>
+            <div class="example-header-actions">
+                <button class="example-toggle" data-toggle-target="grpc-response-GenerateCode">
+                    <span class="material-symbols-rounded">expand_more</span>
+                    Show
+                </button>
+                <button class="copy-btn" data-copy-target="grpc-response-GenerateCode">
+                    <span class="material-symbols-rounded">content_copy</span>
+                    Copy
+                </button>
+            </div>
+        </div>
+        <pre class="example-code" id="grpc-response-GenerateCode">{
+  <span class="json-key">"codeGeneratorResponse"</span>: {
+    <span class="json-key">"error"</span>: <span class="json-string">"string"</span>,
+    <span class="json-key">"file"</span>: [
+      {
+        <span class="json-key">"content"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"generatedCodeInfo"</span>: {
+          <span class="json-key">"annotation"</span>: [
+            {
+              <span class="json-key">"begin"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"path"</span>: [],
+              <span class="json-key">"semantic"</span>: <span class="json-string">"Semantic_VALUE"</span>,
+              <span class="json-key">"sourceFile"</span>: <span class="json-string">"string"</span>
+            }
+          ]
+        },
+        <span class="json-key">"insertionPoint"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"name"</span>: <span class="json-string">"string"</span>
+      }
+    ],
+    <span class="json-key">"maximumEdition"</span>: <span class="json-number">0</span>,
+    <span class="json-key">"minimumEdition"</span>: <span class="json-number">0</span>,
+    <span class="json-key">"supportedFeatures"</span>: <span class="json-number">0</span>
+  }
+}</pre>
+    </div>
+</div>
+
+
+
+
+        
+    </div>
+</details>
+
+        
+        
+
+
+<details class="method-block" id="api-generator-v1-serviceapi-plugins" open>
+    <summary class="method-header">
+        <span class="badge badge-unary">UNARY</span>
+        
+        <span class="method-name">Plugins</span>
+        <span class="method-desc-short">List available plugins.
+
+Returns a list of all plugins regis...</span>
+        
+        <span class="material-symbols-rounded method-chevron">expand_more</span>
+    </summary>
+    <div class="method-details">
+        <div class="description"><p class="md-paragraph">List available plugins.</p><p class="md-paragraph">Returns a list of all plugins registered in the service.</p><p class="md-paragraph">Use this to discover available plugins and their versions.</p></div>
+
+        
+        
+<div class="io-grid">
+    <div class="io-box">
+        <span class="io-label">Request</span>
+        <div class="type-pill">
+            <span class="material-symbols-rounded">arrow_forward</span>
+            <a href="#api-generator-v1-pluginsrequest">PluginsRequest</a>
+        </div>
+    </div>
+    <div class="io-box">
+        <span class="io-label">Response</span>
+        <div class="type-pill">
+            <span class="material-symbols-rounded">arrow_back</span>
+            <a href="#api-generator-v1-pluginsresponse">PluginsResponse</a>
+        </div>
+    </div>
+</div>
+
+
+
+
+<div class="example-section">
+    <div class="example-block collapsed" data-example-id="grpc-request-Plugins">
+        <div class="example-header">
+            <span class="example-title">Request Example</span>
+            <div class="example-header-actions">
+                <button class="example-toggle" data-toggle-target="grpc-request-Plugins">
+                    <span class="material-symbols-rounded">expand_more</span>
+                    Show
+                </button>
+                <button class="copy-btn" data-copy-target="grpc-request-Plugins">
+                    <span class="material-symbols-rounded">content_copy</span>
+                    Copy
+                </button>
+            </div>
+        </div>
+        <pre class="example-code" id="grpc-request-Plugins">{}</pre>
+    </div>
+</div>
+
+
+
+
+
+
+
+<div class="example-section">
+    <div class="example-block collapsed" data-example-id="grpc-response-Plugins">
+        <div class="example-header">
+            <span class="example-title">Response Example</span>
+            <div class="example-header-actions">
+                <button class="example-toggle" data-toggle-target="grpc-response-Plugins">
+                    <span class="material-symbols-rounded">expand_more</span>
+                    Show
+                </button>
+                <button class="copy-btn" data-copy-target="grpc-response-Plugins">
+                    <span class="material-symbols-rounded">content_copy</span>
+                    Copy
+                </button>
+            </div>
+        </div>
+        <pre class="example-code" id="grpc-response-Plugins">{
+  <span class="json-key">"plugins"</span>: [
+    {
+      <span class="json-key">"createdAt"</span>: {
+        <span class="json-key">"nanos"</span>: <span class="json-number">0</span>,
+        <span class="json-key">"seconds"</span>: <span class="json-number">0</span>
+      },
+      <span class="json-key">"group"</span>: <span class="json-string">"protocolbuffers"</span>,
+      <span class="json-key">"id"</span>: <span class="json-string">"550e8400-e29b-41d4-a716-446655440000"</span>,
+      <span class="json-key">"name"</span>: <span class="json-string">"go"</span>,
+      <span class="json-key">"version"</span>: <span class="json-string">"v1.36.10"</span>
+    }
+  ]
+}</pre>
+    </div>
+</div>
+
+
+
+
+        
+    </div>
+</details>
+
+        
+    </div>
+</section>
+
+
+
+
+
+<section class="card" id="api-generator-v1-generatecoderequest">
+    <div class="card-header">
+        <div class="card-title">
+            <span class="material-symbols-rounded" style="color: var(--color-secondary)">data_object</span>
+            <h2>GenerateCodeRequest</h2>
+            
+        </div>
+        <span class="card-subtitle">api.generator.v1.GenerateCodeRequest</span>
+    </div>
+    <div class="card-body">
+        <div class="description"><p class="md-paragraph">Request message for code generation.</p></div>
+
+        
+        
+        <table class="schema-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+            
+            
+<tr class="">
+    <td>
+        <div class="field-name">code_generator_request</div>
+        <div class="field-number">id: 1</div>
+        <div class="field-number">json: codeGeneratorRequest</div>
+    </td>
+    <td>
+        <div class="field-type"><a href="#google-protobuf-compiler-codegeneratorrequest">CodeGeneratorRequest</a></div>
+        <div class="field-meta">
+            
+            
+            <span class="meta-tag optional">optional</span>
+            
+            
+        </div>
+    </td>
+    <td>
+        <div><p class="md-paragraph">Standard protobuf code generator request.</p><p class="md-paragraph">This should contain the proto files to process and any plugin-specific parameters.</p><p class="md-paragraph">The request is passed directly to the plugin&#39;s stdin.</p></div>
+        
+    </td>
+</tr>
+
+            
+            
+<tr class="">
+    <td>
+        <div class="field-name">plugin_name</div>
+        <div class="field-number">id: 2</div>
+        <div class="field-number">json: pluginName</div>
+    </td>
+    <td>
+        <div class="field-type">string</div>
+        <div class="field-meta">
+            
+            
+            <span class="meta-tag optional">optional</span>
+            
+            
+        </div>
+    </td>
+    <td>
+        <div><p class="md-paragraph">Name of the plugin to use for generation.</p><p class="md-paragraph">Format: <code class="md-inline-code">&lt;group&gt;/&lt;name&gt;:&lt;version&gt;</code></p><p class="md-paragraph">Examples:</p><ul class="md-ul"><li><code class="md-inline-code">protocolbuffers/go:v1.36.10</code></li><li><code class="md-inline-code">grpc/go:v1.5.1</code></li><li><code class="md-inline-code">grpc-ecosystem/gateway:latest</code></li></ul></div>
+        
+    </td>
+</tr>
+
+            
+            </tbody>
+        </table>
+        
+
+        
+        
+
+        
+
+        <div class="message-example">
+            <div class="message-example-title">Example</div>
+            
+
+<div class="example-section">
+    <div class="example-block collapsed" data-example-id="msg-api-generator-v1-generatecoderequest">
+        <div class="example-header">
+            <span class="example-title">JSON</span>
+            <div class="example-header-actions">
+                <button class="example-toggle" data-toggle-target="msg-api-generator-v1-generatecoderequest">
+                    <span class="material-symbols-rounded">expand_more</span>
+                    Show
+                </button>
+                <button class="copy-btn" data-copy-target="msg-api-generator-v1-generatecoderequest">
+                    <span class="material-symbols-rounded">content_copy</span>
+                    Copy
+                </button>
+            </div>
+        </div>
+        <pre class="example-code" id="msg-api-generator-v1-generatecoderequest">{
+  <span class="json-key">"codeGeneratorRequest"</span>: {
+    <span class="json-key">"compilerVersion"</span>: {
+      <span class="json-key">"major"</span>: <span class="json-number">0</span>,
+      <span class="json-key">"minor"</span>: <span class="json-number">0</span>,
+      <span class="json-key">"patch"</span>: <span class="json-number">0</span>,
+      <span class="json-key">"suffix"</span>: <span class="json-string">"string"</span>
+    },
+    <span class="json-key">"fileToGenerate"</span>: [],
+    <span class="json-key">"parameter"</span>: <span class="json-string">"string"</span>,
+    <span class="json-key">"protoFile"</span>: [
+      {
+        <span class="json-key">"dependency"</span>: [],
+        <span class="json-key">"edition"</span>: <span class="json-string">"Edition_VALUE"</span>,
+        <span class="json-key">"enumType"</span>: [
+          {
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"allowAlias"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecatedLegacyJsonFieldConflicts"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            },
+            <span class="json-key">"reservedName"</span>: [],
+            <span class="json-key">"reservedRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ],
+            <span class="json-key">"value"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cEnumValueOptions\u003e"</span>
+              }
+            ]
+          }
+        ],
+        <span class="json-key">"extension"</span>: [
+          {
+            <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+            <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"ctype"</span>: <span class="json-string">"CType_VALUE"</span>,
+              <span class="json-key">"debugRedact"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"editionDefaults"</span>: [
+                <span class="json-string">"\u003cEditionDefault\u003e"</span>
+              ],
+              <span class="json-key">"featureSupport"</span>: <span class="json-string">"\u003cFeatureSupport\u003e"</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"jstype"</span>: <span class="json-string">"JSType_VALUE"</span>,
+              <span class="json-key">"lazy"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"packed"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"retention"</span>: <span class="json-string">"OptionRetention_VALUE"</span>,
+              <span class="json-key">"targets"</span>: [],
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ],
+              <span class="json-key">"unverifiedLazy"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"weak"</span>: <span class="json-boolean">true</span>
+            },
+            <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+            <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+            <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+          }
+        ],
+        <span class="json-key">"messageType"</span>: [
+          {
+            <span class="json-key">"enumType"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cEnumOptions\u003e"</span>,
+                <span class="json-key">"reservedName"</span>: [],
+                <span class="json-key">"reservedRange"</span>: [
+                  <span class="json-string">"\u003cEnumReservedRange\u003e"</span>
+                ],
+                <span class="json-key">"value"</span>: [
+                  <span class="json-string">"\u003cEnumValueDescriptorProto\u003e"</span>
+                ]
+              }
+            ],
+            <span class="json-key">"extension"</span>: [
+              {
+                <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cFieldOptions\u003e"</span>,
+                <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+                <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+              }
+            ],
+            <span class="json-key">"extensionRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cExtensionRangeOptions\u003e"</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ],
+            <span class="json-key">"field"</span>: [
+              {
+                <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cFieldOptions\u003e"</span>,
+                <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+                <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+              }
+            ],
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"nestedType"</span>: [
+              {
+                <span class="json-key">"enumType"</span>: [
+                  <span class="json-string">"\u003cEnumDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"extension"</span>: [
+                  <span class="json-string">"\u003cFieldDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"extensionRange"</span>: [
+                  <span class="json-string">"\u003cExtensionRange\u003e"</span>
+                ],
+                <span class="json-key">"field"</span>: [
+                  <span class="json-string">"\u003cFieldDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"nestedType"</span>: [
+                  <span class="json-string">"\u003cDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"oneofDecl"</span>: [
+                  <span class="json-string">"\u003cOneofDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cMessageOptions\u003e"</span>,
+                <span class="json-key">"reservedName"</span>: [],
+                <span class="json-key">"reservedRange"</span>: [
+                  <span class="json-string">"\u003cReservedRange\u003e"</span>
+                ]
+              }
+            ],
+            <span class="json-key">"oneofDecl"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cOneofOptions\u003e"</span>
+              }
+            ],
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecatedLegacyJsonFieldConflicts"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"mapEntry"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"messageSetWireFormat"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"noStandardDescriptorAccessor"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            },
+            <span class="json-key">"reservedName"</span>: [],
+            <span class="json-key">"reservedRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ]
+          }
+        ],
+        <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"options"</span>: {
+          <span class="json-key">"ccEnableArenas"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"ccGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"csharpNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"features"</span>: {
+            <span class="json-key">"enumType"</span>: <span class="json-string">"EnumType_VALUE"</span>,
+            <span class="json-key">"fieldPresence"</span>: <span class="json-string">"FieldPresence_VALUE"</span>,
+            <span class="json-key">"jsonFormat"</span>: <span class="json-string">"JsonFormat_VALUE"</span>,
+            <span class="json-key">"messageEncoding"</span>: <span class="json-string">"MessageEncoding_VALUE"</span>,
+            <span class="json-key">"repeatedFieldEncoding"</span>: <span class="json-string">"RepeatedFieldEncoding_VALUE"</span>,
+            <span class="json-key">"utf8Validation"</span>: <span class="json-string">"Utf8Validation_VALUE"</span>
+          },
+          <span class="json-key">"goPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaGenerateEqualsAndHash"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaMultipleFiles"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaOuterClassname"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaStringCheckUtf8"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"objcClassPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"optimizeFor"</span>: <span class="json-string">"OptimizeMode_VALUE"</span>,
+          <span class="json-key">"phpClassPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"phpMetadataNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"phpNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"pyGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"rubyPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"swiftPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"uninterpretedOption"</span>: [
+            {
+              <span class="json-key">"aggregateValue"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"doubleValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"identifierValue"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"name"</span>: [
+                <span class="json-string">"\u003cNamePart\u003e"</span>
+              ],
+              <span class="json-key">"negativeIntValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"positiveIntValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"stringValue"</span>: <span class="json-string">"base64..."</span>
+            }
+          ]
+        },
+        <span class="json-key">"package"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"publicDependency"</span>: [],
+        <span class="json-key">"service"</span>: [
+          {
+            <span class="json-key">"method"</span>: [
+              {
+                <span class="json-key">"clientStreaming"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"inputType"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cMethodOptions\u003e"</span>,
+                <span class="json-key">"outputType"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"serverStreaming"</span>: <span class="json-boolean">true</span>
+              }
+            ],
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            }
+          }
+        ],
+        <span class="json-key">"sourceCodeInfo"</span>: {
+          <span class="json-key">"location"</span>: [
+            {
+              <span class="json-key">"leadingComments"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"leadingDetachedComments"</span>: [],
+              <span class="json-key">"path"</span>: [],
+              <span class="json-key">"span"</span>: [],
+              <span class="json-key">"trailingComments"</span>: <span class="json-string">"string"</span>
+            }
+          ]
+        },
+        <span class="json-key">"syntax"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"weakDependency"</span>: []
+      }
+    ],
+    <span class="json-key">"sourceFileDescriptors"</span>: [
+      {
+        <span class="json-key">"dependency"</span>: [],
+        <span class="json-key">"edition"</span>: <span class="json-string">"Edition_VALUE"</span>,
+        <span class="json-key">"enumType"</span>: [
+          {
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"allowAlias"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecatedLegacyJsonFieldConflicts"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            },
+            <span class="json-key">"reservedName"</span>: [],
+            <span class="json-key">"reservedRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ],
+            <span class="json-key">"value"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cEnumValueOptions\u003e"</span>
+              }
+            ]
+          }
+        ],
+        <span class="json-key">"extension"</span>: [
+          {
+            <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+            <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"ctype"</span>: <span class="json-string">"CType_VALUE"</span>,
+              <span class="json-key">"debugRedact"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"editionDefaults"</span>: [
+                <span class="json-string">"\u003cEditionDefault\u003e"</span>
+              ],
+              <span class="json-key">"featureSupport"</span>: <span class="json-string">"\u003cFeatureSupport\u003e"</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"jstype"</span>: <span class="json-string">"JSType_VALUE"</span>,
+              <span class="json-key">"lazy"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"packed"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"retention"</span>: <span class="json-string">"OptionRetention_VALUE"</span>,
+              <span class="json-key">"targets"</span>: [],
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ],
+              <span class="json-key">"unverifiedLazy"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"weak"</span>: <span class="json-boolean">true</span>
+            },
+            <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+            <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+            <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+          }
+        ],
+        <span class="json-key">"messageType"</span>: [
+          {
+            <span class="json-key">"enumType"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cEnumOptions\u003e"</span>,
+                <span class="json-key">"reservedName"</span>: [],
+                <span class="json-key">"reservedRange"</span>: [
+                  <span class="json-string">"\u003cEnumReservedRange\u003e"</span>
+                ],
+                <span class="json-key">"value"</span>: [
+                  <span class="json-string">"\u003cEnumValueDescriptorProto\u003e"</span>
+                ]
+              }
+            ],
+            <span class="json-key">"extension"</span>: [
+              {
+                <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cFieldOptions\u003e"</span>,
+                <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+                <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+              }
+            ],
+            <span class="json-key">"extensionRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cExtensionRangeOptions\u003e"</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ],
+            <span class="json-key">"field"</span>: [
+              {
+                <span class="json-key">"defaultValue"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"extendee"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"jsonName"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"label"</span>: <span class="json-string">"Label_VALUE"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"number"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"oneofIndex"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cFieldOptions\u003e"</span>,
+                <span class="json-key">"proto3Optional"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"type"</span>: <span class="json-string">"Type_VALUE"</span>,
+                <span class="json-key">"typeName"</span>: <span class="json-string">"string"</span>
+              }
+            ],
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"nestedType"</span>: [
+              {
+                <span class="json-key">"enumType"</span>: [
+                  <span class="json-string">"\u003cEnumDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"extension"</span>: [
+                  <span class="json-string">"\u003cFieldDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"extensionRange"</span>: [
+                  <span class="json-string">"\u003cExtensionRange\u003e"</span>
+                ],
+                <span class="json-key">"field"</span>: [
+                  <span class="json-string">"\u003cFieldDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"nestedType"</span>: [
+                  <span class="json-string">"\u003cDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"oneofDecl"</span>: [
+                  <span class="json-string">"\u003cOneofDescriptorProto\u003e"</span>
+                ],
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cMessageOptions\u003e"</span>,
+                <span class="json-key">"reservedName"</span>: [],
+                <span class="json-key">"reservedRange"</span>: [
+                  <span class="json-string">"\u003cReservedRange\u003e"</span>
+                ]
+              }
+            ],
+            <span class="json-key">"oneofDecl"</span>: [
+              {
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cOneofOptions\u003e"</span>
+              }
+            ],
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"deprecatedLegacyJsonFieldConflicts"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"mapEntry"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"messageSetWireFormat"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"noStandardDescriptorAccessor"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            },
+            <span class="json-key">"reservedName"</span>: [],
+            <span class="json-key">"reservedRange"</span>: [
+              {
+                <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+                <span class="json-key">"start"</span>: <span class="json-number">0</span>
+              }
+            ]
+          }
+        ],
+        <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"options"</span>: {
+          <span class="json-key">"ccEnableArenas"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"ccGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"csharpNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"features"</span>: {
+            <span class="json-key">"enumType"</span>: <span class="json-string">"EnumType_VALUE"</span>,
+            <span class="json-key">"fieldPresence"</span>: <span class="json-string">"FieldPresence_VALUE"</span>,
+            <span class="json-key">"jsonFormat"</span>: <span class="json-string">"JsonFormat_VALUE"</span>,
+            <span class="json-key">"messageEncoding"</span>: <span class="json-string">"MessageEncoding_VALUE"</span>,
+            <span class="json-key">"repeatedFieldEncoding"</span>: <span class="json-string">"RepeatedFieldEncoding_VALUE"</span>,
+            <span class="json-key">"utf8Validation"</span>: <span class="json-string">"Utf8Validation_VALUE"</span>
+          },
+          <span class="json-key">"goPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaGenerateEqualsAndHash"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaMultipleFiles"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"javaOuterClassname"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"javaStringCheckUtf8"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"objcClassPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"optimizeFor"</span>: <span class="json-string">"OptimizeMode_VALUE"</span>,
+          <span class="json-key">"phpClassPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"phpMetadataNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"phpNamespace"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"pyGenericServices"</span>: <span class="json-boolean">true</span>,
+          <span class="json-key">"rubyPackage"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"swiftPrefix"</span>: <span class="json-string">"string"</span>,
+          <span class="json-key">"uninterpretedOption"</span>: [
+            {
+              <span class="json-key">"aggregateValue"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"doubleValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"identifierValue"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"name"</span>: [
+                <span class="json-string">"\u003cNamePart\u003e"</span>
+              ],
+              <span class="json-key">"negativeIntValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"positiveIntValue"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"stringValue"</span>: <span class="json-string">"base64..."</span>
+            }
+          ]
+        },
+        <span class="json-key">"package"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"publicDependency"</span>: [],
+        <span class="json-key">"service"</span>: [
+          {
+            <span class="json-key">"method"</span>: [
+              {
+                <span class="json-key">"clientStreaming"</span>: <span class="json-boolean">true</span>,
+                <span class="json-key">"inputType"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"options"</span>: <span class="json-string">"\u003cMethodOptions\u003e"</span>,
+                <span class="json-key">"outputType"</span>: <span class="json-string">"string"</span>,
+                <span class="json-key">"serverStreaming"</span>: <span class="json-boolean">true</span>
+              }
+            ],
+            <span class="json-key">"name"</span>: <span class="json-string">"string"</span>,
+            <span class="json-key">"options"</span>: {
+              <span class="json-key">"deprecated"</span>: <span class="json-boolean">true</span>,
+              <span class="json-key">"features"</span>: <span class="json-string">"\u003cFeatureSet\u003e"</span>,
+              <span class="json-key">"uninterpretedOption"</span>: [
+                <span class="json-string">"\u003cUninterpretedOption\u003e"</span>
+              ]
+            }
+          }
+        ],
+        <span class="json-key">"sourceCodeInfo"</span>: {
+          <span class="json-key">"location"</span>: [
+            {
+              <span class="json-key">"leadingComments"</span>: <span class="json-string">"string"</span>,
+              <span class="json-key">"leadingDetachedComments"</span>: [],
+              <span class="json-key">"path"</span>: [],
+              <span class="json-key">"span"</span>: [],
+              <span class="json-key">"trailingComments"</span>: <span class="json-string">"string"</span>
+            }
+          ]
+        },
+        <span class="json-key">"syntax"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"weakDependency"</span>: []
+      }
+    ]
+  },
+  <span class="json-key">"pluginName"</span>: <span class="json-string">"protocolbuffers/go:v1.36.10"</span>
+}</pre>
+    </div>
+</div>
+
+
+        </div>
+    </div>
+</section>
+
+
+
+
+
+
+
+<section class="card" id="api-generator-v1-generatecoderesponse">
+    <div class="card-header">
+        <div class="card-title">
+            <span class="material-symbols-rounded" style="color: var(--color-secondary)">data_object</span>
+            <h2>GenerateCodeResponse</h2>
+            
+        </div>
+        <span class="card-subtitle">api.generator.v1.GenerateCodeResponse</span>
+    </div>
+    <div class="card-body">
+        <div class="description"><p class="md-paragraph">Response message for code generation.</p></div>
+
+        
+        
+        <table class="schema-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+            
+            
+<tr class="">
+    <td>
+        <div class="field-name">code_generator_response</div>
+        <div class="field-number">id: 1</div>
+        <div class="field-number">json: codeGeneratorResponse</div>
+    </td>
+    <td>
+        <div class="field-type"><a href="#google-protobuf-compiler-codegeneratorresponse">CodeGeneratorResponse</a></div>
+        <div class="field-meta">
+            
+            
+            <span class="meta-tag optional">optional</span>
+            
+            
+        </div>
+    </td>
+    <td>
+        <div><p class="md-paragraph">Standard protobuf code generator response.</p><p class="md-paragraph">Contains the generated files and any error messages from the plugin.</p><p class="md-paragraph">Check the <code class="md-inline-code">error</code> field in the response for plugin-level errors.</p></div>
+        
+    </td>
+</tr>
+
+            
+            </tbody>
+        </table>
+        
+
+        
+        
+
+        
+
+        <div class="message-example">
+            <div class="message-example-title">Example</div>
+            
+
+<div class="example-section">
+    <div class="example-block collapsed" data-example-id="msg-api-generator-v1-generatecoderesponse">
+        <div class="example-header">
+            <span class="example-title">JSON</span>
+            <div class="example-header-actions">
+                <button class="example-toggle" data-toggle-target="msg-api-generator-v1-generatecoderesponse">
+                    <span class="material-symbols-rounded">expand_more</span>
+                    Show
+                </button>
+                <button class="copy-btn" data-copy-target="msg-api-generator-v1-generatecoderesponse">
+                    <span class="material-symbols-rounded">content_copy</span>
+                    Copy
+                </button>
+            </div>
+        </div>
+        <pre class="example-code" id="msg-api-generator-v1-generatecoderesponse">{
+  <span class="json-key">"codeGeneratorResponse"</span>: {
+    <span class="json-key">"error"</span>: <span class="json-string">"string"</span>,
+    <span class="json-key">"file"</span>: [
+      {
+        <span class="json-key">"content"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"generatedCodeInfo"</span>: {
+          <span class="json-key">"annotation"</span>: [
+            {
+              <span class="json-key">"begin"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"end"</span>: <span class="json-number">0</span>,
+              <span class="json-key">"path"</span>: [],
+              <span class="json-key">"semantic"</span>: <span class="json-string">"Semantic_VALUE"</span>,
+              <span class="json-key">"sourceFile"</span>: <span class="json-string">"string"</span>
+            }
+          ]
+        },
+        <span class="json-key">"insertionPoint"</span>: <span class="json-string">"string"</span>,
+        <span class="json-key">"name"</span>: <span class="json-string">"string"</span>
+      }
+    ],
+    <span class="json-key">"maximumEdition"</span>: <span class="json-number">0</span>,
+    <span class="json-key">"minimumEdition"</span>: <span class="json-number">0</span>,
+    <span class="json-key">"supportedFeatures"</span>: <span class="json-number">0</span>
+  }
+}</pre>
+    </div>
+</div>
+
+
+        </div>
+    </div>
+</section>
+
+
+
+
+
+
+
+<section class="card" id="api-generator-v1-pluginsrequest">
+    <div class="card-header">
+        <div class="card-title">
+            <span class="material-symbols-rounded" style="color: var(--color-secondary)">data_object</span>
+            <h2>PluginsRequest</h2>
+            
+        </div>
+        <span class="card-subtitle">api.generator.v1.PluginsRequest</span>
+    </div>
+    <div class="card-body">
+        <div class="description"><p class="md-paragraph">Request message for listing plugins.</p><p class="md-paragraph">Currently accepts no parameters. Future versions may add filtering options.</p></div>
+
+        
+
+        
+
+        <div class="message-example">
+            <div class="message-example-title">Example</div>
+            
+
+<div class="example-section">
+    <div class="example-block collapsed" data-example-id="msg-api-generator-v1-pluginsrequest">
+        <div class="example-header">
+            <span class="example-title">JSON</span>
+            <div class="example-header-actions">
+                <button class="example-toggle" data-toggle-target="msg-api-generator-v1-pluginsrequest">
+                    <span class="material-symbols-rounded">expand_more</span>
+                    Show
+                </button>
+                <button class="copy-btn" data-copy-target="msg-api-generator-v1-pluginsrequest">
+                    <span class="material-symbols-rounded">content_copy</span>
+                    Copy
+                </button>
+            </div>
+        </div>
+        <pre class="example-code" id="msg-api-generator-v1-pluginsrequest">{}</pre>
+    </div>
+</div>
+
+
+        </div>
+    </div>
+</section>
+
+
+
+
+
+
+
+<section class="card" id="api-generator-v1-pluginsresponse">
+    <div class="card-header">
+        <div class="card-title">
+            <span class="material-symbols-rounded" style="color: var(--color-secondary)">data_object</span>
+            <h2>PluginsResponse</h2>
+            
+        </div>
+        <span class="card-subtitle">api.generator.v1.PluginsResponse</span>
+    </div>
+    <div class="card-body">
+        <div class="description"><p class="md-paragraph">Response message for listing plugins.</p></div>
+
+        
+        
+        <table class="schema-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+            
+            
+<tr class="">
+    <td>
+        <div class="field-name">plugins</div>
+        <div class="field-number">id: 1</div>
+        
+    </td>
+    <td>
+        <div class="field-type"><a href="#api-generator-v1-plugininfo">PluginInfo</a></div>
+        <div class="field-meta">
+            
+            
+            <span class="meta-tag repeated">repeated</span>
+            
+            
+        </div>
+    </td>
+    <td>
+        <div><p class="md-paragraph">List of available plugins.</p><p class="md-paragraph">Plugins are sorted by group, name, and version.</p></div>
+        
+    </td>
+</tr>
+
+            
+            </tbody>
+        </table>
+        
+
+        
+        
+
+        
+
+        <div class="message-example">
+            <div class="message-example-title">Example</div>
+            
+
+<div class="example-section">
+    <div class="example-block collapsed" data-example-id="msg-api-generator-v1-pluginsresponse">
+        <div class="example-header">
+            <span class="example-title">JSON</span>
+            <div class="example-header-actions">
+                <button class="example-toggle" data-toggle-target="msg-api-generator-v1-pluginsresponse">
+                    <span class="material-symbols-rounded">expand_more</span>
+                    Show
+                </button>
+                <button class="copy-btn" data-copy-target="msg-api-generator-v1-pluginsresponse">
+                    <span class="material-symbols-rounded">content_copy</span>
+                    Copy
+                </button>
+            </div>
+        </div>
+        <pre class="example-code" id="msg-api-generator-v1-pluginsresponse">{
+  <span class="json-key">"plugins"</span>: [
+    {
+      <span class="json-key">"createdAt"</span>: {
+        <span class="json-key">"nanos"</span>: <span class="json-number">0</span>,
+        <span class="json-key">"seconds"</span>: <span class="json-number">0</span>
+      },
+      <span class="json-key">"group"</span>: <span class="json-string">"protocolbuffers"</span>,
+      <span class="json-key">"id"</span>: <span class="json-string">"550e8400-e29b-41d4-a716-446655440000"</span>,
+      <span class="json-key">"name"</span>: <span class="json-string">"go"</span>,
+      <span class="json-key">"version"</span>: <span class="json-string">"v1.36.10"</span>
+    }
+  ]
+}</pre>
+    </div>
+</div>
+
+
+        </div>
+    </div>
+</section>
+
+
+
+
+
+
+
+<section class="card" id="api-generator-v1-plugininfo">
+    <div class="card-header">
+        <div class="card-title">
+            <span class="material-symbols-rounded" style="color: var(--color-secondary)">data_object</span>
+            <h2>PluginInfo</h2>
+            
+        </div>
+        <span class="card-subtitle">api.generator.v1.PluginInfo</span>
+    </div>
+    <div class="card-body">
+        <div class="description"><p class="md-paragraph">Information about a registered plugin.</p></div>
+
+        
+        
+        <table class="schema-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+            
+            
+<tr class="">
+    <td>
+        <div class="field-name">id</div>
+        <div class="field-number">id: 1</div>
+        
+    </td>
+    <td>
+        <div class="field-type">string</div>
+        <div class="field-meta">
+            
+            
+            <span class="meta-tag optional">optional</span>
+            
+            
+        </div>
+    </td>
+    <td>
+        <div><p class="md-paragraph">Unique identifier for the plugin.</p><p class="md-paragraph">This is an internal UUID assigned when the plugin is registered.</p></div>
+        
+    </td>
+</tr>
+
+            
+            
+<tr class="">
+    <td>
+        <div class="field-name">group</div>
+        <div class="field-number">id: 2</div>
+        
+    </td>
+    <td>
+        <div class="field-type">string</div>
+        <div class="field-meta">
+            
+            
+            <span class="meta-tag optional">optional</span>
+            
+            
+        </div>
+    </td>
+    <td>
+        <div><p class="md-paragraph">Group to which the plugin belongs.</p><p class="md-paragraph">Groups organize plugins by maintainer or ecosystem.</p><p class="md-paragraph">Common groups:</p><ul class="md-ul"><li><code class="md-inline-code">protocolbuffers</code> — Official Google protobuf plugins</li><li><code class="md-inline-code">grpc</code> — Official gRPC plugins</li><li><code class="md-inline-code">grpc-ecosystem</code> — gRPC ecosystem plugins (gateway, openapi)</li><li><code class="md-inline-code">community</code> — Community-maintained plugins</li></ul></div>
+        
+    </td>
+</tr>
+
+            
+            
+<tr class="">
+    <td>
+        <div class="field-name">name</div>
+        <div class="field-number">id: 3</div>
+        
+    </td>
+    <td>
+        <div class="field-type">string</div>
+        <div class="field-meta">
+            
+            
+            <span class="meta-tag optional">optional</span>
+            
+            
+        </div>
+    </td>
+    <td>
+        <div><p class="md-paragraph">Name of the plugin.</p><p class="md-paragraph">This is the plugin&#39;s identifier within its group.</p><p class="md-paragraph">Examples: <code class="md-inline-code">go</code>, <code class="md-inline-code">python</code>, <code class="md-inline-code">gateway</code>, <code class="md-inline-code">openapiv2</code></p></div>
+        
+    </td>
+</tr>
+
+            
+            
+<tr class="">
+    <td>
+        <div class="field-name">version</div>
+        <div class="field-number">id: 4</div>
+        
+    </td>
+    <td>
+        <div class="field-type">string</div>
+        <div class="field-meta">
+            
+            
+            <span class="meta-tag optional">optional</span>
+            
+            
+        </div>
+    </td>
+    <td>
+        <div><p class="md-paragraph">Version of the plugin.</p><p class="md-paragraph">Follows semantic versioning (semver) format.</p></div>
+        
+    </td>
+</tr>
+
+            
+            
+<tr class="">
+    <td>
+        <div class="field-name">created_at</div>
+        <div class="field-number">id: 5</div>
+        <div class="field-number">json: createdAt</div>
+    </td>
+    <td>
+        <div class="field-type"><a href="#google-protobuf-timestamp">Timestamp</a></div>
+        <div class="field-meta">
+            
+            
+            <span class="meta-tag optional">optional</span>
+            
+            
+        </div>
+    </td>
+    <td>
+        <div><p class="md-paragraph">Timestamp when the plugin was registered.</p></div>
+        
+    </td>
+</tr>
+
+            
+            </tbody>
+        </table>
+        
+
+        
+        
+
+        
+
+        <div class="message-example">
+            <div class="message-example-title">Example</div>
+            
+
+<div class="example-section">
+    <div class="example-block collapsed" data-example-id="msg-api-generator-v1-plugininfo">
+        <div class="example-header">
+            <span class="example-title">JSON</span>
+            <div class="example-header-actions">
+                <button class="example-toggle" data-toggle-target="msg-api-generator-v1-plugininfo">
+                    <span class="material-symbols-rounded">expand_more</span>
+                    Show
+                </button>
+                <button class="copy-btn" data-copy-target="msg-api-generator-v1-plugininfo">
+                    <span class="material-symbols-rounded">content_copy</span>
+                    Copy
+                </button>
+            </div>
+        </div>
+        <pre class="example-code" id="msg-api-generator-v1-plugininfo">{
+  <span class="json-key">"createdAt"</span>: {
+    <span class="json-key">"nanos"</span>: <span class="json-number">0</span>,
+    <span class="json-key">"seconds"</span>: <span class="json-number">0</span>
+  },
+  <span class="json-key">"group"</span>: <span class="json-string">"protocolbuffers"</span>,
+  <span class="json-key">"id"</span>: <span class="json-string">"550e8400-e29b-41d4-a716-446655440000"</span>,
+  <span class="json-key">"name"</span>: <span class="json-string">"go"</span>,
+  <span class="json-key">"version"</span>: <span class="json-string">"v1.36.10"</span>
+}</pre>
+    </div>
+</div>
+
+
+        </div>
+    </div>
+</section>
+
+
+
+
+
+
+
+
+
+    </main>
+    <script>
+(function() {
+    'use strict';
+
+    // ===== Search =====
+    function setupSearch() {
+        const searchInput = document.getElementById('nav-search');
+        if (!searchInput) return;
+
+        searchInput.addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase().trim();
+            const links = document.querySelectorAll('.nav-link');
+
+            links.forEach(function(link) {
+                const name = link.getAttribute('data-name') || '';
+                const parent = link.closest('.nav-nested');
+
+                if (query === '' || name.includes(query)) {
+                    link.classList.remove('hidden');
+                    if (parent) parent.classList.remove('hidden');
+                } else {
+                    link.classList.add('hidden');
+                }
+            });
+
+            // Show nested containers if any child is visible
+            document.querySelectorAll('.nav-nested').forEach(function(nested) {
+                const visibleChildren = nested.querySelectorAll('.nav-link:not(.hidden)');
+                if (visibleChildren.length > 0) {
+                    nested.classList.remove('hidden');
+                }
+            });
+        });
+    }
+
+    // ===== Scroll Spy =====
+    function setupScrollSpy() {
+        const sections = document.querySelectorAll('section[id]');
+        const navLinks = document.querySelectorAll('.nav-link');
+
+        function updateActiveNav() {
+            const scrollPos = window.scrollY + 100;
+
+            sections.forEach(function(section) {
+                const top = section.offsetTop;
+                const height = section.offsetHeight;
+                const id = section.getAttribute('id');
+
+                if (scrollPos >= top && scrollPos < top + height) {
+                    navLinks.forEach(function(link) {
+                        link.classList.remove('active');
+                        if (link.getAttribute('href') === '#' + id) {
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }
+
+        window.addEventListener('scroll', updateActiveNav);
+        updateActiveNav();
+    }
+
+    // ===== Protocol Tabs =====
+    function setupProtocolTabs() {
+        document.querySelectorAll('.protocol-tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                const tabsContainer = tab.parentElement;
+                const methodDetails = tabsContainer.parentElement;
+                const tabName = tab.getAttribute('data-tab');
+
+                // Update active tab
+                tabsContainer.querySelectorAll('.protocol-tab').forEach(function(t) {
+                    t.classList.remove('active');
+                });
+                tab.classList.add('active');
+
+                // Update active content
+                methodDetails.querySelectorAll('.protocol-content').forEach(function(content) {
+                    content.classList.remove('active');
+                });
+                const targetContent = methodDetails.querySelector('.protocol-content[data-tab-content="' + tabName + '"]');
+                if (targetContent) {
+                    targetContent.classList.add('active');
+                }
+            });
+        });
+    }
+
+    // ===== Example Toggles =====
+    function setupExampleToggles() {
+        document.querySelectorAll('.example-toggle').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const targetId = btn.getAttribute('data-toggle-target');
+                const block = document.querySelector('.example-block[data-example-id="' + targetId + '"]');
+                if (block) {
+                    const isCollapsed = block.classList.contains('collapsed');
+                    if (isCollapsed) {
+                        block.classList.remove('collapsed');
+                        btn.innerHTML = '<span class="material-symbols-rounded">expand_more</span>Hide';
+                    } else {
+                        block.classList.add('collapsed');
+                        btn.innerHTML = '<span class="material-symbols-rounded">expand_more</span>Show';
+                    }
+                }
+            });
+        });
+    }
+
+    // ===== Copy Buttons =====
+    function setupCopyButtons() {
+        document.querySelectorAll('.copy-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const targetId = btn.getAttribute('data-copy-target');
+                const target = document.getElementById(targetId);
+                if (target) {
+                    navigator.clipboard.writeText(target.textContent).then(function() {
+                        btn.classList.add('copied');
+                        const originalHtml = btn.innerHTML;
+                        btn.innerHTML = '<span class="material-symbols-rounded">check</span> Copied';
+                        setTimeout(function() {
+                            btn.classList.remove('copied');
+                            btn.innerHTML = originalHtml;
+                        }, 2000);
+                    });
+                }
+            });
+        });
+    }
+
+    // ===== Initialize =====
+    document.addEventListener('DOMContentLoaded', function() {
+        setupSearch();
+        setupScrollSpy();
+        setupProtocolTabs();
+        setupExampleToggles();
+        setupCopyButtons();
+    });
+})();
+
+    </script>
+</body>
+</html>

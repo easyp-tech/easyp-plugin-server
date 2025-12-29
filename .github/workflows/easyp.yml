@@ -1,0 +1,41 @@
+name: EasyP
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: EasyP Lint
+        uses: easyp-tech/actions/lint@v1
+        with:
+          version: v0.12.0
+          config: easyp.yaml
+          directory: api
+
+  breaking:
+    name: Breaking Changes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: EasyP Breaking
+        uses: easyp-tech/actions/breaking@v1
+        with:
+          version: v0.12.0
+          config: easyp.yaml
+          directory: api
+          against: origin/main

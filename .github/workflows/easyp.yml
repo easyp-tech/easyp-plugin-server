@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: EasyP Lint
-        uses: easyp-tech/actions/lint@v1.6.3
+        uses: easyp-tech/actions/lint@v1
         with:
           version: v0.12.2
           config: easyp.yaml
@@ -32,7 +32,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: EasyP Breaking
-        uses: easyp-tech/actions/breaking@v1.6.3
+        uses: easyp-tech/actions/breaking@v1
         with:
           version: v0.12.2
           config: easyp.yaml

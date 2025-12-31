@@ -1,4 +1,5 @@
 deps: [
+  github.com/bufbuild/protoc-gen-validate,
   github.com/googleapis/googleapis,
   github.com/grpc-ecosystem/grpc-gateway,
   github.com/easyp-tech/protoc-gen-easydoc,

@@ -1,115 +1,214 @@
+networks:
+  easyp_network:
+    name: easyp_network
+    driver: bridge
+
 volumes:
   registry-data:
   postgres-data:
-  loki-data:
-  prometheus-data:
+  rustfs-data:
   grafana-data:
 
 services:
 
-  registry:
-    image: registry:3.0.0
-    container_name: "easyp-registry"
-    restart: "unless-stopped"
-    volumes:
-      - "registry-data:/var/lib/registry"
-    ports:
-      - "127.0.0.1:5005:5000"
-    labels:
-      - "service=easyp-registry"
-
-  postgres:
-    image: postgres:17.4
-    container_name: "easyp-postgres"
+  traefik:
+    image: traefik:v3.6
+    container_name: easyp-traefik
     restart: unless-stopped
+    command:
+      - "--configFile=/etc/traefik/traefik.yml"
     volumes:
-      - "postgres-data:/var/lib/postgresql/data"
-    environment:
-      POSTGRES_DB: "easyp_db"
-      POSTGRES_USER: "easyp_svc"
-      POSTGRES_PASSWORD: "easyp_pass"
+      - "./configs/traefik/traefik.yml:/etc/traefik/traefik.yml:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
     ports:
-      - "5432:5432"
+      - "${EASYP_TRAEFIK_PORT:-80}:80"
+    networks:
+      - easyp_network
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: easyp-rustfs
+    restart: unless-stopped
+    environment:
+      - RUSTFS_ACCESS_KEY=rustfsadmin
+      - RUSTFS_SECRET_KEY=rustfsadmin
+    volumes:
+      - rustfs-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
     labels:
-      - "service=easyp-database-postgres"
+      traefik.enable: "true"
+      traefik.http.routers.rustfs.rule: "Host(`easyp.s3.localhost`)"
+      traefik.http.services.rustfs.loadbalancer.server.port: "9001"
+    networks:
+      - easyp_network
+
+  init-buckets:
+    image: minio/mc:latest
+    container_name: easyp-init-buckets
+    entrypoint: >
+      /bin/sh -c "
+      until /usr/bin/mc alias set rustfs http://rustfs:9000 rustfsadmin rustfsadmin; do echo '...waiting for S3...'; sleep 1; done;
+      /usr/bin/mc mb --ignore-existing rustfs/tempo;
+      /usr/bin/mc mb --ignore-existing rustfs/mimir-blocks;
+      /usr/bin/mc mb --ignore-existing rustfs/mimir-ruler;
+      /usr/bin/mc mb --ignore-existing rustfs/mimir-alertmanager;
+      /usr/bin/mc mb --ignore-existing rustfs/loki-chunks;
+      /usr/bin/mc mb --ignore-existing rustfs/loki-ruler;
+      /usr/bin/mc mb --ignore-existing rustfs/pyroscope;
+      exit 0;
+      "
+    networks:
+      - easyp_network
+
+  mimir:
+    image: grafana/mimir:2.16.0
+    container_name: easyp-mimir
+    restart: unless-stopped
+    depends_on:
+      init-buckets:
+        condition: service_completed_successfully
+    volumes:
+      - "./configs/mimir/mimir.yaml:/etc/mimir/mimir.yaml:ro"
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    networks:
+      - easyp_network
 
   loki:
-    image: "grafana/loki:3.5.7"
-    container_name: "easyp-loki"
-    restart: "unless-stopped"
+    image: grafana/loki:3.5.0
+    container_name: easyp-loki
+    restart: unless-stopped
+    depends_on:
+      init-buckets:
+        condition: service_completed_successfully
     volumes:
-      - "./infrastructure/loki/config.yml:/etc/loki/config.yml"
-      - "loki-data:/loki"
-    command: [ "-config.file=/etc/loki/config.yml" ]
-    ports:
-      - "3100:3100"
-    labels:
-      - "service=easyp-logs-loki"
+      - "./configs/loki/loki.yml:/etc/loki/loki.yml:ro"
+    command: ["-config.file=/etc/loki/loki.yml"]
+    networks:
+      - easyp_network
 
-  promtail:
-    image: "grafana/promtail:3.5.7"
-    container_name: "easyp-promtail"
-    restart: "unless-stopped"
+  tempo:
+    image: grafana/tempo:2.7.2
+    container_name: easyp-tempo
+    restart: unless-stopped
+    depends_on:
+      init-buckets:
+        condition: service_completed_successfully
     volumes:
-      - "./infrastructure/promtail/config.yml:/etc/promtail/config.yml"
+      - "./configs/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro"
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    networks:
+      - easyp_network
+
+  alloy:
+    image: grafana/alloy:v1.9.1
+    container_name: easyp-alloy
+    restart: unless-stopped
+    depends_on:
+      - loki
+      - mimir
+      - tempo
+    volumes:
+      - "./configs/alloy/config.alloy:/etc/alloy/config.alloy:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "/var/lib/docker/containers:/var/lib/docker/containers:ro"
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    command: [ "-config.file=/etc/promtail/config.yml", "-log.format=json" ]
-    ports:
-      - "9080:9080"
-    labels:
-      - "service=easyp-logs-promtail"
-
-  prometheus:
-    image: "prom/prometheus:v3.7.3"
-    container_name: "easyp-prometheus"
-    restart: "unless-stopped"
-    volumes:
-      - "prometheus-data:/data"
-      - "./infrastructure/prometheus/config.yml:/etc/prometheus/prometheus.yml"
     command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--log.level=debug"
+      - "run"
+      - "/etc/alloy/config.alloy"
+      - "--storage.path=/var/lib/alloy/data"
     ports:
-      - "9090:9090"
-    labels:
-      - "service=easyp-metrics-prometheus"
+      - "12345:12345"
+    networks:
+      - easyp_network
+
+  pyroscope:
+    image: grafana/pyroscope:1.13.5
+    container_name: easyp-pyroscope
+    restart: unless-stopped
+    depends_on:
+      init-buckets:
+        condition: service_completed_successfully
+    volumes:
+      - "./configs/pyroscope/pyroscope.yaml:/etc/pyroscope/pyroscope.yaml:ro"
+    command: ["-config.file=/etc/pyroscope/pyroscope.yaml"]
+    networks:
+      - easyp_network
 
   grafana:
-    image: "grafana/grafana:12.2.1"
-    container_name: "easyp-grafana"
-    restart: "unless-stopped"
+    image: grafana/grafana:12.3.0
+    container_name: easyp-grafana
+    restart: unless-stopped
+    depends_on:
+      - loki
+      - mimir
+      - tempo
+      - pyroscope
     volumes:
-      - "./infrastructure/grafana/config.ini:/local/grafana.ini"
-      - "./infrastructure/grafana/dashboards:/etc/grafana/provisioning/dashboards"
-      - "./infrastructure/grafana/datasources:/etc/grafana/provisioning/datasources"
-      - "grafana-data:/var/lib/grafana"
+      - "./configs/grafana/config.ini:/etc/grafana/grafana.ini:ro"
+      - "./configs/grafana/provisioning:/etc/grafana/provisioning:ro"
+      - grafana-data:/var/lib/grafana
     environment:
-      GF_PATHS_CONFIG: "/local/grafana.ini"
-      GF_SERVER_SERVE_FROM_SUB_PATH: true
+      GF_PATHS_CONFIG: "/etc/grafana/grafana.ini"
+      GF_PATHS_PROVISIONING: "/etc/grafana/provisioning"
     ports:
-      - "3000:3000"
+      - "${EASYP_GRAFANA_PORT:-3000}:3000"
     labels:
-      - "service=easyp-metrics-grafana"
+      traefik.enable: "true"
+      traefik.http.routers.grafana.rule: "Host(`easyp.grafana.localhost`)"
+      traefik.http.services.grafana.loadbalancer.server.port: "3000"
+    networks:
+      - easyp_network
+
+  registry:
+    image: registry:3.0.0
+    container_name: easyp-registry
+    restart: unless-stopped
+    volumes:
+      - registry-data:/var/lib/registry
+    ports:
+      - "${EASYP_REGISTRY_PORT:-5005}:5000"
+    networks:
+      - easyp_network
+
+  postgres:
+    image: postgres:17.7
+    container_name: easyp-postgres
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: easyp_db
+      POSTGRES_USER: easyp_svc
+      POSTGRES_PASSWORD: easyp_pass
+    ports:
+      - "${EASYP_POSTGRES_PORT:-5432}:5432"
+    networks:
+      - easyp_network
 
   service:
     build:
       context: .
-      dockerfile: ./docker/Dockerfile
-    container_name: "easyp-api-service"
+      dockerfile: ./Dockerfile
+    container_name: easyp-api-service
     restart: always
-    labels:
-      service: "easyp-api-service"
-    command: [
-      "-cfg=/config.yml",
-      "-log_level=debug",
-    ]
+    depends_on:
+      - postgres
+      - alloy
+    command: ["-cfg=/config.yml", "-log_level=debug"]
     volumes:
-      - "./config.yml:/config.yml"
-      - "./migrate:/migrate"
+      - "./config.yml:/config.yml:ro"
+      - "./migrate:/migrate:ro"
       - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://alloy:4317"
+      OTEL_SERVICE_NAME: "easyp-api-service"
     ports:
-      - "8080:8080" # gRPC
-      - "8081:8081" # metric
-      - "8082:8082" # health
-      - "8083:8083" # gateway
+      - "${EASYP_GRPC_PORT:-8080}:8080"
+      - "${EASYP_METRICS_PORT:-8081}:8081"
+      - "${EASYP_HEALTH_PORT:-8082}:8082"
+      - "${EASYP_GATEWAY_PORT:-8083}:8083"
+    labels:
+      service: easyp-api-service
+    networks:
+      - easyp_network

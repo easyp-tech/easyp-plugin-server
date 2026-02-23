@@ -1,0 +1,17 @@
+apiVersion: 1
+
+providers:
+  - name: Logs
+    folder: logs
+    options:
+      path: /etc/grafana/provisioning/dashboards/logs
+
+  - name: Metrics
+    folder: metrics
+    options:
+      path: /etc/grafana/provisioning/dashboards/metrics
+
+  - name: Service
+    folder: service
+    options:
+      path: /etc/grafana/provisioning/dashboards/service

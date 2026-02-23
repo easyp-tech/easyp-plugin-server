@@ -14,14 +14,12 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/jmoiron/sqlx"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sipki-tech/dev-platform/database"
-	"github.com/sipki-tech/dev-platform/database/connectors"
-	"github.com/sipki-tech/dev-platform/database/migrations"
+	"github.com/lib/pq"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
 
 	"github.com/easyp-tech/service/internal/core"
+	"github.com/easyp-tech/service/internal/database"
 )
 
 var _ core.Registry = &Registry{}
@@ -43,23 +41,11 @@ type (
 	// PluginConfig represents the complete plugin configuration
 	PluginConfig struct {
 		Docker *DockerConfig `json:"docker,omitempty"`
-		// Future extensions can be added here:
-		// Security SecurityConfig `json:"security,omitempty"`
-		// Monitoring MonitoringConfig `json:"monitoring,omitempty"`
-		// Cache CacheConfig `json:"cache,omitempty"`
-	}
-
-	// Config provide connection info for database.
-	Config struct {
-		Postgres   connectors.Raw
-		MigrateDir string
-		Driver     string
-		Domain     string
 	}
 
 	// Registry is a registry for EasyP plugin server.
 	Registry struct {
-		sql    *database.SQL
+		db     *database.SQL
 		domain *url.URL
 	}
 
@@ -70,6 +56,7 @@ type (
 		Name      string          `db:"name"`
 		Version   string          `db:"version"`
 		Config    json.RawMessage `db:"config"`
+		Tags      pq.StringArray  `db:"tags"`
 		CreatedAt time.Time       `db:"created_at"`
 
 		domain       *url.URL     `db:"-"`
@@ -78,111 +65,92 @@ type (
 )
 
 // New build and returns a new Registry.
-func New(ctx context.Context, reg *prometheus.Registry, namespace string, cfg Config) (*Registry, error) {
-	const subsystem = "repo"
-	m := database.NewMetrics(reg, namespace, subsystem, new(core.Registry))
-
-	returnErrs := []error{ // List of core.Err… returned by Repo methods.
-		core.ErrNotFound,
-		core.ErrInvalidPluginName,
-	}
-
-	migrates, err := migrations.Parse(cfg.MigrateDir)
-	if err != nil {
-		return nil, fmt.Errorf("migrations.Parse: %w", err)
-	}
-
-	err = migrations.Run(ctx, cfg.Driver, &cfg.Postgres, migrations.Up, migrates)
-	if err != nil {
-		return nil, fmt.Errorf("migrations.Run: %w", err)
-	}
-
-	conn, err := database.NewSQL(ctx, cfg.Driver, database.SQLConfig{
-		Metrics:    m,
-		ReturnErrs: returnErrs,
-	}, &cfg.Postgres)
-	if err != nil {
-		return nil, fmt.Errorf("database.NewSQL: %w", err)
-	}
-
-	u, err := url.Parse(cfg.Domain)
+func New(ctx context.Context, db *database.SQL, domain string) (*Registry, error) {
+	u, err := url.Parse(domain)
 	if err != nil {
 		return nil, fmt.Errorf("url.Parse: %w", err)
 	}
 
 	return &Registry{
-		sql:    conn,
+		db:     db,
 		domain: u,
 	}, nil
 }
 
 // Get implements core.Registry.
 func (r *Registry) Get(ctx context.Context, pluginGroup, pluginName, pluginVersion string) (p core.Plugin, err error) {
-	err = r.sql.NoTx(func(d *sqlx.DB) error {
-		dbFormat := plugin{}
+	dbFormat := plugin{}
 
-		query := "select id, group_name, name, version, config, created_at from plugins where group_name = $1 and name = $2 and version = $3"
-		args := []any{pluginGroup, pluginName, pluginVersion}
+	query := "select id, group_name, name, version, config, tags, created_at from plugins where group_name = $1 and name = $2 and version = $3"
+	args := []any{pluginGroup, pluginName, pluginVersion}
 
-		if pluginVersion == "latest" {
-			query = "select id, group_name, name, version, config, created_at from plugins where group_name = $1 and name = $2 order by version desc limit 1"
-			args = []any{pluginGroup, pluginName}
-		}
-
-		err := d.GetContext(ctx, &dbFormat, query, args...)
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return fmt.Errorf("d.GetContext: %w (plugin groupd: %s; plugin name: %s; plugin version: %s)", core.ErrNotFound, pluginGroup, pluginName, pluginVersion)
-		case err != nil:
-			return fmt.Errorf("d.GetContext: %w (plugin groupd: %s; plugin name: %s; plugin version: %s)", err, pluginGroup, pluginName, pluginVersion)
-		}
-
-		// Parse plugin configuration
-		if len(dbFormat.Config) > 0 {
-			if err := json.Unmarshal(dbFormat.Config, &dbFormat.pluginConfig); err != nil {
-				return fmt.Errorf("json.Unmarshal config: %w", err)
-			}
-		}
-
-		dbFormat.domain = r.domain
-		p = &dbFormat
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("sql.NoTx: %w", err)
+	if pluginVersion == "latest" {
+		query = "select id, group_name, name, version, config, tags, created_at from plugins where group_name = $1 and name = $2 order by version desc limit 1"
+		args = []any{pluginGroup, pluginName}
 	}
 
+	if err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+		return conn.GetContext(ctx, &dbFormat, query, args...)
+	}); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: %s/%s:%s", core.ErrNotFound, pluginGroup, pluginName, pluginVersion)
+		}
+		return nil, fmt.Errorf("r.db.NoTxContext(Get): %w", err)
+	}
+
+	// Parse plugin configuration
+	if len(dbFormat.Config) > 0 {
+		if err := json.Unmarshal(dbFormat.Config, &dbFormat.pluginConfig); err != nil {
+			return nil, fmt.Errorf("json.Unmarshal config: %w", err)
+		}
+	}
+
+	dbFormat.domain = r.domain
+	p = &dbFormat
 	return p, nil
 }
 
 // List implements core.Registry.
 func (r *Registry) List(ctx context.Context, filter core.PluginFilter) ([]core.PluginInfo, error) {
 	var plugins []plugin
-	err := r.sql.NoTx(func(d *sqlx.DB) error {
-		query := "select id, group_name, name, version, created_at from plugins where 1=1"
-		var args []any
-		argID := 1
+	query := "select id, group_name, name, version, tags, created_at from plugins where 1=1"
+	var args []any
+	argID := 1
 
-		if filter.Group != "" {
-			query += fmt.Sprintf(" and group_name = $%d", argID)
-			args = append(args, filter.Group)
-			argID++
-		}
-		if filter.Name != "" {
-			query += fmt.Sprintf(" and name = $%d", argID)
-			args = append(args, filter.Name)
-			argID++
-		}
-		if filter.Version != "" {
-			query += fmt.Sprintf(" and version = $%d", argID)
-			args = append(args, filter.Version)
-			argID++
-		}
+	if filter.Group != "" {
+		query += fmt.Sprintf(" and group_name = $%d", argID)
+		args = append(args, filter.Group)
+		argID++
+	}
+	if filter.Name != "" {
+		query += fmt.Sprintf(" and name = $%d", argID)
+		args = append(args, filter.Name)
+		argID++
+	}
+	if filter.Version != "" {
+		query += fmt.Sprintf(" and version = $%d", argID)
+		args = append(args, filter.Version)
+		argID++
+	}
 
-		return d.SelectContext(ctx, &plugins, query, args...)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("r.sql.NoTx: %w", err)
+	if len(filter.Tags) > 0 {
+		var nonEmptyTags []string
+		for _, t := range filter.Tags {
+			if t != "" {
+				nonEmptyTags = append(nonEmptyTags, t)
+			}
+		}
+		if len(nonEmptyTags) > 0 {
+			query += fmt.Sprintf(" and tags @> $%d", argID)
+			args = append(args, pq.Array(nonEmptyTags))
+			argID++
+		}
+	}
+
+	if err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+		return conn.SelectContext(ctx, &plugins, query, args...)
+	}); err != nil {
+		return nil, fmt.Errorf("r.db.NoTxContext(List): %w", err)
 	}
 
 	result := make([]core.PluginInfo, 0, len(plugins))
@@ -195,13 +163,18 @@ func (r *Registry) List(ctx context.Context, filter core.PluginFilter) ([]core.P
 
 // Close database connection.
 func (r *Registry) Close() error {
-	return r.sql.Close()
+	return r.db.Close()
 }
 
 // Health checks the health of the registry.
 func (r *Registry) Health(ctx context.Context) error {
-	return r.sql.NoTx(func(db *sqlx.DB) error { return db.PingContext(ctx) })
+	return r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+		return conn.PingContext(ctx)
+	})
 }
+
+// DB returns the underlying *database.SQL connection.
+func (r *Registry) DB() *database.SQL { return r.db }
 
 // Generate implements core.Plugin.
 func (p *plugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
@@ -296,6 +269,7 @@ func (p *plugin) Info(_ context.Context) *core.PluginInfo {
 		Group:     p.GroupName,
 		Name:      p.Name,
 		Version:   p.Version,
+		Tags:      []string(p.Tags),
 		CreatedAt: p.CreatedAt,
 	}
 }

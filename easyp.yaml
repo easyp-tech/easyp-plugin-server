@@ -70,16 +70,16 @@ generate:
         root: "."
 
   plugins:
-    - remote: "api.beta.easyp.tech/protocolbuffers/go"
+    - remote: "localhost:8080/protocolbuffers/go"
       out: .
       opts:
         paths: source_relative
-    - remote: "api.beta.easyp.tech/grpc/go"
+    - remote: "localhost:8080/grpc/go"
       out: .
       opts:
         paths: source_relative
         require_unimplemented_servers: false
-    - remote: "api.beta.easyp.tech/easyp-tech/easydoc"
-      out: docs
-      opts:
-        formats: "html|md"
+    # - remote: "api.beta.easyp.tech/easyp-tech/easydoc"
+    #   out: docs
+    #   opts:
+    #     formats: "html|md"

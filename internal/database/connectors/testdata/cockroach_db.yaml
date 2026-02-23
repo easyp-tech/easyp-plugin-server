@@ -1,0 +1,16 @@
+user: "user"
+password: "password"
+host: "127.0.0.1"
+port: 26257
+database: "defaultdb"
+parameters:
+  application_name: "application_name"
+  mode: "disable"
+  ssl_root_cert: "path/to/ssl/root"
+  ssl_cert: "path/to/ssl/cert"
+  ssl_key: "path/to/ssl/key"
+  options:
+    cluster: "cluster_id"
+    variable:
+      name: "name"
+      value: "value"

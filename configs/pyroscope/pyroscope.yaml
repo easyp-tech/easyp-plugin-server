@@ -1,0 +1,32 @@
+target: all
+multitenancy_enabled: false
+
+server:
+  http_listen_port: 4040
+
+storage:
+  backend: s3
+  s3:
+    endpoint: rustfs:9000
+    access_key_id: rustfsadmin
+    secret_access_key: rustfsadmin
+    bucket_name: pyroscope
+    insecure: true
+
+ingester:
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+
+compactor:
+  sharding_ring:
+    kvstore:
+      store: inmemory
+
+store_gateway:
+  sharding_ring:
+    kvstore:
+      store: inmemory
+    replication_factor: 1

@@ -1,0 +1,95 @@
+package telemetry
+
+import (
+	"context"
+	"errors"
+	"os/exec"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/protobuf/types/pluginpb"
+
+	"github.com/easyp-tech/service/internal/core"
+	"github.com/grafana/pyroscope-go"
+)
+
+// Compile-time interface check.
+var _ core.Plugin = (*TracingPlugin)(nil)
+
+// TracingPlugin — декоратор core.Plugin, добавляющий span и метрику длительности.
+type TracingPlugin struct {
+	inner    core.Plugin
+	tracer   trace.Tracer
+	duration metric.Float64Histogram // plugin.execution.duration
+}
+
+// NewTracingPlugin creates a new TracingPlugin decorator wrapping the given Plugin.
+func NewTracingPlugin(inner core.Plugin, tracer trace.Tracer) *TracingPlugin {
+	meter := otel.Meter("registry")
+	hist, _ := meter.Float64Histogram("plugin.execution.duration",
+		metric.WithUnit("s"),
+		metric.WithDescription("Duration of plugin code generation"))
+	return &TracingPlugin{inner: inner, tracer: tracer, duration: hist}
+}
+
+// Generate creates a span "plugin.Generate" with attribute "plugin.image",
+// records histogram "plugin.execution.duration" with attribute "plugin.name",
+// and on error sets span status to Error with RecordError.
+func (p *TracingPlugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
+	info := p.inner.Info(ctx)
+	imageName := info.Group + "/" + info.Name + ":" + info.Version
+
+	ctx, span := p.tracer.Start(ctx, "plugin.Generate",
+		trace.WithAttributes(attribute.String("plugin.image", imageName)))
+	defer span.End()
+
+	// Create child span for Docker execution
+	ctx, dockerSpan := p.tracer.Start(ctx, "docker.exec",
+		trace.WithAttributes(
+			attribute.String("docker.image", imageName),
+			attribute.String("docker.command", "docker run"),
+		))
+
+	start := time.Now()
+
+	// Wrap Docker execution with Pyroscope labels
+	var resp *pluginpb.CodeGeneratorResponse
+	var err error
+	pyroscope.TagWrapper(ctx, pyroscope.Labels("plugin", imageName), func(ctx context.Context) {
+		resp, err = p.inner.Generate(ctx, req)
+	})
+
+	elapsed := time.Since(start).Seconds()
+
+	// End docker span with error info if needed
+	if err != nil {
+		dockerSpan.RecordError(err)
+		dockerSpan.SetStatus(codes.Error, err.Error())
+
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			dockerSpan.SetAttributes(attribute.Int("docker.exit_code", exitErr.ExitCode()))
+		}
+	}
+	dockerSpan.End()
+
+	p.duration.Record(ctx, elapsed,
+		metric.WithAttributes(attribute.String("plugin.name", info.Name)))
+
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// Info proxies the call to the inner Plugin without creating a span.
+func (p *TracingPlugin) Info(ctx context.Context) *core.PluginInfo {
+	return p.inner.Info(ctx)
+}

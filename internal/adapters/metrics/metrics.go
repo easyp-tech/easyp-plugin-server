@@ -3,6 +3,7 @@ package metrics
 
 import (
 	"context"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -13,7 +14,10 @@ var _ core.Metrics = Metrics{}
 
 // Metrics is the metrics adapter for the EasyP plugin server.
 type Metrics struct {
-	generated *prometheus.CounterVec
+	generated          *prometheus.CounterVec
+	generationDuration *prometheus.HistogramVec
+	generationErrors   *prometheus.CounterVec
+	generationRetries  *prometheus.CounterVec
 }
 
 // New creates and returns a new Metrics adapter.
@@ -27,9 +31,36 @@ func New(reg *prometheus.Registry, namespace string) *Metrics {
 			},
 			[]string{"plugin"},
 		),
+		generationDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Name:      "generation_duration_seconds",
+				Help:      "Duration of code generation in seconds.",
+			},
+			[]string{"plugin"},
+		),
+		generationErrors: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Name:      "generation_errors_total",
+				Help:      "Total number of generation errors by plugin and error type.",
+			},
+			[]string{"plugin", "error_type"},
+		),
+		generationRetries: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Name:      "generation_retries_total",
+				Help:      "Total number of generation retries by plugin.",
+			},
+			[]string{"plugin"},
+		),
 	}
 
 	reg.MustRegister(m.generated)
+	reg.MustRegister(m.generationDuration)
+	reg.MustRegister(m.generationErrors)
+	reg.MustRegister(m.generationRetries)
 
 	return m
 }
@@ -39,4 +70,19 @@ func (m Metrics) GenerateCode(_ context.Context, info core.PluginInfo) error {
 	plugin := info.Group + "/" + info.Name + ":" + info.Version
 	m.generated.WithLabelValues(plugin).Inc()
 	return nil
+}
+
+// ObserveGenerationDuration records the duration of a code generation attempt.
+func (m Metrics) ObserveGenerationDuration(_ context.Context, pluginName string, duration time.Duration) {
+	m.generationDuration.WithLabelValues(pluginName).Observe(duration.Seconds())
+}
+
+// IncGenerationErrors increments the generation error counter.
+func (m Metrics) IncGenerationErrors(_ context.Context, pluginName string, errorType string) {
+	m.generationErrors.WithLabelValues(pluginName, errorType).Inc()
+}
+
+// IncGenerationRetries increments the generation retry counter.
+func (m Metrics) IncGenerationRetries(_ context.Context, pluginName string) {
+	m.generationRetries.WithLabelValues(pluginName).Inc()
 }

@@ -1,0 +1,113 @@
+# Конфигурация Grafana Mimir
+
+# Целевой режим: all (монолит)
+target: all
+
+# Отключаем multitenancy
+multitenancy_enabled: false
+
+# Конфигурация сервера
+server:
+  http_listen_port: 9009
+  grpc_listen_port: 9095
+  log_level: info
+
+# Common configuration — S3 storage via RustFS
+common:
+  storage:
+    backend: s3
+    s3:
+      endpoint: rustfs:9000
+      access_key_id: rustfsadmin
+      secret_access_key: rustfsadmin
+      insecure: true
+      bucket_name: mimir-blocks
+
+# Blocks Storage
+blocks_storage:
+  backend: s3
+  s3:
+    bucket_name: mimir-blocks
+  tsdb:
+    dir: /data/ingester
+    block_ranges_period: [2h]
+    retention_period: 24h
+  bucket_store:
+    sync_interval: 15m
+
+# Ingester
+ingester:
+  ring:
+    replication_factor: 1
+    kvstore:
+      store: memberlist
+
+# Distributor
+distributor:
+  ring:
+    kvstore:
+      store: memberlist
+
+# Compactor
+compactor:
+  data_dir: /data/compactor
+  compaction_interval: 15m
+  sharding_ring:
+    kvstore:
+      store: memberlist
+
+# Store Gateway (needed for blocks storage)
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+    kvstore:
+      store: memberlist
+
+# Ruler
+ruler:
+  rule_path: /data/ruler
+  alertmanager_url: http://localhost:9093
+  enable_api: true
+  ring:
+    kvstore:
+      store: memberlist
+
+# Ruler Storage (top-level key)
+ruler_storage:
+  backend: s3
+  s3:
+    endpoint: rustfs:9000
+    access_key_id: rustfsadmin
+    secret_access_key: rustfsadmin
+    insecure: true
+    bucket_name: mimir-ruler
+
+# Alertmanager
+alertmanager:
+  data_dir: /data/alertmanager
+  sharding_ring:
+    replication_factor: 1
+    kvstore:
+      store: memberlist
+
+# Alertmanager Storage (top-level key)
+alertmanager_storage:
+  backend: s3
+  s3:
+    endpoint: rustfs:9000
+    access_key_id: rustfsadmin
+    secret_access_key: rustfsadmin
+    insecure: true
+    bucket_name: mimir-alertmanager
+
+# Limits
+limits:
+  max_global_series_per_user: 1000000
+  ingestion_rate: 10000
+
+# Memberlist (Simple config for single node)
+memberlist:
+  abort_if_cluster_join_fails: false
+  bind_port: 7946
+  join_members:
+    - back_template_mimir:7946

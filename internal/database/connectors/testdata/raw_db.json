@@ -1,0 +1,3 @@
+{
+  "dsn": "postgres://user:password@127.0.0.1:26257/defaultdb?application_name=application_name"
+}

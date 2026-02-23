@@ -1,0 +1,175 @@
+// OTLP Receiver - accepts traces, metrics, and logs via OTLP
+otelcol.receiver.otlp "default" {
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
+
+  output {
+    metrics = [otelcol.exporter.prometheus.mimir.input]
+    logs    = [otelcol.exporter.loki.loki.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// Convert OTel Metrics -> Prometheus
+otelcol.exporter.prometheus "mimir" {
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+// Convert OTel Logs -> Loki
+otelcol.exporter.loki "loki" {
+  forward_to = [loki.write.loki.receiver]
+}
+
+// Mimir (Metrics Storage)
+prometheus.remote_write "mimir" {
+  endpoint {
+    url = "http://mimir:9009/api/v1/push"
+  }
+}
+
+// Loki (Logs Storage)
+loki.write "loki" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// Tempo (Traces Storage)
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+    tls {
+      insecure = true
+    }
+  }
+}
+
+// ============================================
+// Docker Logs Collection (Promtail replacement)
+// ============================================
+
+// Discover all Docker containers
+discovery.docker "linux" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+// Relabel: Extract labels from Docker metadata
+discovery.relabel "docker_logs" {
+  targets = discovery.docker.linux.targets
+
+  // Container ID
+  rule {
+    source_labels = ["__meta_docker_container_id"]
+    target_label  = "container_id"
+  }
+
+  // Container Name (strip leading /)
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container_name"
+  }
+
+  // Image Name
+  rule {
+    source_labels = ["__meta_docker_container_image"]
+    target_label  = "image_name"
+  }
+
+  // Service label (from docker-compose labels)
+  rule {
+    source_labels = ["__meta_docker_container_label_service"]
+    target_label  = "service"
+  }
+
+  // Compose service name (fallback)
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "compose_service"
+  }
+}
+
+// Collect Docker logs via Docker API
+loki.source.docker "default" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.docker_logs.output
+  forward_to       = [loki.process.docker_logs.receiver]
+  refresh_interval = "5s"
+  relabel_rules    = discovery.relabel.docker_logs.rules
+}
+
+// Process logs: Parse JSON if present
+loki.process "docker_logs" {
+  forward_to = [loki.write.loki.receiver]
+
+  // Add static job label
+  stage.static_labels {
+    values = {
+      job = "docker",
+    }
+  }
+
+  // Try to parse application JSON logs (backend, mimir, loki, tempo, grafana)
+  stage.json {
+    expressions = {
+      level = "level",
+      msg   = "msg",
+    }
+  }
+
+  // Normalize level to UPPERCASE
+  stage.template {
+    source   = "level"
+    template = "{{ ToUpper .Value }}"
+  }
+
+  // Add level as label if found
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+}
+
+// ============================================
+// Prometheus Scrapers
+// ============================================
+
+// 1. Alloy Self-Monitoring
+prometheus.scrape "alloy_self" {
+  targets    = prometheus.exporter.self.default.targets
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+prometheus.exporter.self "default" {}
+
+// 2. Mimir Monitoring
+prometheus.scrape "mimir" {
+  targets    = [{"__address__" = "mimir:9009"}]
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+// 3. Backend Monitoring
+prometheus.scrape "service" {
+  targets    = [{"__address__" = "service:8081"}]
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+// 4. Loki Monitoring
+prometheus.scrape "loki" {
+  targets    = [{"__address__" = "loki:3100"}]
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+// 5. Grafana Monitoring
+prometheus.scrape "grafana" {
+  targets    = [{"__address__" = "grafana:3000"}]
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+// 6. Tempo Monitoring
+prometheus.scrape "tempo" {
+  targets    = [{"__address__" = "tempo:3200"}]
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}

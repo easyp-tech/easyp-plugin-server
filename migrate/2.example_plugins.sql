@@ -17,4 +17,4 @@ values (gen_random_uuid(), 'protocolbuffers', 'go', 'v1.36.10',
         now());
 
 -- down
-truncate table  plugins;
+truncate table plugins;

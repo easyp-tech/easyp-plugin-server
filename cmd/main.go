@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,21 +17,24 @@ import (
 	"github.com/hellofresh/health-go/v5"
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sethvargo/go-envconfig"
-	"github.com/sipki-tech/dev-platform/database/connectors"
-	"github.com/sipki-tech/dev-platform/grpc_helper"
-	"github.com/sipki-tech/dev-platform/logger"
-	"github.com/sipki-tech/dev-platform/metrics"
-	"github.com/sipki-tech/dev-platform/serve"
-	"github.com/sipki-tech/dev-platform/version"
-	"google.golang.org/grpc/grpclog"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 	"gopkg.in/yaml.v3"
 
+	adapter_audit "github.com/easyp-tech/service/internal/adapters/audit"
 	adapter_metrics "github.com/easyp-tech/service/internal/adapters/metrics"
 	"github.com/easyp-tech/service/internal/adapters/registry"
 	"github.com/easyp-tech/service/internal/api"
 	"github.com/easyp-tech/service/internal/core"
+	"github.com/easyp-tech/service/internal/database"
+	"github.com/easyp-tech/service/internal/database/connectors"
+	"github.com/easyp-tech/service/internal/database/migrations"
 	"github.com/easyp-tech/service/internal/flags"
+	"github.com/easyp-tech/service/internal/grpchelper"
+	"github.com/easyp-tech/service/internal/monitor"
+	"github.com/easyp-tech/service/internal/telemetry"
 )
 
 const (
@@ -38,19 +44,21 @@ const (
 
 type (
 	config struct {
-		Server   server         `yaml:"server" env:", prefix=SERVER_"`
-		DB       dbConfig       `yaml:"db" env:", prefix=DB_"`
-		Registry registryConfig `yaml:"registry" env:", prefix=REGISTRY_"`
+		Server     server           `yaml:"server" env:", prefix=SERVER_"`
+		DB         dbConfig         `yaml:"db" env:", prefix=DB_"`
+		Registry   registryConfig   `yaml:"registry" env:", prefix=REGISTRY_"`
+		Telemetry  telemetryConfig  `yaml:"telemetry" env:", prefix=TELEMETRY_"`
+		WorkerPool workerPoolConfig `yaml:"worker_pool" env:", prefix=WORKER_POOL_"`
 	}
 	server struct {
 		Host string `yaml:"host" env:"HOST, default=0.0.0.0"`
 		Port ports  `yaml:"port" env:", prefix=PORT_"`
 	}
 	ports struct {
-		GRPC    uint16 `yaml:"grpc" env:"GRPC, default=23410"`
-		Metric  uint16 `yaml:"metric" env:"METRIC, default=23411"`
-		Health  uint16 `yaml:"health" env:"HEALTH, default=23412"`
-		Gateway uint16 `yaml:"gateway" env:"GATEWAY, default=23413"`
+		GRPC    string `yaml:"grpc" env:"GRPC, default=23410"`
+		Metric  string `yaml:"metric" env:"METRIC, default=23411"`
+		Health  string `yaml:"health" env:"HEALTH, default=23412"`
+		Gateway string `yaml:"gateway" env:"GATEWAY, default=23413"`
 	}
 	dbConfig struct {
 		MigrateDir string `yaml:"migrate_dir" env:"MIGRATE_DIR, default=migrate"`
@@ -60,6 +68,17 @@ type (
 	registryConfig struct {
 		Domain string `yaml:"domain" env:"DOMAIN, default=localhost:5005"`
 	}
+	telemetryConfig struct {
+		OTLPEndpoint      string `yaml:"otlp_endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT, default=localhost:4317"`
+		PyroscopeEndpoint string `yaml:"pyroscope_endpoint" env:"PYROSCOPE_ENDPOINT, default=http://localhost:4040"`
+	}
+	workerPoolConfig struct {
+		Workers           int           `yaml:"workers" env:"WORKERS,default=4"`
+		QueueSize         int           `yaml:"queue_size" env:"QUEUE_SIZE,default=16"`
+		GenerationTimeout time.Duration `yaml:"generation_timeout" env:"GENERATION_TIMEOUT,default=120s"`
+		MaxRetries        int           `yaml:"max_retries" env:"MAX_RETRIES,default=2"`
+		ShutdownTimeout   time.Duration `yaml:"shutdown_timeout" env:"SHUTDOWN_TIMEOUT,default=30s"`
+	}
 )
 
 var (
@@ -67,25 +86,35 @@ var (
 	logLevel = &flags.Level{Level: slog.LevelDebug}
 )
 
+// grpcMetrics implements grpchelper.Metrics for the recovery interceptor.
+type grpcMetrics struct {
+	panics prometheus.Counter
+}
+
+func (m *grpcMetrics) PanicsTotal() prometheus.Counter {
+	return m.panics
+}
+
 func main() {
 	flag.Var(cfgFile, "cfg", "path to config file")
 	flag.Var(logLevel, "log_level", "log level")
 	flag.Parse()
 
 	log := buildLogger(logLevel.Level)
-	grpclog.SetLoggerV2(grpc_helper.NewLogger(log))
 
 	appName := filepath.Base(os.Args[0])
-	ctxParent := logger.NewContext(context.Background(), log.With(slog.String(logger.Version.String(), version.System())))
+	ctxParent := monitor.WithContext(context.Background(), log.With(
+		slog.String("version", "dev"), // Replace with actual version logic if needed
+		slog.String("app", appName),
+	))
+
 	ctx, cancel := signal.NotifyContext(ctxParent, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
 	defer cancel()
+
 	go forceShutdown(ctx)
 
-	err := start(ctx, cfgFile, appName)
-	if err != nil {
-		log.Error("shutdown",
-			slog.String(logger.Error.String(), err.Error()),
-		)
+	if err := start(ctx, cfgFile, appName); err != nil {
+		log.Error("shutdown", "error", err)
 		os.Exit(exitCode)
 	}
 }
@@ -105,73 +134,229 @@ func start(ctx context.Context, cfgFile *flags.File, appName string) error {
 		}
 	}
 
-	reg := prometheus.NewPedanticRegistry()
+	reg := prometheus.NewRegistry() // Use standard registry
+	// Add Go metrics
+	reg.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	reg.MustRegister(prometheus.NewGoCollector())
 
 	return run(ctx, cfg, reg, appName)
 }
 
 func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace string) error {
-	log := logger.FromContext(ctx)
-	m := metrics.New(reg, namespace)
+	log := monitor.FromContext(ctx)
 
-	r, err := registry.New(ctx, reg, namespace, registry.Config{
-		Postgres: connectors.Raw{
-			Query: cfg.DB.Postgres,
-		},
-		MigrateDir: cfg.DB.MigrateDir,
-		Driver:     cfg.DB.Driver,
-		Domain:     cfg.Registry.Domain,
-	})
+	// Initialize telemetry (before anything else)
+	telCfg := telemetry.Config{
+		OTLPEndpoint:      cfg.Telemetry.OTLPEndpoint,
+		ServiceName:       namespace,
+		PyroscopeEndpoint: cfg.Telemetry.PyroscopeEndpoint,
+	}
+	baseHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true, Level: slog.LevelDebug})
+	shutdownTelemetry, telLog, err := telemetry.Init(ctx, telCfg, baseHandler)
 	if err != nil {
-		return fmt.Errorf("repo.New: %w", err)
+		return fmt.Errorf("telemetry.Init: %w", err)
+	}
+	// Use telemetry-enriched logger
+	log = telLog
+	// Update context with new logger
+	ctx = monitor.WithContext(ctx, log)
+
+	// Parse and run migrations before creating the database connection
+	migrates, err := migrations.Parse(cfg.DB.MigrateDir)
+	if err != nil {
+		return fmt.Errorf("migrations.Parse: %w", err)
+	}
+
+	err = migrations.Run(ctx, cfg.DB.Driver, &connectors.Raw{Query: cfg.DB.Postgres}, migrations.Up, migrates)
+	if err != nil {
+		return fmt.Errorf("migrations.Run: %w", err)
+	}
+
+	// Create DAL metrics for database operations
+	dalMetrics := database.NewMetrics(reg, namespace, "repo", new(core.Registry))
+
+	// Create database connection via database.NewSQL
+	sqlCfg := database.SQLConfig{Metrics: dalMetrics}
+	db, err := database.NewSQL(ctx, cfg.DB.Driver, sqlCfg, &connectors.Raw{Query: cfg.DB.Postgres})
+	if err != nil {
+		return fmt.Errorf("database.NewSQL: %w", err)
+	}
+
+	r, err := registry.New(ctx, db, cfg.Registry.Domain)
+	if err != nil {
+		return fmt.Errorf("registry.New: %w", err)
 	}
 
 	defer func() {
-		err := r.Close()
-		if err != nil {
-			log.Error("close database connection", slog.String(logger.Error.String(), err.Error()))
+		if err := r.Close(); err != nil {
+			log.Error("close database connection", "error", err)
 		}
 	}()
 
-	module := core.New(adapter_metrics.New(reg, namespace), r)
+	// Register DB connection pool metrics collector
+	dbCollector := adapter_metrics.NewDBCollector(r.DB().UnderlyingDB(), namespace)
+	reg.MustRegister(dbCollector)
 
-	grpcAPI := api.New(ctx, m, module, reg, namespace)
+	auditStore := adapter_audit.New(r.DB(), log)
+	auditWorker, auditCh := adapter_audit.NewWorker(auditStore, 1000, log, reg, namespace)
 
-	const healthTimeout = 1 * time.Second
+	go auditWorker.Run(ctx)
 
-	// add some checks on instance creation
-	h, err := health.New(
-		health.WithComponent(
-			health.Component{
-				Name:    namespace,
-				Version: version.System(),
-			},
-		),
-		health.WithChecks(
-			health.Config{
-				Name:    "postgres",
-				Timeout: healthTimeout,
-				Check:   r.Health,
-			},
-		),
+	defer func() {
+		lost := auditWorker.Shutdown(5 * time.Second)
+		if lost > 0 {
+			log.Warn("audit events lost on shutdown", "count", lost)
+		}
+	}()
+
+	// Wrap Registry in tracing decorator
+	tracedRegistry := telemetry.NewTracingRegistry(r)
+
+	// Wrap TracingRegistry in WorkerPool (limit Docker parallelism)
+	metricsAdapter := adapter_metrics.New(reg, namespace)
+	pool := core.NewWorkerPool(tracedRegistry, core.WorkerPoolConfig{
+		Workers:           cfg.WorkerPool.Workers,
+		QueueSize:         cfg.WorkerPool.QueueSize,
+		GenerationTimeout: cfg.WorkerPool.GenerationTimeout,
+		MaxRetries:        cfg.WorkerPool.MaxRetries,
+		ShutdownTimeout:   cfg.WorkerPool.ShutdownTimeout,
+	}, log, metricsAdapter, reg, namespace)
+	pool.Start(ctx)
+
+	defer func() {
+		lost := pool.Shutdown(cfg.WorkerPool.ShutdownTimeout)
+		if lost > 0 {
+			log.Warn("generation jobs lost on shutdown", "count", lost)
+		}
+	}()
+
+	// Core gets pool as Registry
+	module := core.New(metricsAdapter, pool)
+
+	// Wrap Core in tracing decorator, pass to API
+	tracedCore := telemetry.NewTracingCore(module)
+
+	// Create gRPC server metrics
+	serverMetrics := grpchelper.NewServerMetrics(reg, "easyp", "api")
+
+	// Create panics counter
+	panicsCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "easyp",
+		Name:      "panics_total",
+		Help:      "Total number of panics recovered in gRPC handlers.",
+	})
+	reg.MustRegister(panicsCounter)
+
+	// Create audit interceptor
+	auditInterceptor := api.NewAuditInterceptor(auditCh, log)
+
+	// Create gRPC server with full middleware stack
+	grpcSrv, healthSrv := grpchelper.NewServer(
+		&grpcMetrics{panics: panicsCounter},
+		log,
+		serverMetrics,
+		api.ErrorToStatus,
+		[]grpc.UnaryServerInterceptor{auditInterceptor.UnaryServerInterceptor()},
+		nil,
 	)
-	if err != nil {
-		return fmt.Errorf("health.New: %w", err)
-	}
+	serverMetrics.InitializeMetrics(grpcSrv)
 
-	return serve.Start(
-		ctx,
-		serve.Metrics(log.With(slog.String(logger.Module.String(), "metric")), cfg.Server.Host, cfg.Server.Port.Metric, reg),
-		serve.GRPC(log.With(slog.String(logger.Module.String(), "gRPC")), cfg.Server.Host, cfg.Server.Port.GRPC, grpcAPI),
-		serve.HTTP(log.With(slog.String(logger.Module.String(), "health")), cfg.Server.Host, cfg.Server.Port.Health, h.Handler()),
-	)
+	// Register API handlers
+	api.New(grpcSrv, healthSrv, tracedCore)
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	// Run gRPC Server
+	g.Go(func() error {
+		lis, err := net.Listen("tcp", fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.GRPC))
+		if err != nil {
+			return fmt.Errorf("net.Listen gRPC: %w", err)
+		}
+		log.Info("starting gRPC server", "addr", lis.Addr().String())
+
+		go func() {
+			<-ctx.Done()
+			// Shutdown order: 1. Stop accepting new gRPC requests
+			grpcSrv.GracefulStop()
+			// 2. Shutdown telemetry (flush spans/metrics)
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := shutdownTelemetry(shutdownCtx); err != nil {
+				log.Error("telemetry shutdown error", "error", err)
+			}
+		}()
+
+		if err := grpcSrv.Serve(lis); err != nil {
+			return fmt.Errorf("grpcSrv.Serve: %w", err)
+		}
+		return nil
+	})
+
+	// Run Metrics Server
+	g.Go(func() error {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+
+		srv := &http.Server{
+			Addr:    fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.Metric),
+			Handler: mux,
+		}
+
+		log.Info("starting metrics server", "addr", srv.Addr)
+
+		go func() {
+			<-ctx.Done()
+			ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = srv.Shutdown(ctxShutdown)
+		}()
+
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("metrics server error: %w", err)
+		}
+		return nil
+	})
+
+	// Run Health Server
+	g.Go(func() error {
+		// Simple health check handler
+		h, err := health.New(health.WithChecks(health.Config{
+			Name:    "postgres",
+			Timeout: time.Second,
+			Check:   r.Health,
+		}))
+		if err != nil {
+			return fmt.Errorf("health.New: %w", err)
+		}
+
+		srv := &http.Server{
+			Addr:    fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.Health),
+			Handler: h.Handler(),
+		}
+
+		log.Info("starting health server", "addr", srv.Addr)
+
+		go func() {
+			<-ctx.Done()
+			ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = srv.Shutdown(ctxShutdown)
+		}()
+
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("health server error: %w", err)
+		}
+		return nil
+	})
+
+	return g.Wait()
 }
 
 func buildLogger(level slog.Level) *slog.Logger {
 	return slog.New(
 		slog.NewJSONHandler(
 			os.Stdout,
-			&slog.HandlerOptions{ //nolint:exhaustruct
+			&slog.HandlerOptions{
 				AddSource: true,
 				Level:     level,
 			},
@@ -180,12 +365,17 @@ func buildLogger(level slog.Level) *slog.Logger {
 }
 
 func forceShutdown(ctx context.Context) {
-	log := logger.FromContext(ctx)
+	log := monitor.FromContext(ctx)
 	const shutdownDelay = 15 * time.Second
 
 	<-ctx.Done()
-	time.Sleep(shutdownDelay)
 
-	log.Error("failed to graceful shutdown")
-	os.Exit(exitCode)
+	// Create a new context for the shutdown delay/logging since the parent ctx is done
+	// But actually we just want to sleep.
+
+	select {
+	case <-time.After(shutdownDelay):
+		log.Error("failed to graceful shutdown")
+		os.Exit(exitCode)
+	}
 }

@@ -11,3 +11,12 @@ db:
   postgres: "postgres://easyp_svc:easyp_pass@postgres:5432/easyp_db?sslmode=disable"
 registry:
   domain: "localhost:5005"
+telemetry:
+  otlp_endpoint: "alloy:4317"
+  pyroscope_endpoint: "http://pyroscope:4040"
+worker_pool:
+  workers: 4
+  queue_size: 16
+  generation_timeout: 120s
+  max_retries: 3
+  shutdown_timeout: 30s

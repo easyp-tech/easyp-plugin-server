@@ -15,6 +15,20 @@ var (
 	ErrNotFound          = errors.New("not found")
 	ErrInvalidPluginName = errors.New("invalid plugin name")
 	ErrGenerationFailed  = errors.New("code generation failed")
+	ErrServerOverloaded  = errors.New("server overloaded")
+	ErrShuttingDown      = errors.New("server shutting down")
+)
+
+// Audit operation types.
+const (
+	OperationGenerateCode = "GENERATE_CODE"
+	OperationListPlugins  = "LIST_PLUGINS"
+)
+
+// Audit statuses.
+const (
+	AuditStatusSuccess = "success"
+	AuditStatusError   = "error"
 )
 
 type (
@@ -23,6 +37,12 @@ type (
 		// GenerateCode records metrics for a code generation request.
 		// The pluginName parameter identifies which plugin was used (e.g., "grpc/go:v1.36.9").
 		GenerateCode(ctx context.Context, info PluginInfo) error
+		// ObserveGenerationDuration records the duration of a code generation attempt.
+		ObserveGenerationDuration(ctx context.Context, pluginName string, duration time.Duration)
+		// IncGenerationErrors increments the generation error counter with the given error type.
+		IncGenerationErrors(ctx context.Context, pluginName string, errorType string)
+		// IncGenerationRetries increments the generation retry counter.
+		IncGenerationRetries(ctx context.Context, pluginName string)
 	}
 
 	// Registry provides access to available plugins.
@@ -66,6 +86,7 @@ type (
 		Group     string
 		Name      string
 		Version   string
+		Tags      []string
 		CreatedAt time.Time
 	}
 
@@ -74,5 +95,32 @@ type (
 		Group   string
 		Name    string
 		Version string
+		Tags    []string
+	}
+
+	// AuditEntry представляет одну запись аудит-журнала.
+	AuditEntry struct {
+		ID            uuid.UUID
+		OperationType string
+		PluginName    string
+		CallerAddress string
+		Status        string
+		ErrorCode     string
+		ErrorMessage  string
+		DurationMs    int64
+		Metadata      map[string]any
+		CreatedAt     time.Time
+	}
+
+	// AuditLog определяет интерфейс для записи аудит-событий.
+	AuditLog interface {
+		// Save сохраняет аудит-запись в хранилище.
+		Save(ctx context.Context, entry AuditEntry) error
+	}
+
+	// CoreService defines the business logic interface used by the API layer.
+	CoreService interface {
+		Generate(ctx context.Context, req GenerateCodeRequest) (*GenerateCodeResponse, error)
+		ListPlugins(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
 	}
 )

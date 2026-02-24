@@ -197,6 +197,10 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	dbCollector := adapter_metrics.NewDBCollector(r.DB().UnderlyingDB(), namespace)
 	reg.MustRegister(dbCollector)
 
+	// Register business metrics collector
+	businessCollector := adapter_metrics.NewBusinessMetricsCollector(r.DB().UnderlyingDB(), namespace, log)
+	reg.MustRegister(businessCollector)
+
 	auditStore := adapter_audit.New(r.DB(), log)
 	auditWorker, auditCh := adapter_audit.NewWorker(auditStore, 1000, log, reg, namespace)
 

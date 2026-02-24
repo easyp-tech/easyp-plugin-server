@@ -31,3 +31,15 @@ tasks:
       - "local-push-registry"
     cmds:
       - "docker compose logs -f service"
+
+  test-mcp:
+    dir: "{{.USER_WORKING_DIR}}"
+    cmds:
+      - "go test ./internal/mcpserver -run TestMCPServer -count=1"
+
+  smoke-mcp:
+    dir: "{{.USER_WORKING_DIR}}"
+    deps:
+      - "up"
+    cmds:
+      - "go run ./cmd/mcp-smoke --endpoint http://localhost:8083/mcp"

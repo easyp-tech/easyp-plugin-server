@@ -162,6 +162,9 @@ curl http://localhost:8082/health
 # Metrics
 curl http://localhost:8081/metrics
 
+# MCP (streamable HTTP transport)
+curl -i http://localhost:8083/mcp
+
 # Grafana (admin/admin)
 open http://localhost:3000
 ```
@@ -201,6 +204,19 @@ service ServiceAPI {
 }
 ```
 
+### MCP API (HTTP Transport)
+
+**Endpoint:** `http://localhost:8083/mcp` (streamable MCP over HTTP)
+
+Implemented tools:
+- `plugins.list` — list available plugins with optional filters: `group`, `name`, `version`, `tags`
+- `easyp.config.describe` — return structured `easyp.yaml` schema/docs/examples for full config or selected `path`
+
+Testing MCP:
+- Contract/integration tests (in-process HTTP MCP server): `go test ./internal/mcpserver -run TestMCPServer -count=1`
+- Live smoke check against running endpoint: `go run ./cmd/mcp-smoke --endpoint http://localhost:8083/mcp`
+- Task shortcuts: `task test-mcp`, `task smoke-mcp`
+
 ## Plugin Naming Format
 
 Plugins are identified in the format: `{group}/{name}:{version}`
@@ -228,6 +244,7 @@ SERVER_HOST=0.0.0.0
 SERVER_PORT_GRPC=8080
 SERVER_PORT_METRIC=8081  
 SERVER_PORT_HEALTH=8082
+SERVER_PORT_GATEWAY=8083
 
 # Database
 DB_POSTGRES_DSN="postgres://user:pass@localhost/db"
@@ -246,6 +263,7 @@ server:
     grpc: 8080
     metric: 8081
     health: 8082
+    gateway: 8083
 db:
   migrate_dir: "migrate"
   driver: "postgres"
@@ -501,6 +519,7 @@ docker build -f docker/Dockerfile -t easyp-api-service .
 | Prometheus | http://localhost:9090 | Metrics |
 | Health | http://localhost:8082 | Health checks |
 | Metrics | http://localhost:8081 | Prometheus metrics |
+| MCP | http://localhost:8083/mcp | MCP streamable HTTP endpoint |
 
 ### Key Metrics
 

@@ -33,6 +33,7 @@ import (
 	"github.com/easyp-tech/service/internal/database/migrations"
 	"github.com/easyp-tech/service/internal/flags"
 	"github.com/easyp-tech/service/internal/grpchelper"
+	"github.com/easyp-tech/service/internal/mcpserver"
 	"github.com/easyp-tech/service/internal/monitor"
 	"github.com/easyp-tech/service/internal/telemetry"
 )
@@ -268,6 +269,8 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	// Register API handlers
 	api.New(grpcSrv, healthSrv, tracedCore)
 
+	mcpSrv := mcpserver.New(tracedCore, log)
+
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Run gRPC Server
@@ -349,6 +352,31 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("health server error: %w", err)
+		}
+		return nil
+	})
+
+	// Run MCP Server over streamable HTTP transport.
+	g.Go(func() error {
+		mux := http.NewServeMux()
+		mux.Handle("/mcp", mcpSrv.Handler())
+
+		srv := &http.Server{
+			Addr:    fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.Gateway),
+			Handler: mux,
+		}
+
+		log.Info("starting mcp server", "addr", srv.Addr, "path", "/mcp")
+
+		go func() {
+			<-ctx.Done()
+			ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = srv.Shutdown(ctxShutdown)
+		}()
+
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("mcp server error: %w", err)
 		}
 		return nil
 	})

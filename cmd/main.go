@@ -56,10 +56,10 @@ type (
 		Port ports  `yaml:"port" env:", prefix=PORT_"`
 	}
 	ports struct {
-		GRPC    string `yaml:"grpc" env:"GRPC, default=23410"`
-		Metric  string `yaml:"metric" env:"METRIC, default=23411"`
-		Health  string `yaml:"health" env:"HEALTH, default=23412"`
-		Gateway string `yaml:"gateway" env:"GATEWAY, default=23413"`
+		GRPC   string `yaml:"grpc" env:"GRPC, default=23410"`
+		Metric string `yaml:"metric" env:"METRIC, default=23411"`
+		Health string `yaml:"health" env:"HEALTH, default=23412"`
+		MCP    string `yaml:"mcp" env:"MCP, default=23413"`
 	}
 	dbConfig struct {
 		MigrateDir string `yaml:"migrate_dir" env:"MIGRATE_DIR, default=migrate"`
@@ -362,7 +362,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 		mux.Handle("/mcp", mcpSrv.Handler())
 
 		srv := &http.Server{
-			Addr:    fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.Gateway),
+			Addr:    fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.MCP),
 			Handler: mux,
 		}
 

@@ -32,9 +32,13 @@ type pluginsListOutput struct {
 	Plugins []pluginsListItem `json:"plugins"`
 }
 
+const (
+	pluginsListToolName = "plugins_list"
+)
+
 func registerPluginTools(server *mcp.Server, pluginService PluginService) {
 	mcp.AddTool(server, &mcp.Tool{
-		Name:         "plugins.list",
+		Name:         pluginsListToolName,
 		Description:  "List available plugins with optional filters: group, name, version, tags.",
 		InputSchema:  pluginsListInputSchema(),
 		OutputSchema: pluginsListOutputSchema(),

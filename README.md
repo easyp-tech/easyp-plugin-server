@@ -209,8 +209,8 @@ service ServiceAPI {
 **Endpoint:** `http://localhost:8083/mcp` (streamable MCP over HTTP)
 
 Implemented tools:
-- `plugins.list` — list available plugins with optional filters: `group`, `name`, `version`, `tags`
-- `easyp.config.describe` — return structured `easyp.yaml` schema/docs/examples for full config or selected `path`
+- `plugins_list` — list available plugins with optional filters: `group`, `name`, `version`, `tags`
+- `easyp_config_describe` — return structured `easyp.yaml` schema/docs/examples for full config or selected `path`
 
 Testing MCP:
 - Contract/integration tests (in-process HTTP MCP server): `go test ./internal/mcpserver -run TestMCPServer -count=1`

@@ -61,16 +61,17 @@ func TestMCPServer_RegistersToolsAndListsPlugins(t *testing.T) {
 	for _, tool := range tools.Tools {
 		toolNames = append(toolNames, tool.Name)
 	}
-	require.Contains(t, toolNames, "plugins.list")
-	require.Contains(t, toolNames, "easyp.config.describe")
+	require.Contains(t, toolNames, pluginsListToolName)
+	require.Contains(t, toolNames, easypConfigDescribeToolName)
 
+	args := map[string]any{
+		"group": "grpc",
+		"name":  "go",
+		"tags":  []string{"stable", "go"},
+	}
 	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "plugins.list",
-		Arguments: map[string]any{
-			"group": "grpc",
-			"name":  "go",
-			"tags":  []string{"stable", "go"},
-		},
+		Name:      pluginsListToolName,
+		Arguments: args,
 	})
 	require.NoError(t, err)
 	require.False(t, res.IsError)
@@ -111,7 +112,7 @@ func TestMCPServer_EasypConfigDescribe(t *testing.T) {
 	defer shutdown()
 
 	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "easyp.config.describe",
+		Name: easypConfigDescribeToolName,
 		Arguments: map[string]any{
 			"path": "generate.inputs[].git_repo",
 		},
@@ -136,7 +137,7 @@ func TestMCPServer_EasypConfigDescribe(t *testing.T) {
 	require.Contains(t, strings.Join(gitRepoOut.Notes, "\n"), "git_repo.out")
 
 	res, err = session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "easyp.config.describe",
+		Name: easypConfigDescribeToolName,
 		Arguments: map[string]any{
 			"path": "generate.plugins[]",
 		},
@@ -156,7 +157,7 @@ func TestMCPServer_EasypConfigDescribe(t *testing.T) {
 	require.NotContains(t, paths, "generate.plugins[].url")
 
 	errRes, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "easyp.config.describe",
+		Name: easypConfigDescribeToolName,
 		Arguments: map[string]any{
 			"path": "unknown.section",
 		},

@@ -111,11 +111,15 @@ type easypSpec struct {
 	DocsByPath    map[string]easypNodeDoc
 }
 
+const (
+	easypConfigDescribeToolName = "easyp_config_describe"
+)
+
 func registerEasypConfigTools(server *mcp.Server) {
 	spec := newEasypSpec()
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:         "easyp.config.describe",
+		Name:         easypConfigDescribeToolName,
 		Description:  "Describe easyp.yaml schema and field usage. Supports full schema or a specific path with examples.",
 		InputSchema:  easypConfigDescribeInputSchema(),
 		OutputSchema: easypConfigDescribeOutputSchema(),

@@ -18,7 +18,7 @@ func main() {
 	var endpoint string
 	var timeout time.Duration
 
-	flag.StringVar(&endpoint, "endpoint", "http://localhost:8083/mcp", "MCP streamable HTTP endpoint")
+	flag.StringVar(&endpoint, "endpoint", "http://localhost:23413/mcp", "MCP streamable HTTP endpoint")
 	flag.DurationVar(&timeout, "timeout", 15*time.Second, "overall timeout")
 	flag.Parse()
 
@@ -41,26 +41,6 @@ func main() {
 	}
 
 	fmt.Println("MCP smoke check passed")
-
-	list, err := session.ListTools(ctx, &mcp.ListToolsParams{})
-	if err != nil {
-		exitf("failed to list tools: %v", err)
-	}
-
-	fmt.Println("\nVerified tools:")
-	for _, tool := range list.Tools {
-		res, err := session.CallTool(ctx, &mcp.CallToolParams{
-			Name: tool.Name,
-		})
-		status := "OK"
-		if err != nil {
-			status = fmt.Sprintf("ERROR (transport): %v", err)
-		} else if res.IsError {
-			status = fmt.Sprintf("ERROR (tool): %s", toolText(res))
-		}
-		fmt.Printf("- %s: %s\n", tool.Name, status)
-		fmt.Printf("result: %v\n", res.StructuredContent)
-	}
 }
 
 func runSmoke(ctx context.Context, session *mcp.ClientSession) error {

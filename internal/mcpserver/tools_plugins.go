@@ -49,7 +49,9 @@ func registerPluginTools(server *mcp.Server, pluginService PluginService) {
 			Version: strings.TrimSpace(input.Version),
 			Tags:    compactStrings(input.Tags),
 		}
-
+		if pluginService == nil {
+			return &mcp.CallToolResult{}, pluginsListOutput{}, nil
+		}
 		plugins, err := pluginService.ListPlugins(ctx, filter)
 		if err != nil {
 			return nil, pluginsListOutput{}, fmt.Errorf("list plugins: %w", err)

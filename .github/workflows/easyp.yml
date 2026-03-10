@@ -18,9 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: EasyP Lint
-        uses: easyp-tech/actions/lint@v1
+        uses: easyp-tech/actions/lint@v1.1.1
         with:
-          version: v0.12.2
+          version: v0.16.0
           config: easyp.yaml
           directory: api
 
@@ -32,9 +32,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: EasyP Breaking
-        uses: easyp-tech/actions/breaking@v1
+        uses: easyp-tech/actions/breaking@v1.1.1
         with:
-          version: v0.12.2
+          version: v0.16.0
           config: easyp.yaml
           directory: api
           against: master

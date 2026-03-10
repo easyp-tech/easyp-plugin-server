@@ -20,6 +20,8 @@ github.com/easyp-tech/easyp v0.14.1-0.20260301022854-21e6e9dbe91e h1:6bPKqVs7zRY
 github.com/easyp-tech/easyp v0.14.1-0.20260301022854-21e6e9dbe91e/go.mod h1:YIRgbpJBhj+txUP9EC/16L6QeZOgHhHgAYDeLpmWu6M=
 github.com/easyp-tech/protoc-gen-easydoc v0.4.0 h1:JJREL3C/+EKf9lzypTAGo6QeUWDtDKVxK1aq8EbRzzc=
 github.com/easyp-tech/protoc-gen-easydoc v0.4.0/go.mod h1:/NhDdfMihhuPWYUy74Hf0VaUtzOfEStv6UHHpPogQBg=
+github.com/easyp-tech/protoc-gen-mcp v0.1.1 h1:/0Tgj0p+YhEWG+uB8/sP5lHAbKkXl20UazdIrx8XySw=
+github.com/easyp-tech/protoc-gen-mcp v0.1.1/go.mod h1:Prp5IJPFVhDxuFbXNLtPQonsN32Z8SRs0bu9qrAgIHA=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
 github.com/go-logr/logr v1.4.3 h1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=
 github.com/go-logr/logr v1.4.3/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=

@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package api.generator.v1;
 
+import "api/mcp/options/v1/options.proto";
 import "doc/v1/doc.proto";
 import "google/protobuf/compiler/plugin.proto";
 import "google/protobuf/timestamp.proto";
@@ -56,13 +57,25 @@ service ServiceAPI {
   // | `INVALID_ARGUMENT` | Invalid plugin name format |
   // | `INTERNAL` | Plugin execution failed |
   // | `DEADLINE_EXCEEDED` | Plugin execution timeout |
-  rpc GenerateCode(GenerateCodeRequest) returns (GenerateCodeResponse);
+  rpc GenerateCode(GenerateCodeRequest) returns (GenerateCodeResponse) {
+    option (api.mcp.options.v1.method) = {
+      hidden: true
+    };
+  }
 
   // List available plugins.
   //
   // Returns a list of all plugins registered in the service.
   // Use this to discover available plugins and their versions.
-  rpc Plugins(PluginsRequest) returns (PluginsResponse);
+  rpc Plugins(PluginsRequest) returns (PluginsResponse) {
+    option (api.mcp.options.v1.method) = {
+      name: "plugins_list"
+      title: "List plugins"
+      description: "List available plugins with optional filters: group, name, version, tags."
+      examples: '{"group":"grpc","name":"go"}'
+      examples: '{"tags":["stable","go"]}'
+    };
+  }
 }
 
 // Request message for code generation.
@@ -102,16 +115,62 @@ message GenerateCodeResponse {
 }
 
 // Request message for listing plugins.
-//
-// Currently accepts no parameters. Future versions may add filtering options.
-message PluginsRequest {}
+message PluginsRequest {
+  // Filter by exact plugin group.
+  //
+  // Omit to return plugins from all groups.
+  string group = 1 [
+    (api.mcp.options.v1.field).optional = true,
+    (doc.v1.field) = {
+      pattern: "^[a-z][a-z0-9-]*$"
+      example: "grpc"
+    }
+  ];
+
+  // Filter by exact plugin name.
+  //
+  // Omit to return plugins with any name.
+  string name = 2 [
+    (api.mcp.options.v1.field).optional = true,
+    (doc.v1.field) = {
+      pattern: "^[a-z][a-z0-9-]*$"
+      example: "go"
+    }
+  ];
+
+  // Filter by exact plugin version.
+  //
+  // Omit to return all versions.
+  string version = 3 [
+    (api.mcp.options.v1.field).optional = true,
+    (doc.v1.field) = {
+      pattern: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+      example: "v1.5.1"
+    }
+  ];
+
+  // Filter by tags.
+  //
+  // A plugin must contain all specified tags to match.
+  repeated string tags = 4 [(doc.v1.field) = {
+    example: "stable"
+  }];
+}
 
 // Response message for listing plugins.
 message PluginsResponse {
-  // List of available plugins.
+  // List of available plugins matching the supplied filters.
   //
   // Plugins are sorted by group, name, and version.
-  repeated PluginInfo plugins = 1 [(doc.v1.field) = {
+  repeated PluginInfo plugins = 1 [
+    (api.mcp.options.v1.field).required = true,
+    (doc.v1.field) = {
+      output_only: true
+    }
+  ];
+
+  // Number of matching plugins in this response.
+  int32 total = 2 [(doc.v1.field) = {
     output_only: true
   }];
 }
@@ -162,9 +221,12 @@ message PluginInfo {
   }];
 
   // Timestamp when the plugin was registered.
-  google.protobuf.Timestamp created_at = 5 [(doc.v1.field) = {
-    output_only: true
-  }];
+  google.protobuf.Timestamp created_at = 5 [
+    json_name = "created_at",
+    (doc.v1.field) = {
+      output_only: true
+    }
+  ];
 
   // Tags associated with the plugin for categorization.
   //

@@ -106,7 +106,15 @@ func (c *Client) ListPlugins(ctx context.Context, filter ...PluginFilter) ([]*ge
 	ctx, cancel := c.withTimeout(ctx, c.cfg.listPluginsTimeout)
 	defer cancel()
 
-	resp, err := c.genClient.Plugins(ctx, &generator.PluginsRequest{})
+	req := &generator.PluginsRequest{}
+	if len(filter) > 0 {
+		req.Group = filter[0].Group
+		req.Name = filter[0].Name
+		req.Version = filter[0].Version
+		req.Tags = append([]string(nil), filter[0].Tags...)
+	}
+
+	resp, err := c.genClient.Plugins(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("c.genClient.Plugins: %w", err)
 	}

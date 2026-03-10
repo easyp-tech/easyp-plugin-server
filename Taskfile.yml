@@ -9,6 +9,13 @@ tasks:
     cmds:
       - "docker compose up --build --remove-orphans --detach"
 
+  up-minimal:
+    dir: "{{.USER_WORKING_DIR}}"
+    preconditions:
+      - "test -f docker-compose.yml"
+    cmds:
+      - "sh -c 'EASYP_POSTGRES_PORT=${EASYP_POSTGRES_PORT:-5433} docker compose up -d postgres registry'"
+
   down:
     dir: "{{.USER_WORKING_DIR}}"
     preconditions:
@@ -23,6 +30,17 @@ tasks:
     cmds:
       - "./push.sh localhost:5005 --push"
 
+  local-push-required:
+    dir: "{{.USER_WORKING_DIR}}"
+    preconditions:
+      - "test -f registry/protocolbuffers/go/v1.36.10/Dockerfile"
+      - "test -f registry/grpc/go/v1.5.1/Dockerfile"
+    cmds:
+      - "docker build --platform linux/amd64 -t localhost:5005/protocolbuffers/go:v1.36.10 registry/protocolbuffers/go/v1.36.10"
+      - "docker push localhost:5005/protocolbuffers/go:v1.36.10"
+      - "docker build --platform linux/amd64 -t localhost:5005/grpc/go:v1.5.1 registry/grpc/go/v1.5.1"
+      - "docker push localhost:5005/grpc/go:v1.5.1"
+
   run:
     dir: "{{.USER_WORKING_DIR}}"
     deps:
@@ -31,6 +49,13 @@ tasks:
       - "local-push-registry"
     cmds:
       - "docker compose logs -f service"
+
+  run-local:
+    dir: "{{.USER_WORKING_DIR}}"
+    preconditions:
+      - "test -f config.local.yml"
+    cmds:
+      - "go run ./cmd/main.go -cfg config.local.yml -log_level debug"
 
   test-mcp:
     dir: "{{.USER_WORKING_DIR}}"

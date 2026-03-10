@@ -20,3 +20,10 @@ worker_pool:
   generation_timeout: 120s
   max_retries: 3
   shutdown_timeout: 30s
+license:
+  key: ""    # inline PASETO token (takes priority over file)
+  file: ""   # path to license file
+rate_limit:
+  requests_per_second: 10.0  # token refill rate (tokens/sec)
+  burst: 20                   # max tokens (burst size)
+  cleanup_interval: 10m       # stale client cleanup interval

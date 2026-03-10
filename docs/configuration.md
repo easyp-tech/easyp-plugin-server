@@ -49,6 +49,15 @@ worker_pool:
   generation_timeout: 120s # Maximum generation time
   max_retries: 3          # Retries on transient errors
   shutdown_timeout: 30s   # Graceful shutdown timeout
+
+license:
+  key: ""                 # Inline PASETO v4.public license token (takes priority over file)
+  file: ""                # Path to a file containing the PASETO license token
+
+rate_limit:
+  requests_per_second: 10.0  # Token refill rate (tokens/sec)
+  burst: 20                   # Max tokens (burst size)
+  cleanup_interval: 10m       # Stale client cleanup interval
 ```
 
 ## Environment Variables
@@ -95,6 +104,88 @@ All configuration parameters can be overridden via environment variables.
 | `WORKER_POOL_GENERATION_TIMEOUT` | Generation timeout | `120s` |
 | `WORKER_POOL_MAX_RETRIES` | Maximum retries | `3` |
 | `WORKER_POOL_SHUTDOWN_TIMEOUT` | Shutdown timeout | `30s` |
+
+### Rate Limiting
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RATE_LIMIT_REQUESTS_PER_SECOND` | Token refill rate (tokens/sec) | `10.0` |
+| `RATE_LIMIT_BURST` | Max tokens (burst size) | `20` |
+| `RATE_LIMIT_CLEANUP_INTERVAL` | Stale client bucket cleanup interval | `10m` |
+
+### License
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LICENSE_KEY` | Inline PASETO v4.public license token | — |
+| `LICENSE_FILE` | Path to a file containing the license token | — |
+
+## Rate Limiting
+
+Per-client rate limiting using the token bucket algorithm. Each client (identified by IP address) gets an independent bucket. Controlled by FeatureGate — when `FeatureRateLimiting` is disabled, all requests pass through.
+
+### Configuration Parameters
+
+| Parameter | Env Variable | Default | Description |
+|-----------|-------------|---------|-------------|
+| `rate_limit.requests_per_second` | `RATE_LIMIT_REQUESTS_PER_SECOND` | `10.0` | Token refill rate per second |
+| `rate_limit.burst` | `RATE_LIMIT_BURST` | `20` | Maximum tokens (burst capacity) |
+| `rate_limit.cleanup_interval` | `RATE_LIMIT_CLEANUP_INTERVAL` | `10m` | Interval for cleaning up stale client buckets |
+
+### Behavior
+
+- Allowed requests receive `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers in gRPC response metadata
+- Denied requests return gRPC `RESOURCE_EXHAUSTED` with the same headers in trailing metadata
+- If the client IP cannot be determined, the request passes through (fail-open)
+- The `KeyExtractor` abstraction allows switching from IP-based to API key or tenant ID-based limiting in the future
+
+### Example
+
+```yaml
+rate_limit:
+  requests_per_second: 10.0  # token refill rate (tokens/sec)
+  burst: 20                   # max tokens (burst size)
+  cleanup_interval: 10m       # stale client cleanup interval
+```
+
+## License
+
+The license system controls access to Enterprise features using PASETO v4.public tokens signed with Ed25519. When no valid license is present, the service operates in Community mode with all core features enabled.
+
+### Configuration Parameters
+
+| Parameter | Env Variable | Description |
+|-----------|-------------|-------------|
+| `license.key` | `LICENSE_KEY` | Inline PASETO v4.public token string |
+| `license.file` | `LICENSE_FILE` | Path to a file containing the PASETO token |
+
+### Priority and Behavior
+
+- If `license.key` is set, it is used regardless of `license.file` (a warning is logged when both are specified).
+- If only `license.file` is set, the token is read from the specified file path.
+- If neither is set, the service starts in **Community mode** — core features are available (code generation, plugin listing, MCP tools, rate limiting, plugin CRUD). Limits: `max_workers=4`, `max_plugins=10`.
+
+### Embedding the Public Key
+
+The Ed25519 public key used to verify license tokens must be embedded at build time via `-ldflags`:
+
+```bash
+go build -ldflags "-X main.licensePublicKey=<hex-encoded-ed25519-public-key>" ./cmd/
+```
+
+If no public key is embedded in the binary, the service operates in Community mode regardless of any token configuration.
+
+### Example
+
+```yaml
+# Enterprise license via inline token
+license:
+  key: "v4.public.eyJ..."
+
+# Or via file path
+license:
+  file: "/etc/easyp/license.key"
+```
 
 ## Docker Compose Environment Variables
 
@@ -157,4 +248,10 @@ worker_pool:
   generation_timeout: 120s
   max_retries: 3
   shutdown_timeout: 30s
+rate_limit:
+  requests_per_second: 20.0
+  burst: 40
+  cleanup_interval: 10m
+license:
+  file: "/etc/easyp/license.key"
 ```

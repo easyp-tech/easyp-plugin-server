@@ -9,15 +9,18 @@ import (
 
 // Core defines the interface for interacting with the plugin server.
 type Core struct {
-	metrics  Metrics
-	registry Registry
+	metrics     Metrics
+	registry    Registry
+	featureGate FeatureGate
 }
 
 // New creates a new Core instance.
-func New(metrics Metrics, registry Registry) *Core {
+// If featureGate is nil, all features are considered available (backward compatibility).
+func New(metrics Metrics, registry Registry, featureGate FeatureGate) *Core {
 	return &Core{
-		metrics:  metrics,
-		registry: registry,
+		metrics:     metrics,
+		registry:    registry,
+		featureGate: featureGate,
 	}
 }
 

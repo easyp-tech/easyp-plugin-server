@@ -99,6 +99,21 @@ Service (Pyroscope SDK) → Pyroscope server (S3 backend)
 | `audit_events_lost_total` | Counter | Lost audit events (channel overflow) |
 | `audit_queue_depth` | Gauge | Audit queue depth |
 
+### Rate Limiting
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `easyp_rate_limit_requests_total` | Counter | `status` (allowed/denied), `client_ip` | Total requests processed by rate limiter |
+| `easyp_rate_limit_active_clients` | Gauge | — | Current number of active client buckets |
+
+### License
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `easyp_license_valid` | Gauge | — | 1 when the license is valid, 0 when invalid or absent |
+| `easyp_license_expiry_timestamp_seconds` | Gauge | — | Unix timestamp of the license expiration |
+| `easyp_license_feature_denied_total` | Counter | `feature` | Number of feature access denials per feature |
+
 ### System
 
 | Metric | Type | Description |
@@ -175,4 +190,52 @@ pool_active_workers / 4 * 100  # utilization percentage (with 4 workers)
 
 ```promql
 db_open_connections / 50 * 100  # usage percentage
+```
+
+### License Status
+
+```promql
+easyp_license_valid
+```
+
+### Time Until License Expiration
+
+```promql
+easyp_license_expiry_timestamp_seconds - time()
+```
+
+### Feature Denial Rate
+
+```promql
+rate(easyp_license_feature_denied_total[5m])
+```
+
+### Top Denied Features
+
+```promql
+topk(5, sum by (feature) (rate(easyp_license_feature_denied_total[5m])))
+```
+
+### Rate Limit Denial Rate
+
+```promql
+rate(easyp_rate_limit_requests_total{status="denied"}[5m])
+```
+
+### Rate Limit Allow/Deny Ratio
+
+```promql
+sum(rate(easyp_rate_limit_requests_total{status="denied"}[5m])) / sum(rate(easyp_rate_limit_requests_total[5m])) * 100
+```
+
+### Top Rate-Limited Clients
+
+```promql
+topk(10, sum by (client_ip) (rate(easyp_rate_limit_requests_total{status="denied"}[5m])))
+```
+
+### Active Rate Limit Buckets
+
+```promql
+easyp_rate_limit_active_clients
 ```

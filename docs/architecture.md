@@ -8,8 +8,10 @@ EasyP API Service is a code generation service from Protocol Buffers using Docke
 
 ```
 gRPC Client → API Layer (gRPC + interceptors) → Core (business logic) → WorkerPool → Registry → Docker
-                                                                                    → PostgreSQL
-MCP Client  → MCP Server (HTTP)               → Core
+                                                      ↑                             → PostgreSQL
+                                                      FeatureGate
+                                                      ↑
+MCP Client  → MCP Server (HTTP)               → Core  LicenseManager
 ```
 
 ## Components
@@ -25,7 +27,9 @@ A gRPC server with a chain of interceptors that process each request in the foll
 5. **Panic recovery** — panic interception with `panics_total` counter increment
 6. **Validation** — incoming message validation
 7. **Error code conversion** — conversion of internal errors to gRPC codes
-8. **Audit interceptor** — non-blocking audit event recording
+8. **Rate limit interceptor** — per-client rate limiting via token bucket algorithm (uses `grpc-ecosystem/go-grpc-middleware/v2/interceptors/ratelimit`). Controlled by FeatureGate; when disabled, all requests pass through
+9. **License interceptor** — license-based feature gating (Enterprise methods require a valid license; Community methods pass through)
+10. **Audit interceptor** — non-blocking audit event recording
 
 ### Core (`internal/core`)
 
@@ -75,6 +79,48 @@ An asynchronous audit system.
 - Writes to the `audit_log` table
 - Non-blocking dispatch from the gRPC interceptor — when the channel overflows, the event is dropped (`audit_events_lost_total` is incremented)
 
+### License System (`internal/license`)
+
+A license-based feature gating system built on PASETO v4.public tokens (Ed25519 signatures).
+
+**Components:**
+
+- **Feature enum** — typed `int` constants defined with `iota`. Each feature is classified as Community or Enterprise. Methods: `String()`, `IsEnterprise()`, `Valid()`
+- **LicenseManager** — parses and validates PASETO v4.public tokens using a public key embedded at build time via `-ldflags`. Caches parsed claims in memory. Runs an expiration watcher (60s ticker) that transitions to Community mode when the license expires
+- **FeatureGate** — provides `Enabled(feature)`, `MaxWorkers()`, and `MaxPlugins()` based on the current cached claims. Increments the `easyp_license_feature_denied_total` Prometheus counter when an Enterprise feature is denied
+
+**Tiers:**
+
+| Tier | Features | MaxWorkers | MaxPlugins |
+|------|----------|------------|------------|
+| Community (default) | Code generation, plugin listing, MCP tools, rate limiting, plugin CRUD | 4 | 10 |
+| Enterprise | All | 16 | -1 (unlimited) |
+
+**Graceful degradation:** when no license is configured, the token is invalid, or the license expires at runtime, the system falls back to Community mode without interruption.
+
+**Integration:**
+- `FeatureGate` is injected into `Core` via constructor. The `core.FeatureGate` interface uses `Enabled(feature int)` (not `license.Feature`) to avoid circular dependencies. A `featureGateAdapter` in `cmd/main.go` bridges `license.FeatureGate` (Feature type) to `core.FeatureGate` (int type)
+- `LicenseInterceptor` in the gRPC chain checks the FeatureGate for Enterprise methods and returns `PERMISSION_DENIED` when the feature is not enabled. Community methods (those without a method-to-feature mapping) pass through without checks
+
+### Rate Limiter (`internal/ratelimiter`)
+
+A per-client rate limiting system integrated as a gRPC interceptor.
+
+**Algorithm:** Token bucket via `golang.org/x/time/rate`. Each client gets an independent bucket identified by IP address (extracted via `KeyExtractor` abstraction).
+
+**Components:**
+
+- **Config** — `RequestsPerSecond` (token refill rate), `Burst` (max tokens), `CleanupInterval` (stale bucket cleanup period)
+- **KeyExtractor** — `func(ctx context.Context) string` abstraction for client identification. Default implementation `PeerIPExtractor` extracts IP from `peer.FromContext()`. Extensible to API key, tenant ID, etc.
+- **RateLimiter** — implements `ratelimit.Limiter` interface from `grpc-ecosystem/go-grpc-middleware/v2`. Per-client buckets stored in `sync.Map`. Background goroutine cleans up stale buckets
+- **Prometheus metrics** — `easyp_rate_limit_requests_total` (allowed/denied), `easyp_rate_limit_active_clients`
+
+**Behavior:**
+- Controlled by FeatureGate (`FeatureRateLimiting`). When disabled, all requests pass through
+- Empty key from KeyExtractor → fail-open (request allowed)
+- Denied requests return `RESOURCE_EXHAUSTED` with `X-RateLimit-*` headers in gRPC metadata
+- Allowed requests include `X-RateLimit-*` headers in response metadata
+
 ### Metrics (`internal/adapters/metrics`)
 
 Prometheus-based metrics:
@@ -116,15 +162,16 @@ An SQL wrapper over sqlx:
 ## Code Generation Request Flow
 
 1. The gRPC client sends a `GenerateRequest` with protobuf files and the plugin name
-2. The request passes through the interceptor chain (validation, logging, metrics, audit)
+2. The request passes through the interceptor chain (validation, logging, metrics, license check, audit)
 3. `Core.Generate()` parses the plugin name (`group/name:version`)
-4. Core requests the plugin from the Registry (PostgreSQL)
-5. The task is submitted to the WorkerPool
-6. The WorkerPool checks queue availability (backpressure)
-7. A worker executes `docker run --rm -i` with security constraints
-8. Protobuf data is passed to the container's stdin, the result is read from stdout
-9. On transient errors, a retry is performed (up to `max_retries` attempts)
-10. The result is returned to the client via gRPC, metrics and audit are recorded
+4. Core checks the FeatureGate for feature availability and applies license-based limits
+5. Core requests the plugin from the Registry (PostgreSQL)
+6. The task is submitted to the WorkerPool
+7. The WorkerPool checks queue availability (backpressure)
+8. A worker executes `docker run --rm -i` with security constraints
+9. Protobuf data is passed to the container's stdin, the result is read from stdout
+10. On transient errors, a retry is performed (up to `max_retries` attempts)
+11. The result is returned to the client via gRPC, metrics and audit are recorded
 
 ## Design Patterns
 
@@ -132,5 +179,6 @@ An SQL wrapper over sqlx:
 |---------|-------|
 | **Decorator** | Tracing: `TracingCore`, `TracingRegistry`, `TracingPlugin` wrap interfaces, adding spans |
 | **Worker Pool** | Limiting Docker container concurrency with a queue and backpressure |
-| **Adapter** | Adapters for metrics, audit, registry — isolate infrastructure from business logic |
+| **Adapter** | Adapters for metrics, audit, registry — isolate infrastructure from business logic. `featureGateAdapter` bridges `license.FeatureGate` to `core.FeatureGate` to avoid circular dependencies |
 | **Middleware Chain** | gRPC interceptor chain for cross-cutting concerns |
+| **Feature Gate** | `FeatureGate` controls feature availability based on the current license tier |

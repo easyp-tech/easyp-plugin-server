@@ -41,3 +41,4 @@ test/generated/
 
 # EasyP generated files
 easyp.lock
+.kiro/

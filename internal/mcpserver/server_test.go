@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -62,7 +61,6 @@ func TestMCPServer_RegistersToolsAndListsPlugins(t *testing.T) {
 		toolNames = append(toolNames, tool.Name)
 	}
 	require.Contains(t, toolNames, pluginsListToolName)
-	require.Contains(t, toolNames, easypConfigDescribeToolName)
 
 	args := map[string]any{
 		"group": "grpc",
@@ -105,68 +103,6 @@ func TestMCPServer_RegistersToolsAndListsPlugins(t *testing.T) {
 	}, fake.lastFilter)
 }
 
-func TestMCPServer_EasypConfigDescribe(t *testing.T) {
-	t.Parallel()
-
-	session, shutdown := newTestSession(t, &fakePluginService{})
-	defer shutdown()
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: easypConfigDescribeToolName,
-		Arguments: map[string]any{
-			"path": "generate.inputs[].git_repo",
-		},
-	})
-	require.NoError(t, err)
-	require.False(t, res.IsError)
-
-	var gitRepoOut struct {
-		SchemaVersion string `json:"schema_version"`
-		SelectedPath  string `json:"selected_path"`
-		Fields        []struct {
-			Path string `json:"path"`
-		} `json:"fields"`
-		Notes []string `json:"notes"`
-	}
-	decodeStructured(t, res, &gitRepoOut)
-
-	require.Equal(t, "easyp-config-v1", gitRepoOut.SchemaVersion)
-	require.Equal(t, "generate.inputs[].git_repo", gitRepoOut.SelectedPath)
-	require.NotEmpty(t, gitRepoOut.Fields)
-	require.NotContains(t, fieldPaths(gitRepoOut.Fields), "generate.inputs[].git_repo.out")
-	require.Contains(t, strings.Join(gitRepoOut.Notes, "\n"), "git_repo.out")
-
-	res, err = session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: easypConfigDescribeToolName,
-		Arguments: map[string]any{
-			"path": "generate.plugins[]",
-		},
-	})
-	require.NoError(t, err)
-	require.False(t, res.IsError)
-
-	var pluginsOut struct {
-		Fields []struct {
-			Path string `json:"path"`
-		} `json:"fields"`
-	}
-	decodeStructured(t, res, &pluginsOut)
-
-	paths := fieldPaths(pluginsOut.Fields)
-	require.Contains(t, paths, "generate.plugins[].remote")
-	require.NotContains(t, paths, "generate.plugins[].url")
-
-	errRes, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: easypConfigDescribeToolName,
-		Arguments: map[string]any{
-			"path": "unknown.section",
-		},
-	})
-	require.NoError(t, err)
-	require.True(t, errRes.IsError)
-	require.Contains(t, toolText(errRes), "unknown path")
-}
-
 func newTestSession(t *testing.T, pluginService PluginService) (*mcp.ClientSession, func()) {
 	t.Helper()
 
@@ -200,24 +136,4 @@ func decodeStructured(t *testing.T, res *mcp.CallToolResult, dst any) {
 	data, err := json.Marshal(res.StructuredContent)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, dst))
-}
-
-func fieldPaths(fields []struct {
-	Path string `json:"path"`
-}) []string {
-	out := make([]string, 0, len(fields))
-	for _, field := range fields {
-		out = append(out, field.Path)
-	}
-	return out
-}
-
-func toolText(res *mcp.CallToolResult) string {
-	parts := make([]string, 0, len(res.Content))
-	for _, c := range res.Content {
-		if text, ok := c.(*mcp.TextContent); ok {
-			parts = append(parts, text.Text)
-		}
-	}
-	return strings.Join(parts, "\n")
 }

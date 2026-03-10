@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	easypmcp "github.com/easyp-tech/easyp/mcp/easypconfig"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/easyp-tech/service/internal/core"
@@ -35,7 +36,7 @@ func New(pluginService PluginService, logger *slog.Logger) *Server {
 	}, opts)
 
 	registerPluginTools(srv, pluginService)
-	registerEasypConfigTools(srv)
+	easypmcp.RegisterTool(srv)
 
 	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return srv

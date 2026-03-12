@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -51,15 +52,26 @@ func (api *API) GenerateCode(ctx context.Context, request *generator.GenerateCod
 	}, nil
 }
 
-// Plugins implements generator.ServiceAPIServer.
-func (api *API) Plugins(ctx context.Context, _ *generator.PluginsRequest) (*generator.PluginsResponse, error) {
-	plugins, err := api.app.ListPlugins(ctx, core.PluginFilter{})
+func (api *API) Plugins(ctx context.Context, request *generator.PluginsRequest) (*generator.PluginsResponse, error) {
+	if request == nil {
+		request = &generator.PluginsRequest{}
+	}
+
+	filter := core.PluginFilter{
+		Group:   strings.TrimSpace(request.GetGroup()),
+		Name:    strings.TrimSpace(request.GetName()),
+		Version: strings.TrimSpace(request.GetVersion()),
+		Tags:    compactStrings(request.GetTags()),
+	}
+
+	plugins, err := api.app.ListPlugins(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("api.app.ListPlugins: %w", err)
 	}
 
 	response := &generator.PluginsResponse{
 		Plugins: make([]*generator.PluginInfo, 0, len(plugins)),
+		Total:   int32(len(plugins)),
 	}
 
 	for _, p := range plugins {
@@ -74,6 +86,18 @@ func (api *API) Plugins(ctx context.Context, _ *generator.PluginsRequest) (*gene
 	}
 
 	return response, nil
+}
+
+func compactStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
 }
 
 // ErrorToStatus converts an application error to a gRPC status.

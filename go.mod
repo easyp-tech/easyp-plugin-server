@@ -5,8 +5,8 @@ go 1.26.0
 require (
 	github.com/easyp-tech/easyp v0.14.1-0.20260301022854-21e6e9dbe91e
 	github.com/easyp-tech/protoc-gen-easydoc v0.4.0
+	github.com/easyp-tech/protoc-gen-mcp v0.1.1
 	github.com/gofrs/uuid/v5 v5.4.0
-	github.com/google/jsonschema-go v0.4.2
 	github.com/grafana/pyroscope-go v1.2.7
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
@@ -42,6 +42,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.9 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect

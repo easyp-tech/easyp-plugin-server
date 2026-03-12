@@ -2,11 +2,14 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 
 	easypmcp "github.com/easyp-tech/easyp/mcp/easypconfig"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	generator "github.com/easyp-tech/service/api/generator/v1"
 
 	"github.com/easyp-tech/service/internal/core"
 )
@@ -35,7 +38,9 @@ func New(pluginService PluginService, logger *slog.Logger) *Server {
 		Version: "v1.0.0",
 	}, opts)
 
-	registerPluginTools(srv, pluginService)
+	if err := generator.RegisterServiceAPITools(srv, newPluginToolHandler(pluginService)); err != nil {
+		panic(fmt.Errorf("register generator MCP tools: %w", err))
+	}
 	easypmcp.RegisterTool(srv)
 
 	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {

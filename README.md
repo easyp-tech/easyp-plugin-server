@@ -153,6 +153,32 @@ docker compose up -d
 docker compose logs -f service
 ```
 
+### Minimal Local Run
+
+For local `easyp generate`, gRPC testing and MCP smoke you do not need the full observability stack.
+
+```bash
+# 1. Start only postgres and local registry
+# If port 5432 is already occupied, the task uses 5433 by default.
+task up-minimal
+
+# 2. Publish only the plugin images required by easyp.yaml
+task local-push-required
+
+# 3. In a separate terminal run the service from source
+# config.local.yml is tuned for this mode.
+task run-local
+
+# 4. Generate code
+easyp --cfg easyp.yaml mod download
+easyp --cfg easyp.yaml generate
+
+# 5. Optional MCP smoke check
+go run ./cmd/mcp-smoke --endpoint http://localhost:8083/mcp
+```
+
+If you want every plugin image in the local registry, use `task local-push-registry` instead of `task local-push-required`.
+
 ### Health Check
 
 ```bash
@@ -244,7 +270,7 @@ SERVER_HOST=0.0.0.0
 SERVER_PORT_GRPC=8080
 SERVER_PORT_METRIC=8081  
 SERVER_PORT_HEALTH=8082
-SERVER_PORT_GATEWAY=8083
+SERVER_PORT_MCP=8083
 
 # Database
 DB_POSTGRES_DSN="postgres://user:pass@localhost/db"
@@ -263,7 +289,7 @@ server:
     grpc: 8080
     metric: 8081
     health: 8082
-    gateway: 8083
+    mcp: 8083
 db:
   migrate_dir: "migrate"
   driver: "postgres"

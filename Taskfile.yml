@@ -3,6 +3,7 @@ version: "3"
 tasks:
 
   up:
+    desc: "Start all services. For Enterprise: LICENSE_PUBLIC_KEY=... LICENSE_KEY=... task up"
     dir: "{{.USER_WORKING_DIR}}"
     preconditions:
       - "test -f docker-compose.yml"

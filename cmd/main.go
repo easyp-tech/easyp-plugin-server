@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/ratelimit"
 	"github.com/hellofresh/health-go/v5"
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
@@ -33,8 +34,10 @@ import (
 	"github.com/easyp-tech/service/internal/database/migrations"
 	"github.com/easyp-tech/service/internal/flags"
 	"github.com/easyp-tech/service/internal/grpchelper"
+	"github.com/easyp-tech/service/internal/license"
 	"github.com/easyp-tech/service/internal/mcpserver"
 	"github.com/easyp-tech/service/internal/monitor"
+	"github.com/easyp-tech/service/internal/ratelimiter"
 	"github.com/easyp-tech/service/internal/telemetry"
 )
 
@@ -50,6 +53,8 @@ type (
 		Registry   registryConfig   `yaml:"registry" env:", prefix=REGISTRY_"`
 		Telemetry  telemetryConfig  `yaml:"telemetry" env:", prefix=TELEMETRY_"`
 		WorkerPool workerPoolConfig `yaml:"worker_pool" env:", prefix=WORKER_POOL_"`
+		License    licenseConfig    `yaml:"license" env:", prefix=LICENSE_"`
+		RateLimit  rateLimitConfig  `yaml:"rate_limit" env:", prefix=RATE_LIMIT_"`
 	}
 	server struct {
 		Host string `yaml:"host" env:"HOST, default=0.0.0.0"`
@@ -80,11 +85,22 @@ type (
 		MaxRetries        int           `yaml:"max_retries" env:"MAX_RETRIES,default=2"`
 		ShutdownTimeout   time.Duration `yaml:"shutdown_timeout" env:"SHUTDOWN_TIMEOUT,default=30s"`
 	}
+	licenseConfig struct {
+		Key  string `yaml:"key" env:"KEY"`
+		File string `yaml:"file" env:"FILE"`
+	}
+	rateLimitConfig struct {
+		RequestsPerSecond float64       `yaml:"requests_per_second" env:"REQUESTS_PER_SECOND,default=10.0"`
+		Burst             int           `yaml:"burst" env:"BURST,default=20"`
+		CleanupInterval   time.Duration `yaml:"cleanup_interval" env:"CLEANUP_INTERVAL,default=10m"`
+	}
 )
 
 var (
 	cfgFile  = &flags.File{DefaultPath: "", MaxSize: configFileSize}
 	logLevel = &flags.Level{Level: slog.LevelDebug}
+
+	licensePublicKey string // set via -ldflags "-X main.licensePublicKey=..."
 )
 
 // grpcMetrics implements grpchelper.Metrics for the recovery interceptor.
@@ -94,6 +110,23 @@ type grpcMetrics struct {
 
 func (m *grpcMetrics) PanicsTotal() prometheus.Counter {
 	return m.panics
+}
+
+// featureGateAdapter adapts license.FeatureGate to core.FeatureGate interface.
+type featureGateAdapter struct {
+	gate *license.FeatureGate
+}
+
+func (a *featureGateAdapter) Enabled(feature int) bool {
+	return a.gate.Enabled(license.Feature(feature))
+}
+
+func (a *featureGateAdapter) MaxWorkers() int {
+	return a.gate.MaxWorkers()
+}
+
+func (a *featureGateAdapter) MaxPlugins() int {
+	return a.gate.MaxPlugins()
 }
 
 func main() {
@@ -214,13 +247,41 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 		}
 	}()
 
+	// Create LicenseManager
+	lm, err := license.NewLicenseManager(licensePublicKey, license.LicenseConfig{
+		Key:  cfg.License.Key,
+		File: cfg.License.File,
+	}, log, reg, namespace)
+	if err != nil {
+		log.Warn("license initialization error, continuing in community mode", "error", err)
+	}
+	lm.StartExpirationWatcher(ctx)
+	defer lm.Stop()
+
+	// Create FeatureGate
+	gate := license.NewFeatureGate(lm)
+
+	// Create RateLimiter
+	rl := ratelimiter.New(ratelimiter.Config{
+		RequestsPerSecond: cfg.RateLimit.RequestsPerSecond,
+		Burst:             cfg.RateLimit.Burst,
+		CleanupInterval:   cfg.RateLimit.CleanupInterval,
+	}, gate, nil, log, reg) // nil keyExtractor → PeerIPExtractor
+	rl.StartCleanup(ctx)
+
 	// Wrap Registry in tracing decorator
 	tracedRegistry := telemetry.NewTracingRegistry(r)
+
+	// Override WorkerPool workers from license limits
+	wpWorkers := cfg.WorkerPool.Workers
+	if licenseWorkers := gate.MaxWorkers(); licenseWorkers > 0 {
+		wpWorkers = licenseWorkers
+	}
 
 	// Wrap TracingRegistry in WorkerPool (limit Docker parallelism)
 	metricsAdapter := adapter_metrics.New(reg, namespace)
 	pool := core.NewWorkerPool(tracedRegistry, core.WorkerPoolConfig{
-		Workers:           cfg.WorkerPool.Workers,
+		Workers:           wpWorkers,
 		QueueSize:         cfg.WorkerPool.QueueSize,
 		GenerationTimeout: cfg.WorkerPool.GenerationTimeout,
 		MaxRetries:        cfg.WorkerPool.MaxRetries,
@@ -236,7 +297,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	}()
 
 	// Core gets pool as Registry
-	module := core.New(metricsAdapter, pool)
+	module := core.New(metricsAdapter, pool, &featureGateAdapter{gate: gate})
 
 	// Wrap Core in tracing decorator, pass to API
 	tracedCore := telemetry.NewTracingCore(module)
@@ -255,14 +316,24 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	// Create audit interceptor
 	auditInterceptor := api.NewAuditInterceptor(auditCh, log)
 
+	// Create license interceptor (before audit in the chain)
+	licenseInterceptor := api.NewLicenseInterceptor(gate, log)
+
 	// Create gRPC server with full middleware stack
 	grpcSrv, healthSrv := grpchelper.NewServer(
 		&grpcMetrics{panics: panicsCounter},
 		log,
 		serverMetrics,
 		api.ErrorToStatus,
-		[]grpc.UnaryServerInterceptor{auditInterceptor.UnaryServerInterceptor()},
-		nil,
+		[]grpc.UnaryServerInterceptor{
+			ratelimit.UnaryServerInterceptor(rl),
+			licenseInterceptor.UnaryServerInterceptor(),
+			auditInterceptor.UnaryServerInterceptor(),
+		},
+		[]grpc.StreamServerInterceptor{
+			ratelimit.StreamServerInterceptor(rl),
+			licenseInterceptor.StreamServerInterceptor(),
+		},
 	)
 	serverMetrics.InitializeMetrics(grpcSrv)
 

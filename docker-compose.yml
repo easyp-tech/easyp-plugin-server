@@ -183,6 +183,11 @@ services:
       POSTGRES_PASSWORD: easyp_pass
     ports:
       - "${EASYP_POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U easyp_svc -d easyp_db"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
     networks:
       - easyp_network
 
@@ -190,11 +195,15 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile
+      args:
+        LICENSE_PUBLIC_KEY: "${LICENSE_PUBLIC_KEY:-}"
     container_name: easyp-api-service
     restart: always
     depends_on:
-      - postgres
-      - alloy
+      postgres:
+        condition: service_healthy
+      alloy:
+        condition: service_started
     command: ["-cfg=/config.yml", "-log_level=debug"]
     volumes:
       - "./config.yml:/config.yml:ro"
@@ -203,6 +212,7 @@ services:
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://alloy:4317"
       OTEL_SERVICE_NAME: "easyp-api-service"
+      LICENSE_KEY: "${LICENSE_KEY:-}"
     ports:
       - "${EASYP_GRPC_PORT:-8080}:8080"
       - "${EASYP_METRICS_PORT:-8081}:8081"

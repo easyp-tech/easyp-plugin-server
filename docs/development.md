@@ -42,9 +42,14 @@ After startup:
 # Build the binary
 go build -o bin/server ./cmd/main.go
 
+# Build with an embedded license public key (Ed25519, hex-encoded)
+go build -ldflags "-X main.licensePublicKey=<hex-encoded-ed25519-public-key>" -o bin/server ./cmd/main.go
+
 # Run with configuration
 ./bin/server -cfg config.yml -log_level debug
 ```
+
+If `licensePublicKey` is not set, the service starts in Community mode (all community features enabled, enterprise features disabled).
 
 ## Project Structure
 
@@ -57,6 +62,7 @@ go build -o bin/server ./cmd/main.go
 │   ├── api/                 # gRPC transport layer (server, interceptors)
 │   ├── core/                # Business logic (Core, WorkerPool)
 │   │   └── pool.go          # Worker pool with backpressure and retry
+│   ├── license/             # License system (Feature enum, Claims, LicenseManager, FeatureGate, metrics)
 │   ├── adapters/
 │   │   ├── registry/        # Plugin registry adapter (PostgreSQL + Docker)
 │   │   ├── audit/           # Asynchronous audit system
@@ -155,6 +161,15 @@ go test ./internal/mcpserver -run TestMCPServer -count=1
 task test-mcp
 ```
 
+### License Tests
+
+```bash
+# Run all license package tests (unit + property-based)
+go test ./internal/license/... -v
+```
+
+To generate test licenses during development, use `license.FormatToken` with a test Ed25519 private key. See `internal/license/claims_test.go` for examples.
+
 ### MCP Smoke Tests
 
 Require a running server:
@@ -184,6 +199,8 @@ Uses the `easyp.yaml` configuration with remote plugins on `localhost:8080`.
 | Prometheus client | v1.23.2 | Metrics export |
 | MCP SDK | v1.3.1 | Model Context Protocol |
 | Pyroscope | v1.2.7 | Continuous profiling |
+| go-paseto | v1.5+ | PASETO v4.public token library (Ed25519) |
+| rapid | — | Property-based testing library |
 
 ## Release
 

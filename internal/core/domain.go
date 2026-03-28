@@ -118,6 +118,20 @@ type (
 		Save(ctx context.Context, entry AuditEntry) error
 	}
 
+	// FeatureGate определяет интерфейс проверки доступности функций.
+	// Определён в core для избежания циклических зависимостей.
+	// Параметр feature имеет тип int (не license.Feature) для предотвращения
+	// циклической зависимости между пакетами core и license.
+	FeatureGate interface {
+		// Enabled возвращает true, если функция с указанным идентификатором разрешена текущей лицензией.
+		Enabled(feature int) bool
+		// MaxWorkers возвращает лимит воркеров из текущей лицензии.
+		MaxWorkers() int
+		// MaxPlugins возвращает лимит плагинов из текущей лицензии.
+		// -1 означает отсутствие ограничения.
+		MaxPlugins() int
+	}
+
 	// CoreService defines the business logic interface used by the API layer.
 	CoreService interface {
 		Generate(ctx context.Context, req GenerateCodeRequest) (*GenerateCodeResponse, error)

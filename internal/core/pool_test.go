@@ -14,8 +14,11 @@ import (
 // --- Mock types ---
 
 type mockRegistry struct {
-	getFn  func(ctx context.Context, group, name, version string) (Plugin, error)
-	listFn func(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
+	getFn    func(ctx context.Context, group, name, version string) (Plugin, error)
+	listFn   func(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
+	createFn func(ctx context.Context, req CreatePluginRequest) (*PluginInfo, error)
+	updateFn func(ctx context.Context, req UpdatePluginRequest) (*PluginInfo, error)
+	deleteFn func(ctx context.Context, group, name, version string) error
 }
 
 func (m *mockRegistry) Get(ctx context.Context, group, name, version string) (Plugin, error) {
@@ -24,6 +27,27 @@ func (m *mockRegistry) Get(ctx context.Context, group, name, version string) (Pl
 
 func (m *mockRegistry) List(ctx context.Context, filter PluginFilter) ([]PluginInfo, error) {
 	return m.listFn(ctx, filter)
+}
+
+func (m *mockRegistry) Create(ctx context.Context, req CreatePluginRequest) (*PluginInfo, error) {
+	if m.createFn != nil {
+		return m.createFn(ctx, req)
+	}
+	return nil, nil
+}
+
+func (m *mockRegistry) Update(ctx context.Context, req UpdatePluginRequest) (*PluginInfo, error) {
+	if m.updateFn != nil {
+		return m.updateFn(ctx, req)
+	}
+	return nil, nil
+}
+
+func (m *mockRegistry) Delete(ctx context.Context, group, name, version string) error {
+	if m.deleteFn != nil {
+		return m.deleteFn(ctx, group, name, version)
+	}
+	return nil
 }
 
 type mockPlugin struct {

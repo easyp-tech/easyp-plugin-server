@@ -33,6 +33,12 @@ func methodToOperationType(fullMethod string) string {
 		return core.OperationGenerateCode
 	case generator.ServiceAPI_Plugins_FullMethodName:
 		return core.OperationListPlugins
+	case generator.ServiceAPI_CreatePlugin_FullMethodName:
+		return core.OperationCreatePlugin
+	case generator.ServiceAPI_UpdatePlugin_FullMethodName:
+		return core.OperationUpdatePlugin
+	case generator.ServiceAPI_DeletePlugin_FullMethodName:
+		return core.OperationDeletePlugin
 	default:
 		return ""
 	}
@@ -74,8 +80,15 @@ func (a *AuditInterceptor) UnaryServerInterceptor() grpc.UnaryServerInterceptor 
 
 		// Extract plugin name from request.
 		var pluginName string
-		if genReq, ok := req.(*generator.GenerateCodeRequest); ok {
-			pluginName = genReq.GetPluginName()
+		switch r := req.(type) {
+		case *generator.GenerateCodeRequest:
+			pluginName = r.GetPluginName()
+		case *generator.CreatePluginRequest:
+			pluginName = r.GetGroup() + "/" + r.GetName() + ":" + r.GetVersion()
+		case *generator.UpdatePluginRequest:
+			pluginName = r.GetGroup() + "/" + r.GetName() + ":" + r.GetVersion()
+		case *generator.DeletePluginRequest:
+			pluginName = r.GetGroup() + "/" + r.GetName() + ":" + r.GetVersion()
 		}
 
 		// Build the audit entry.

@@ -3,8 +3,11 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -12,6 +15,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	generator "github.com/easyp-tech/service/api/generator/v1"
@@ -22,19 +26,23 @@ var _ generator.ServiceAPIServer = (*API)(nil)
 
 // API provides the API server implementation.
 type API struct {
-	app core.CoreService
+	app        core.CoreService
+	mcpHandler http.Handler
 }
 
-// New registers the API handler on the given gRPC server and sets the health
-// serving status. The gRPC server and health server are expected to be created
+// New registers the API handler on the given gRPC server, sets the health
+// serving status, and wires up the MCP HTTP handler.
+// The gRPC server and health server are expected to be created
 // externally (e.g. via grpchelper.NewServer).
-func New(grpcSrv *grpc.Server, healthSrv *health.Server, applications core.CoreService) {
+func New(grpcSrv *grpc.Server, healthSrv *health.Server, applications core.CoreService, logger *slog.Logger) *API {
 	healthSrv.SetServingStatus(generator.ServiceAPI_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
 
 	api := &API{
-		app: applications,
+		app:        applications,
+		mcpHandler: newMCPHandler(applications, logger),
 	}
 	generator.RegisterServiceAPIServer(grpcSrv, api)
+	return api
 }
 
 // GenerateCode implements generator.PluginGeneratorServiceServer.
@@ -100,6 +108,82 @@ func compactStrings(values []string) []string {
 	return out
 }
 
+func (api *API) CreatePlugin(ctx context.Context, request *generator.CreatePluginRequest) (*generator.CreatePluginResponse, error) {
+	var configJSON json.RawMessage
+	if request.GetConfig() != nil {
+		b, err := protojson.Marshal(request.GetConfig())
+		if err != nil {
+			return nil, fmt.Errorf("protojson.Marshal config: %w", err)
+		}
+		configJSON = b
+	}
+
+	info, err := api.app.CreatePlugin(ctx, core.CreatePluginRequest{
+		Group:   strings.TrimSpace(request.GetGroup()),
+		Name:    strings.TrimSpace(request.GetName()),
+		Version: strings.TrimSpace(request.GetVersion()),
+		Config:  configJSON,
+		Tags:    compactStrings(request.GetTags()),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("api.app.CreatePlugin: %w", err)
+	}
+
+	return &generator.CreatePluginResponse{
+		Plugin: pluginInfoToProto(info),
+	}, nil
+}
+
+func (api *API) UpdatePlugin(ctx context.Context, request *generator.UpdatePluginRequest) (*generator.UpdatePluginResponse, error) {
+	var configJSON json.RawMessage
+	if request.GetConfig() != nil {
+		b, err := protojson.Marshal(request.GetConfig())
+		if err != nil {
+			return nil, fmt.Errorf("protojson.Marshal config: %w", err)
+		}
+		configJSON = b
+	}
+
+	info, err := api.app.UpdatePlugin(ctx, core.UpdatePluginRequest{
+		Group:   strings.TrimSpace(request.GetGroup()),
+		Name:    strings.TrimSpace(request.GetName()),
+		Version: strings.TrimSpace(request.GetVersion()),
+		Config:  configJSON,
+		Tags:    compactStrings(request.GetTags()),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("api.app.UpdatePlugin: %w", err)
+	}
+
+	return &generator.UpdatePluginResponse{
+		Plugin: pluginInfoToProto(info),
+	}, nil
+}
+
+func (api *API) DeletePlugin(ctx context.Context, request *generator.DeletePluginRequest) (*generator.DeletePluginResponse, error) {
+	err := api.app.DeletePlugin(ctx,
+		strings.TrimSpace(request.GetGroup()),
+		strings.TrimSpace(request.GetName()),
+		strings.TrimSpace(request.GetVersion()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("api.app.DeletePlugin: %w", err)
+	}
+
+	return &generator.DeletePluginResponse{}, nil
+}
+
+func pluginInfoToProto(info *core.PluginInfo) *generator.PluginInfo {
+	return &generator.PluginInfo{
+		Id:        info.ID.String(),
+		Group:     info.Group,
+		Name:      info.Name,
+		Version:   info.Version,
+		Tags:      info.Tags,
+		CreatedAt: timestamppb.New(info.CreatedAt),
+	}
+}
+
 // ErrorToStatus converts an application error to a gRPC status.
 // Compatible with grpchelper.GRPCCodesConverterHandler.
 func ErrorToStatus(err error) *status.Status {
@@ -117,8 +201,14 @@ func ErrorToStatus(err error) *status.Status {
 		code = codes.Internal
 	case errors.Is(err, core.ErrServerOverloaded):
 		code = codes.ResourceExhausted
+	case errors.Is(err, core.ErrAlreadyExists):
+		code = codes.AlreadyExists
+	case errors.Is(err, core.ErrMaxPluginsExceeded):
+		code = codes.ResourceExhausted
 	case errors.Is(err, core.ErrShuttingDown):
 		code = codes.Unavailable
+	case errors.Is(err, core.ErrFeatureDenied):
+		code = codes.PermissionDenied
 	case errors.Is(err, context.DeadlineExceeded):
 		code = codes.DeadlineExceeded
 	case errors.Is(err, context.Canceled):

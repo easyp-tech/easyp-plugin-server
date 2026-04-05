@@ -1,36 +1,37 @@
 package license
 
-// Feature определяет функцию сервиса как типизированную константу.
-type Feature int
+// feature определяет функцию сервиса как приватную типизированную константу.
+// Публичные константы Feature определены в пакете core.
+type feature int
 
 const (
-	FeatureCodeGeneration Feature = iota // Базовая генерация кода
-	FeaturePluginListing                 // Листинг плагинов
-	FeatureMCPServerTools                // MCP server tools
-	FeatureRateLimiting                  // Rate limiting
-	FeaturePluginCRUD                    // CRUD операции с плагинами
+	featureCodeGeneration feature = iota // Базовая генерация кода
+	featurePluginListing                 // Листинг плагинов
+	featureMCPServerTools                // MCP server tools
+	featureRateLimiting                  // Rate limiting
+	featurePluginCRUD                    // CRUD операции с плагинами
 	// Enterprise-only features
-	FeatureMultiTenancy    // Мультитенантность
-	FeatureResponseCaching // Кэширование ответов
-	FeatureAudit           // Аудит
+	featureMultiTenancy    // Мультитенантность
+	featureResponseCaching // Кэширование ответов
+	featureAudit           // Аудит
 
 	featureCount // sentinel для валидации
 )
 
-// featureNames содержит строковые представления Feature для метрик и логирования.
+// featureNames содержит строковые представления feature для метрик и логирования.
 var featureNames = [featureCount]string{
-	FeatureCodeGeneration:  "code_generation",
-	FeaturePluginListing:   "plugin_listing",
-	FeatureMCPServerTools:  "mcp_server_tools",
-	FeatureRateLimiting:    "rate_limiting",
-	FeaturePluginCRUD:      "plugin_crud",
-	FeatureMultiTenancy:    "multi_tenancy",
-	FeatureResponseCaching: "response_caching",
-	FeatureAudit:           "audit",
+	featureCodeGeneration:  "code_generation",
+	featurePluginListing:   "plugin_listing",
+	featureMCPServerTools:  "mcp_server_tools",
+	featureRateLimiting:    "rate_limiting",
+	featurePluginCRUD:      "plugin_crud",
+	featureMultiTenancy:    "multi_tenancy",
+	featureResponseCaching: "response_caching",
+	featureAudit:           "audit",
 }
 
-// String возвращает строковое представление Feature для метрик и логирования.
-func (f Feature) String() string {
+// String возвращает строковое представление feature для метрик и логирования.
+func (f feature) String() string {
 	if !f.Valid() {
 		return "unknown"
 	}
@@ -38,11 +39,11 @@ func (f Feature) String() string {
 }
 
 // IsEnterprise возвращает true, если функция доступна только в Enterprise.
-func (f Feature) IsEnterprise() bool {
-	return f == FeatureMultiTenancy || f == FeatureResponseCaching || f == FeatureAudit
+func (f feature) IsEnterprise() bool {
+	return f == featureMultiTenancy || f == featureResponseCaching || f == featureAudit
 }
 
-// Valid возвращает true, если значение Feature определено.
-func (f Feature) Valid() bool {
+// Valid возвращает true, если значение feature определено.
+func (f feature) Valid() bool {
 	return f >= 0 && f < featureCount
 }

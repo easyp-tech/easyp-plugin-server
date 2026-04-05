@@ -35,7 +35,6 @@ import (
 	"github.com/easyp-tech/service/internal/flags"
 	"github.com/easyp-tech/service/internal/grpchelper"
 	"github.com/easyp-tech/service/internal/license"
-	"github.com/easyp-tech/service/internal/mcpserver"
 	"github.com/easyp-tech/service/internal/monitor"
 	"github.com/easyp-tech/service/internal/ratelimiter"
 	"github.com/easyp-tech/service/internal/telemetry"
@@ -110,23 +109,6 @@ type grpcMetrics struct {
 
 func (m *grpcMetrics) PanicsTotal() prometheus.Counter {
 	return m.panics
-}
-
-// featureGateAdapter adapts license.FeatureGate to core.FeatureGate interface.
-type featureGateAdapter struct {
-	gate *license.FeatureGate
-}
-
-func (a *featureGateAdapter) Enabled(feature int) bool {
-	return a.gate.Enabled(license.Feature(feature))
-}
-
-func (a *featureGateAdapter) MaxWorkers() int {
-	return a.gate.MaxWorkers()
-}
-
-func (a *featureGateAdapter) MaxPlugins() int {
-	return a.gate.MaxPlugins()
 }
 
 func main() {
@@ -297,7 +279,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	}()
 
 	// Core gets pool as Registry
-	module := core.New(metricsAdapter, pool, &featureGateAdapter{gate: gate})
+	module := core.New(metricsAdapter, pool, gate)
 
 	// Wrap Core in tracing decorator, pass to API
 	tracedCore := telemetry.NewTracingCore(module)
@@ -338,9 +320,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	serverMetrics.InitializeMetrics(grpcSrv)
 
 	// Register API handlers
-	api.New(grpcSrv, healthSrv, tracedCore)
-
-	mcpSrv := mcpserver.New(tracedCore, log)
+	apiSrv := api.New(grpcSrv, healthSrv, tracedCore, log)
 
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -430,7 +410,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	// Run MCP Server over streamable HTTP transport.
 	g.Go(func() error {
 		mux := http.NewServeMux()
-		mux.Handle("/mcp", mcpSrv.Handler())
+		mux.Handle("/mcp", apiSrv.MCPHandler())
 
 		srv := &http.Server{
 			Addr:    fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.MCP),

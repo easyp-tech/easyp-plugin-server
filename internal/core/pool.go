@@ -216,6 +216,21 @@ func (p *WorkerPool) List(ctx context.Context, filter PluginFilter) ([]PluginInf
 	return p.inner.List(ctx, filter)
 }
 
+// Create проксирует запрос напрямую во внутренний Registry без очереди.
+func (p *WorkerPool) Create(ctx context.Context, req CreatePluginRequest) (*PluginInfo, error) {
+	return p.inner.Create(ctx, req)
+}
+
+// Update проксирует запрос напрямую во внутренний Registry без очереди.
+func (p *WorkerPool) Update(ctx context.Context, req UpdatePluginRequest) (*PluginInfo, error) {
+	return p.inner.Update(ctx, req)
+}
+
+// Delete проксирует запрос напрямую во внутренний Registry без очереди.
+func (p *WorkerPool) Delete(ctx context.Context, group, name, version string) error {
+	return p.inner.Delete(ctx, group, name, version)
+}
+
 // Generate выполняет генерацию кода с таймаутом и retry.
 func (pp *poolPlugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
 	genCtx, cancel := context.WithTimeout(ctx, pp.cfg.GenerationTimeout)

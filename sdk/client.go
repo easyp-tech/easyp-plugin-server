@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
 
 	generator "github.com/easyp-tech/service/api/generator/v1"
@@ -108,9 +109,15 @@ func (c *Client) ListPlugins(ctx context.Context, filter ...PluginFilter) ([]*ge
 
 	req := &generator.PluginsRequest{}
 	if len(filter) > 0 {
-		req.Group = filter[0].Group
-		req.Name = filter[0].Name
-		req.Version = filter[0].Version
+		if filter[0].Group != "" {
+			req.Group = proto.String(filter[0].Group)
+		}
+		if filter[0].Name != "" {
+			req.Name = proto.String(filter[0].Name)
+		}
+		if filter[0].Version != "" {
+			req.Version = proto.String(filter[0].Version)
+		}
 		req.Tags = append([]string(nil), filter[0].Tags...)
 	}
 

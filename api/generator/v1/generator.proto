@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package api.generator.v1;
 
-import "api/mcp/options/v1/options.proto";
+import "mcp/options/v1/options.proto";
 import "doc/v1/doc.proto";
 import "google/protobuf/compiler/plugin.proto";
+import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/easyp-tech/service/api/generator/v1;generator";
@@ -58,7 +59,7 @@ service ServiceAPI {
   // | `INTERNAL` | Plugin execution failed |
   // | `DEADLINE_EXCEEDED` | Plugin execution timeout |
   rpc GenerateCode(GenerateCodeRequest) returns (GenerateCodeResponse) {
-    option (api.mcp.options.v1.method) = {
+    option (mcp.options.v1.method) = {
       hidden: true
     };
   }
@@ -68,12 +69,64 @@ service ServiceAPI {
   // Returns a list of all plugins registered in the service.
   // Use this to discover available plugins and their versions.
   rpc Plugins(PluginsRequest) returns (PluginsResponse) {
-    option (api.mcp.options.v1.method) = {
+    option (mcp.options.v1.method) = {
       name: "plugins_list"
       title: "List plugins"
       description: "List available plugins with optional filters: group, name, version, tags."
-      examples: '{"group":"grpc","name":"go"}'
-      examples: '{"tags":["stable","go"]}'
+    };
+  }
+
+  // Create a new plugin registration.
+  //
+  // Registers a plugin with the given group, name, version, optional config, and tags.
+  // Requires an Enterprise license.
+  //
+  // ## Error Codes
+  //
+  // | Code | Description |
+  // |------|-------------|
+  // | `ALREADY_EXISTS` | Plugin with same group/name/version exists |
+  // | `INVALID_ARGUMENT` | Invalid plugin name format |
+  // | `RESOURCE_EXHAUSTED` | Max plugins limit reached |
+  // | `PERMISSION_DENIED` | Enterprise license required |
+  rpc CreatePlugin(CreatePluginRequest) returns (CreatePluginResponse) {
+    option (mcp.options.v1.method) = {
+      hidden: true
+    };
+  }
+
+  // Update an existing plugin.
+  //
+  // Replaces the config and tags of an existing plugin identified by group/name/version.
+  // Requires an Enterprise license.
+  //
+  // ## Error Codes
+  //
+  // | Code | Description |
+  // |------|-------------|
+  // | `NOT_FOUND` | Plugin not found |
+  // | `INVALID_ARGUMENT` | Invalid plugin name format |
+  // | `PERMISSION_DENIED` | Enterprise license required |
+  rpc UpdatePlugin(UpdatePluginRequest) returns (UpdatePluginResponse) {
+    option (mcp.options.v1.method) = {
+      hidden: true
+    };
+  }
+
+  // Delete a plugin.
+  //
+  // Removes a plugin from the registry by group/name/version.
+  // Requires an Enterprise license.
+  //
+  // ## Error Codes
+  //
+  // | Code | Description |
+  // |------|-------------|
+  // | `NOT_FOUND` | Plugin not found |
+  // | `PERMISSION_DENIED` | Enterprise license required |
+  rpc DeletePlugin(DeletePluginRequest) returns (DeletePluginResponse) {
+    option (mcp.options.v1.method) = {
+      hidden: true
     };
   }
 }
@@ -119,35 +172,26 @@ message PluginsRequest {
   // Filter by exact plugin group.
   //
   // Omit to return plugins from all groups.
-  string group = 1 [
-    (api.mcp.options.v1.field).optional = true,
-    (doc.v1.field) = {
-      pattern: "^[a-z][a-z0-9-]*$"
-      example: "grpc"
-    }
-  ];
+  optional string group = 1 [(doc.v1.field) = {
+    pattern: "^[a-z][a-z0-9-]*$"
+    example: "grpc"
+  }];
 
   // Filter by exact plugin name.
   //
   // Omit to return plugins with any name.
-  string name = 2 [
-    (api.mcp.options.v1.field).optional = true,
-    (doc.v1.field) = {
-      pattern: "^[a-z][a-z0-9-]*$"
-      example: "go"
-    }
-  ];
+  optional string name = 2 [(doc.v1.field) = {
+    pattern: "^[a-z][a-z0-9-]*$"
+    example: "go"
+  }];
 
   // Filter by exact plugin version.
   //
   // Omit to return all versions.
-  string version = 3 [
-    (api.mcp.options.v1.field).optional = true,
-    (doc.v1.field) = {
-      pattern: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
-      example: "v1.5.1"
-    }
-  ];
+  optional string version = 3 [(doc.v1.field) = {
+    pattern: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    example: "v1.5.1"
+  }];
 
   // Filter by tags.
   //
@@ -162,12 +206,9 @@ message PluginsResponse {
   // List of available plugins matching the supplied filters.
   //
   // Plugins are sorted by group, name, and version.
-  repeated PluginInfo plugins = 1 [
-    (api.mcp.options.v1.field).required = true,
-    (doc.v1.field) = {
-      output_only: true
-    }
-  ];
+  repeated PluginInfo plugins = 1 [(doc.v1.field) = {
+    output_only: true
+  }];
 
   // Number of matching plugins in this response.
   int32 total = 2 [(doc.v1.field) = {
@@ -236,3 +277,106 @@ message PluginInfo {
     output_only: true
   }];
 }
+
+// Request message for creating a plugin.
+message CreatePluginRequest {
+  // Group to which the plugin belongs.
+  string group = 1 [(doc.v1.field) = {
+    required: true
+    pattern: "^[a-z][a-z0-9-]*$"
+    example: "grpc"
+  }];
+
+  // Name of the plugin.
+  string name = 2 [(doc.v1.field) = {
+    required: true
+    pattern: "^[a-z][a-z0-9-]*$"
+    example: "go"
+  }];
+
+  // Version of the plugin.
+  string version = 3 [(doc.v1.field) = {
+    required: true
+    pattern: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    example: "v1.5.1"
+  }];
+
+  // Optional plugin configuration.
+  google.protobuf.Struct config = 4;
+
+  // Tags for the plugin.
+  repeated string tags = 5;
+}
+
+// Response message for creating a plugin.
+message CreatePluginResponse {
+  // The created plugin information.
+  PluginInfo plugin = 1 [(doc.v1.field) = {
+    output_only: true
+  }];
+}
+
+// Request message for updating a plugin.
+message UpdatePluginRequest {
+  // Group to which the plugin belongs.
+  string group = 1 [(doc.v1.field) = {
+    required: true
+    pattern: "^[a-z][a-z0-9-]*$"
+    example: "grpc"
+  }];
+
+  // Name of the plugin.
+  string name = 2 [(doc.v1.field) = {
+    required: true
+    pattern: "^[a-z][a-z0-9-]*$"
+    example: "go"
+  }];
+
+  // Version of the plugin.
+  string version = 3 [(doc.v1.field) = {
+    required: true
+    pattern: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    example: "v1.5.1"
+  }];
+
+  // New plugin configuration (replaces existing).
+  google.protobuf.Struct config = 4;
+
+  // New tags (replaces existing).
+  repeated string tags = 5;
+}
+
+// Response message for updating a plugin.
+message UpdatePluginResponse {
+  // The updated plugin information.
+  PluginInfo plugin = 1 [(doc.v1.field) = {
+    output_only: true
+  }];
+}
+
+// Request message for deleting a plugin.
+message DeletePluginRequest {
+  // Group to which the plugin belongs.
+  string group = 1 [(doc.v1.field) = {
+    required: true
+    pattern: "^[a-z][a-z0-9-]*$"
+    example: "grpc"
+  }];
+
+  // Name of the plugin.
+  string name = 2 [(doc.v1.field) = {
+    required: true
+    pattern: "^[a-z][a-z0-9-]*$"
+    example: "go"
+  }];
+
+  // Version of the plugin.
+  string version = 3 [(doc.v1.field) = {
+    required: true
+    pattern: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    example: "v1.5.1"
+  }];
+}
+
+// Response message for deleting a plugin.
+message DeletePluginResponse {}

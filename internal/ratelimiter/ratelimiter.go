@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/easyp-tech/service/internal/license"
+	"github.com/easyp-tech/service/internal/core"
 )
 
 // clientBucket хранит rate.Limiter и время последнего обращения.
@@ -27,7 +27,7 @@ type clientBucket struct {
 // RateLimiter реализует ratelimit.Limiter из grpc-ecosystem.
 type RateLimiter struct {
 	cfg          Config
-	gate         *license.FeatureGate
+	gate         core.FeatureGate
 	keyExtractor KeyExtractor
 	logger       *slog.Logger
 	buckets      sync.Map // map[string]*clientBucket
@@ -41,7 +41,7 @@ type RateLimiter struct {
 // keyExtractor определяет стратегию извлечения ключа. Если nil — используется PeerIPExtractor.
 func New(
 	cfg Config,
-	gate *license.FeatureGate,
+	gate core.FeatureGate,
 	keyExtractor KeyExtractor,
 	logger *slog.Logger,
 	reg *prometheus.Registry,
@@ -84,7 +84,7 @@ func New(
 // Возвращает nil если запрос разрешён, или status.Error(RESOURCE_EXHAUSTED) если отклонён.
 func (rl *RateLimiter) Limit(ctx context.Context) error {
 	// Step 1: Check FeatureGate — if nil (no license system), treat as enabled.
-	if rl.gate != nil && !rl.gate.Enabled(license.FeatureRateLimiting) {
+	if rl.gate != nil && !rl.gate.Enabled(core.FeatureRateLimiting) {
 		return nil
 	}
 

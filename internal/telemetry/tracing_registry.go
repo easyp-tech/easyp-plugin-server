@@ -73,3 +73,69 @@ func (r *TracingRegistry) List(ctx context.Context, filter core.PluginFilter) ([
 
 	return result, nil
 }
+
+// Create creates a span "registry.Create" with db attributes.
+func (r *TracingRegistry) Create(ctx context.Context, req core.CreatePluginRequest) (*core.PluginInfo, error) {
+	ctx, span := r.tracer.Start(ctx, "registry.Create",
+		trace.WithAttributes(
+			attribute.String("db.system", "postgresql"),
+			attribute.String("db.operation", "INSERT"),
+			attribute.String("plugin.group", req.Group),
+			attribute.String("plugin.name", req.Name),
+			attribute.String("plugin.version", req.Version),
+		))
+	defer span.End()
+
+	result, err := r.inner.Create(ctx, req)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// Update creates a span "registry.Update" with db attributes.
+func (r *TracingRegistry) Update(ctx context.Context, req core.UpdatePluginRequest) (*core.PluginInfo, error) {
+	ctx, span := r.tracer.Start(ctx, "registry.Update",
+		trace.WithAttributes(
+			attribute.String("db.system", "postgresql"),
+			attribute.String("db.operation", "UPDATE"),
+			attribute.String("plugin.group", req.Group),
+			attribute.String("plugin.name", req.Name),
+			attribute.String("plugin.version", req.Version),
+		))
+	defer span.End()
+
+	result, err := r.inner.Update(ctx, req)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// Delete creates a span "registry.Delete" with db attributes.
+func (r *TracingRegistry) Delete(ctx context.Context, group, name, version string) error {
+	ctx, span := r.tracer.Start(ctx, "registry.Delete",
+		trace.WithAttributes(
+			attribute.String("db.system", "postgresql"),
+			attribute.String("db.operation", "DELETE"),
+			attribute.String("plugin.group", group),
+			attribute.String("plugin.name", name),
+			attribute.String("plugin.version", version),
+		))
+	defer span.End()
+
+	err := r.inner.Delete(ctx, group, name, version)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	return nil
+}

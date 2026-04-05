@@ -1,5 +1,7 @@
 package license
 
+import "github.com/easyp-tech/service/internal/core"
+
 // FeatureGate предоставляет проверку доступности функций на основе текущей лицензии.
 type FeatureGate struct {
 	manager *LicenseManager
@@ -18,14 +20,15 @@ func NewFeatureGate(manager *LicenseManager) *FeatureGate {
 // Для невалидных значений Feature возвращает false.
 //
 // Алгоритм:
-// 1. Если feature невалиден → false
+// 1. Конвертировать core.Feature в приватный feature; если невалиден → false
 // 2. Получить claims из LicenseManager (потокобезопасно)
 // 3. Если tier == Enterprise → true
 // 4. Если feature.IsEnterprise() → инкремент метрики denied, false
 // 5. Проверить наличие feature в claims.Features → результат
-func (fg *FeatureGate) Enabled(feature Feature) bool {
-	// Step 1: Invalid feature → false.
-	if !feature.Valid() {
+func (fg *FeatureGate) Enabled(f core.Feature) bool {
+	// Step 1: Convert and validate.
+	lf := feature(f)
+	if !lf.Valid() {
 		return false
 	}
 
@@ -38,14 +41,14 @@ func (fg *FeatureGate) Enabled(feature Feature) bool {
 	}
 
 	// Step 4: Enterprise-only feature in non-Enterprise mode → deny + metric.
-	if feature.IsEnterprise() {
-		fg.metrics.featureDenied.WithLabelValues(feature.String()).Inc()
+	if lf.IsEnterprise() {
+		fg.metrics.featureDenied.WithLabelValues(f.String()).Inc()
 		return false
 	}
 
 	// Step 5: Check if feature is in claims.Features.
-	for _, f := range claims.Features {
-		if f == feature {
+	for _, cf := range claims.Features {
+		if cf == lf {
 			return true
 		}
 	}

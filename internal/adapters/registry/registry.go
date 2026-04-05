@@ -262,6 +262,87 @@ func (p *plugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorReques
 	return &response, nil
 }
 
+// Create implements core.Registry.
+func (r *Registry) Create(ctx context.Context, req core.CreatePluginRequest) (*core.PluginInfo, error) {
+	var p plugin
+
+	if err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+		return conn.QueryRowxContext(ctx,
+			`INSERT INTO plugins (group_name, name, version, config, tags)
+			 VALUES ($1, $2, $3, $4, $5)
+			 RETURNING id, group_name, name, version, tags, created_at`,
+			req.Group, req.Name, req.Version, req.Config, pq.Array(req.Tags),
+		).StructScan(&p)
+	}); err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return nil, fmt.Errorf("%w: %s/%s:%s", core.ErrAlreadyExists, req.Group, req.Name, req.Version)
+		}
+		return nil, fmt.Errorf("r.db.NoTxContext(Create): %w", err)
+	}
+
+	return &core.PluginInfo{
+		ID:        p.ID,
+		Group:     p.GroupName,
+		Name:      p.Name,
+		Version:   p.Version,
+		Tags:      []string(p.Tags),
+		CreatedAt: p.CreatedAt,
+	}, nil
+}
+
+// Update implements core.Registry.
+func (r *Registry) Update(ctx context.Context, req core.UpdatePluginRequest) (*core.PluginInfo, error) {
+	var p plugin
+
+	if err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+		return conn.QueryRowxContext(ctx,
+			`UPDATE plugins SET config = $1, tags = $2
+			 WHERE group_name = $3 AND name = $4 AND version = $5
+			 RETURNING id, group_name, name, version, tags, created_at`,
+			req.Config, pq.Array(req.Tags), req.Group, req.Name, req.Version,
+		).StructScan(&p)
+	}); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: %s/%s:%s", core.ErrNotFound, req.Group, req.Name, req.Version)
+		}
+		return nil, fmt.Errorf("r.db.NoTxContext(Update): %w", err)
+	}
+
+	return &core.PluginInfo{
+		ID:        p.ID,
+		Group:     p.GroupName,
+		Name:      p.Name,
+		Version:   p.Version,
+		Tags:      []string(p.Tags),
+		CreatedAt: p.CreatedAt,
+	}, nil
+}
+
+// Delete implements core.Registry.
+func (r *Registry) Delete(ctx context.Context, group, name, version string) error {
+	return r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+		result, err := conn.ExecContext(ctx,
+			`DELETE FROM plugins WHERE group_name = $1 AND name = $2 AND version = $3`,
+			group, name, version,
+		)
+		if err != nil {
+			return fmt.Errorf("r.db.NoTxContext(Delete): %w", err)
+		}
+
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("result.RowsAffected: %w", err)
+		}
+
+		if rows == 0 {
+			return fmt.Errorf("%w: %s/%s:%s", core.ErrNotFound, group, name, version)
+		}
+
+		return nil
+	})
+}
+
 // Info implements core.Plugin.
 func (p *plugin) Info(_ context.Context) *core.PluginInfo {
 	return &core.PluginInfo{

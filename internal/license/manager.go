@@ -316,7 +316,7 @@ func extractClaims(token *paseto.Token) (Claims, error) {
 	// library stores time as RFC3339 strings, not as time.Time directly.
 	var raw struct {
 		Tier       Tier      `json:"tier"`
-		Features   []Feature `json:"features"`
+		Features   []feature `json:"features"`
 		MaxWorkers int       `json:"max_workers"`
 		MaxPlugins int       `json:"max_plugins"`
 		RefreshURL string    `json:"refresh_url"`

@@ -8,12 +8,12 @@ server:
 db:
   migrate_dir: "migrate"
   driver: "postgres"
-  postgres: "postgres://easyp_svc:easyp_pass@postgres:5432/easyp_db?sslmode=disable"
+  postgres: "postgres://easyp_svc:easyp_pass@easyp-postgres:5432/easyp_db?sslmode=disable"
 registry:
   domain: "localhost:5005"
 telemetry:
-  otlp_endpoint: "alloy:4317"
-  pyroscope_endpoint: "http://pyroscope:4040"
+  otlp_endpoint: "easyp-alloy:4317"
+  pyroscope_endpoint: "http://easyp-pyroscope:4040"
 worker_pool:
   workers: 4
   queue_size: 16

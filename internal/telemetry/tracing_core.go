@@ -61,3 +61,63 @@ func (c *TracingCore) ListPlugins(ctx context.Context, filter core.PluginFilter)
 
 	return result, nil
 }
+
+// CreatePlugin creates a span "core.CreatePlugin" with plugin attributes.
+func (c *TracingCore) CreatePlugin(ctx context.Context, req core.CreatePluginRequest) (*core.PluginInfo, error) {
+	ctx, span := c.tracer.Start(ctx, "core.CreatePlugin",
+		trace.WithAttributes(
+			attribute.String("plugin.group", req.Group),
+			attribute.String("plugin.name", req.Name),
+			attribute.String("plugin.version", req.Version),
+		))
+	defer span.End()
+
+	result, err := c.inner.CreatePlugin(ctx, req)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// UpdatePlugin creates a span "core.UpdatePlugin" with plugin attributes.
+func (c *TracingCore) UpdatePlugin(ctx context.Context, req core.UpdatePluginRequest) (*core.PluginInfo, error) {
+	ctx, span := c.tracer.Start(ctx, "core.UpdatePlugin",
+		trace.WithAttributes(
+			attribute.String("plugin.group", req.Group),
+			attribute.String("plugin.name", req.Name),
+			attribute.String("plugin.version", req.Version),
+		))
+	defer span.End()
+
+	result, err := c.inner.UpdatePlugin(ctx, req)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// DeletePlugin creates a span "core.DeletePlugin" with plugin attributes.
+func (c *TracingCore) DeletePlugin(ctx context.Context, group, name, version string) error {
+	ctx, span := c.tracer.Start(ctx, "core.DeletePlugin",
+		trace.WithAttributes(
+			attribute.String("plugin.group", group),
+			attribute.String("plugin.name", name),
+			attribute.String("plugin.version", version),
+		))
+	defer span.End()
+
+	err := c.inner.DeletePlugin(ctx, group, name, version)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	return nil
+}

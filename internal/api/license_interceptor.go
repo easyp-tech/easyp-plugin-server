@@ -9,26 +9,26 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/easyp-tech/service/internal/license"
+	"github.com/easyp-tech/service/internal/core"
 )
 
 // LicenseInterceptor проверяет лицензию на уровне gRPC-запроса.
 type LicenseInterceptor struct {
-	gate   *license.FeatureGate
+	gate   core.FeatureGate
 	logger *slog.Logger
 	// methodFeatures маппит gRPC full method name → Feature.
 	// Методы, отсутствующие в маппинге, считаются Community и пропускаются.
-	methodFeatures map[string]license.Feature
+	methodFeatures map[string]core.Feature
 }
 
 // NewLicenseInterceptor создаёт интерсептор с маппингом method → Feature.
 // Текущие методы (GenerateCode, Plugins) — Community, маппинг пуст.
 // Маппинг будет расширяться по мере добавления Enterprise-методов.
-func NewLicenseInterceptor(gate *license.FeatureGate, logger *slog.Logger) *LicenseInterceptor {
+func NewLicenseInterceptor(gate core.FeatureGate, logger *slog.Logger) *LicenseInterceptor {
 	return &LicenseInterceptor{
 		gate:           gate,
 		logger:         logger,
-		methodFeatures: make(map[string]license.Feature),
+		methodFeatures: make(map[string]core.Feature),
 	}
 }
 
@@ -88,7 +88,7 @@ func (li *LicenseInterceptor) StreamServerInterceptor() grpc.StreamServerInterce
 
 // RegisterMethodFeature registers a gRPC method as requiring a specific license feature.
 // This is used to extend the interceptor when new Enterprise methods are added.
-func (li *LicenseInterceptor) RegisterMethodFeature(fullMethod string, feature license.Feature) {
+func (li *LicenseInterceptor) RegisterMethodFeature(fullMethod string, feature core.Feature) {
 	li.methodFeatures[fullMethod] = feature
 	li.logger.Info("registered license check",
 		"method", fullMethod,

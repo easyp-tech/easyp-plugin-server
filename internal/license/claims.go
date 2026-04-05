@@ -13,7 +13,7 @@ const (
 // Claims содержит данные из PASETO-токена лицензии.
 type Claims struct {
 	Tier       Tier      `json:"tier"`
-	Features   []Feature `json:"features"`
+	Features   []feature `json:"features"`
 	MaxWorkers int       `json:"max_workers"`
 	MaxPlugins int       `json:"max_plugins"` // -1 = unlimited
 	ExpiresAt  time.Time `json:"exp"`
@@ -34,9 +34,9 @@ func CommunityDefaults() Claims {
 }
 
 // communityFeatures возвращает список всех не-Enterprise функций.
-func communityFeatures() []Feature {
-	var features []Feature
-	for f := Feature(0); f < featureCount; f++ {
+func communityFeatures() []feature {
+	var features []feature
+	for f := feature(0); f < featureCount; f++ {
 		if !f.IsEnterprise() {
 			features = append(features, f)
 		}

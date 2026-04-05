@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "skills": {
+    "protobuf-expert-skill": {
+      "source": "easyp-tech/protobuf-expert-skill",
+      "sourceType": "github",
+      "computedHash": "d7363c6a8734b7aaf2b5c06e71594af41ae5a46b053889fce6c275c92e3c307f"
+    },
+    "protoc-gen-mcp-skill": {
+      "source": "easyp-tech/protoc-gen-mcp-skill",
+      "sourceType": "github",
+      "computedHash": "df172c5e97b8c048e6af80d96681fa955d01a95b8ed4e167696ef8e0183b1280"
+    },
+    "spec-driven-dev": {
+      "source": "sipki-tech/spec-driven-developer-skill",
+      "sourceType": "github",
+      "computedHash": "4359e371f8bc3523a4e57831110f73376a0d7d2f8b57eeaf9e792d49c9f4037f"
+    }
+  }
+}

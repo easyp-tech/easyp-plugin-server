@@ -3,6 +3,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -12,17 +13,57 @@ import (
 
 // Errors.
 var (
-	ErrNotFound          = errors.New("not found")
-	ErrInvalidPluginName = errors.New("invalid plugin name")
-	ErrGenerationFailed  = errors.New("code generation failed")
-	ErrServerOverloaded  = errors.New("server overloaded")
-	ErrShuttingDown      = errors.New("server shutting down")
+	ErrNotFound           = errors.New("not found")
+	ErrInvalidPluginName  = errors.New("invalid plugin name")
+	ErrGenerationFailed   = errors.New("code generation failed")
+	ErrServerOverloaded   = errors.New("server overloaded")
+	ErrShuttingDown       = errors.New("server shutting down")
+	ErrAlreadyExists      = errors.New("already exists")
+	ErrMaxPluginsExceeded = errors.New("max plugins exceeded")
+	ErrFeatureDenied      = errors.New("feature denied")
 )
+
+// Feature identifies a service capability for licensing and feature-gating.
+type Feature int
+
+const (
+	FeatureCodeGeneration  Feature = iota // Базовая генерация кода
+	FeaturePluginListing                  // Листинг плагинов
+	FeatureMCPServerTools                 // MCP server tools
+	FeatureRateLimiting                   // Rate limiting
+	FeaturePluginCRUD                     // CRUD операции с плагинами
+	FeatureMultiTenancy                   // Мультитенантность (Enterprise)
+	FeatureResponseCaching                // Кэширование ответов (Enterprise)
+	FeatureAudit                          // Аудит (Enterprise)
+)
+
+// featureNames содержит строковые представления Feature для метрик и логирования.
+var featureNames = [...]string{
+	FeatureCodeGeneration:  "code_generation",
+	FeaturePluginListing:   "plugin_listing",
+	FeatureMCPServerTools:  "mcp_server_tools",
+	FeatureRateLimiting:    "rate_limiting",
+	FeaturePluginCRUD:      "plugin_crud",
+	FeatureMultiTenancy:    "multi_tenancy",
+	FeatureResponseCaching: "response_caching",
+	FeatureAudit:           "audit",
+}
+
+// String возвращает строковое представление Feature для метрик и логирования.
+func (f Feature) String() string {
+	if int(f) < 0 || int(f) >= len(featureNames) {
+		return "unknown"
+	}
+	return featureNames[f]
+}
 
 // Audit operation types.
 const (
 	OperationGenerateCode = "GENERATE_CODE"
 	OperationListPlugins  = "LIST_PLUGINS"
+	OperationCreatePlugin = "CREATE_PLUGIN"
+	OperationUpdatePlugin = "UPDATE_PLUGIN"
+	OperationDeletePlugin = "DELETE_PLUGIN"
 )
 
 // Audit statuses.
@@ -53,6 +94,12 @@ type (
 		Get(ctx context.Context, pluginGroup, pluginName, pluginVersion string) (Plugin, error)
 		// List retrieves a list of plugins matching the filter.
 		List(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
+		// Create registers a new plugin in the registry.
+		Create(ctx context.Context, req CreatePluginRequest) (*PluginInfo, error)
+		// Update modifies config and tags of an existing plugin.
+		Update(ctx context.Context, req UpdatePluginRequest) (*PluginInfo, error)
+		// Delete removes a plugin from the registry.
+		Delete(ctx context.Context, group, name, version string) error
 	}
 
 	// Plugin represents a code generator plugin that processes protobuf definitions.
@@ -98,6 +145,25 @@ type (
 		Tags    []string
 	}
 
+	// CreatePluginRequest represents a request to register a new plugin.
+	CreatePluginRequest struct {
+		Group   string
+		Name    string
+		Version string
+		Config  json.RawMessage
+		Tags    []string
+	}
+
+	// UpdatePluginRequest represents a request to update an existing plugin.
+	// Group, Name, and Version are immutable lookup keys.
+	UpdatePluginRequest struct {
+		Group   string
+		Name    string
+		Version string
+		Config  json.RawMessage
+		Tags    []string
+	}
+
 	// AuditEntry представляет одну запись аудит-журнала.
 	AuditEntry struct {
 		ID            uuid.UUID
@@ -119,12 +185,9 @@ type (
 	}
 
 	// FeatureGate определяет интерфейс проверки доступности функций.
-	// Определён в core для избежания циклических зависимостей.
-	// Параметр feature имеет тип int (не license.Feature) для предотвращения
-	// циклической зависимости между пакетами core и license.
 	FeatureGate interface {
-		// Enabled возвращает true, если функция с указанным идентификатором разрешена текущей лицензией.
-		Enabled(feature int) bool
+		// Enabled возвращает true, если функция разрешена текущей лицензией.
+		Enabled(feature Feature) bool
 		// MaxWorkers возвращает лимит воркеров из текущей лицензии.
 		MaxWorkers() int
 		// MaxPlugins возвращает лимит плагинов из текущей лицензии.
@@ -136,5 +199,8 @@ type (
 	CoreService interface {
 		Generate(ctx context.Context, req GenerateCodeRequest) (*GenerateCodeResponse, error)
 		ListPlugins(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
+		CreatePlugin(ctx context.Context, req CreatePluginRequest) (*PluginInfo, error)
+		UpdatePlugin(ctx context.Context, req UpdatePluginRequest) (*PluginInfo, error)
+		DeletePlugin(ctx context.Context, group, name, version string) error
 	}
 )

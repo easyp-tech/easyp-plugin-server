@@ -27,12 +27,12 @@ func TestCommunityDefaults(t *testing.T) {
 	}
 
 	// Verify every non-enterprise feature is included.
-	featureSet := make(map[Feature]bool, len(claims.Features))
+	featureSet := make(map[feature]bool, len(claims.Features))
 	for _, f := range claims.Features {
 		featureSet[f] = true
 	}
 
-	for f := Feature(0); f < featureCount; f++ {
+	for f := feature(0); f < featureCount; f++ {
 		if !f.IsEnterprise() && !featureSet[f] {
 			t.Errorf("community defaults missing feature %s", f)
 		}
@@ -47,7 +47,7 @@ func TestCommunityDefaults_FeatureCount(t *testing.T) {
 
 	// Count expected community features.
 	var expected int
-	for f := Feature(0); f < featureCount; f++ {
+	for f := feature(0); f < featureCount; f++ {
 		if !f.IsEnterprise() {
 			expected++
 		}

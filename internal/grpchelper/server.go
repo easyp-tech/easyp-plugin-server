@@ -1,6 +1,7 @@
 package grpchelper
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
@@ -16,7 +17,10 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/reflection"
+
+	"github.com/easyp-tech/service/internal/core"
 )
 
 const (
@@ -90,6 +94,7 @@ func buildUnaryInterceptors(
 	return append([]grpc.UnaryServerInterceptor{
 		TraceLoggingUnaryServerInterceptor(log),
 		realip.UnaryServerInterceptor(nil, nil),
+		callerIPUnaryInterceptor(),
 		serverMetrics.UnaryServerInterceptor(),
 		logging.UnaryServerInterceptor(interceptorLogger(log), loggingOpts...),
 		grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc(m, errInternal))),
@@ -117,10 +122,45 @@ func buildStreamInterceptors(
 	return append([]grpc.StreamServerInterceptor{
 		TraceLoggingStreamServerInterceptor(log),
 		realip.StreamServerInterceptor(nil, nil),
+		callerIPStreamInterceptor(),
 		serverMetrics.StreamServerInterceptor(),
 		logging.StreamServerInterceptor(interceptorLogger(log), loggingOpts...),
 		grpc_recovery.StreamServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc(m, errInternal))),
 		grpc_validator.StreamServerInterceptor(),
 		StreamConvertCodesServerInterceptor(converter),
 	}, extraStream...)
+}
+
+func extractCallerIP(ctx context.Context) string {
+	p, ok := peer.FromContext(ctx)
+	if !ok || p.Addr == nil {
+		return "unknown"
+	}
+
+	return p.Addr.String()
+}
+
+func callerIPUnaryInterceptor() grpc.UnaryServerInterceptor {
+	return func(
+		ctx context.Context,
+		req any,
+		_ *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (any, error) {
+		return handler(core.WithCallerIP(ctx, extractCallerIP(ctx)), req)
+	}
+}
+
+func callerIPStreamInterceptor() grpc.StreamServerInterceptor {
+	return func(
+		srv any,
+		ss grpc.ServerStream,
+		_ *grpc.StreamServerInfo,
+		handler grpc.StreamHandler,
+	) error {
+		ctx := core.WithCallerIP(ss.Context(), extractCallerIP(ss.Context()))
+		wrapped := &wrappedServerStream{ServerStream: ss, ctx: ctx}
+
+		return handler(srv, wrapped)
+	}
 }

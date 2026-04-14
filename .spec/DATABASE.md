@@ -1,111 +1,168 @@
-<!-- generated: 2026-04-04, template: database.md -->
+<!-- generated: 2026-04-14, template: database.md -->
 # Database
 
-## Overview
+## 1. Overview
 
-PostgreSQL 17.7 via `sqlx` + `lib/pq`. All access goes through the `database.SQL` wrapper which provides metrics, tracing, and transaction management.
+PostgreSQL via `sqlx` (Go SQL extensions). No ORM — raw SQL with parameterized queries.
 
-## Connection Pool Defaults
+- **Driver**: `github.com/lib/pq`
+- **Wrapper**: `github.com/jmoiron/sqlx`
+- **Connection**: `internal/database/sql.go` (`database.SQL`)
+- **Migrations**: Custom parser in `internal/database/migrations/`
+- **Connection string**: `postgres://easyp_svc:easyp_pass@host:port/easyp_db?sslmode=disable`
 
-| Parameter | Default | Config field |
-|-----------|---------|-------------|
-| MaxOpenConns | 50 | `SetMaxOpenConnections` |
-| MaxIdleConns | 50 | `SetMaxIdleConnections` |
-| ConnMaxLifetime | 60s | `SetConnMaxLifetime` |
-| ConnMaxIdleTime | 10s | `SetConnMaxIdleTime` |
+## 2. Schema Overview
 
-DSN: `postgres://easyp_svc:easyp_pass@postgres:5432/easyp_db?sslmode=disable`
+```
+┌───────────────────┐
+│     plugins       │
+│───────────────────│
+│ id (PK, uuid)     │
+│ group_name (text)  │
+│ name (text)        │
+│ version (text)     │
+│ config (jsonb)     │
+│ tags (text[])      │
+│ created_at (ts)    │
+│                    │
+│ UNIQUE(group_name, │
+│   name, version)   │
+└───────────────────┘
 
-## Schema
-
-### `plugins` (migration 1 + 4)
-
-```sql
-CREATE TABLE plugins (
-    id         UUID      NOT NULL DEFAULT gen_random_uuid(),
-    group_name TEXT      NOT NULL,
-    name       TEXT      NOT NULL,
-    version    TEXT      NOT NULL,
-    config     JSONB     NOT NULL DEFAULT '{}',
-    tags       TEXT[]    NOT NULL DEFAULT '{}',
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    UNIQUE (group_name, name, version),
-    PRIMARY KEY (id)
-);
-CREATE INDEX idx_plugins_tags ON plugins USING gin (tags);
+┌────────────────────┐
+│    audit_log       │
+│────────────────────│
+│ id (PK, uuid)      │
+│ operation_type     │
+│ plugin_name        │
+│ caller_address     │
+│ status             │
+│ error_code         │
+│ error_message      │
+│ duration_ms        │
+│ metadata (jsonb)   │
+│ created_at (tstz)  │
+└────────────────────┘
 ```
 
-The `config` JSONB stores Docker execution parameters:
-```json
-{"docker": {"network": "none", "memory": "128m", "cpus": "1.0", "user": "nobody"}}
-```
+**Table Reference:**
 
-### `audit_log` (migration 3)
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `plugins` | Registered code generation plugins | `id`, `group_name`, `name`, `version`, `config` (JSONB Docker settings), `tags` (text array) |
+| `audit_log` | Audit trail of all API operations | `id`, `operation_type`, `plugin_name`, `caller_address`, `status`, `duration_ms`, `metadata` |
 
-```sql
-CREATE TABLE audit_log (
-    id              UUID        NOT NULL DEFAULT gen_random_uuid(),
-    operation_type  TEXT        NOT NULL,
-    plugin_name     TEXT,
-    caller_address  TEXT        NOT NULL,
-    status          TEXT        NOT NULL,  -- 'success' | 'error'
-    error_code      TEXT,
-    error_message   TEXT,
-    duration_ms     BIGINT      NOT NULL,
-    metadata        JSONB       NOT NULL DEFAULT '{}',
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (id)
-);
-CREATE INDEX idx_audit_log_created_at ON audit_log (created_at);
-CREATE INDEX idx_audit_log_operation_type ON audit_log (operation_type);
-```
+## 3. Migration Strategy
 
-## Migrations
+- **Tool**: Custom Go parser (`internal/database/migrations/`)
+- **Directory**: `migrate/`
+- **Naming**: `{N}.{description}.sql` (sequential numbers)
+- **Convention**: `-- up` / `-- down` markers in each file
+- **Execution**: Automatic on service startup (`migrations.Run()` in `cmd/main.go`)
+- **Rollback**: Supported via `-- down` sections
 
-Files in `migrate/` directory, sorted by numeric prefix:
+**Current migrations:**
 
-| # | File | Description |
-|---|------|-------------|
-| 1 | `1.init.sql` | Creates `plugins` table |
-| 2 | `2.example_plugins.sql` | Inserts seed plugins (protocolbuffers/go, grpc/go, etc.) |
-| 3 | `3.audit_log.sql` | Creates `audit_log` table with indexes |
-| 4 | `4.plugin_tags.sql` | Adds `tags TEXT[]` column + GIN index to `plugins` |
+| File | Description |
+|------|-------------|
+| `1.init.sql` | Create `plugins` table (uuid PK, unique group/name/version) |
+| `2.example_plugins.sql` | Seed data: protocolbuffers/go, grpc/go, community/pseudomuto-doc, grpc-ecosystem/openapiv2, grpc-ecosystem/gateway |
+| `3.audit_log.sql` | Create `audit_log` table with indexes on `created_at` and `operation_type` |
+| `4.plugin_tags.sql` | Add `tags text[]` column to `plugins`, GIN index for array queries |
 
-Format: `-- up` / `-- down` sections. Never reorder or renumber existing files.
+**Creating a new migration:**
+1. Create `migrate/{N+1}.{description}.sql`
+2. Add `-- up` section with SQL
+3. Add `-- down` section with rollback SQL
+4. Restart service (migrations run automatically)
 
-## SQL Wrapper (`internal/database/sql.go`)
-
-Three access patterns:
+## 4. Connection Management
 
 ```go
-// No transaction, no tracing
-db.NoTx(func(db *sqlx.DB) error { ... })
-
-// Transaction with tracing
-db.Tx(ctx, nil, func(tx *sqlx.Tx) error { ... })
-
-// No transaction, with tracing
-db.NoTxContext(ctx, func(db *sqlx.DB) error { ... })
+// internal/database/sql.go
+type SQLConfig struct {
+    Metrics *Metrics
+}
 ```
 
-All patterns automatically:
-- Wrap errors with caller method name
-- Collect duration and error metrics via `MetricCollector`
-- Create OTel spans (for `Tx` and `NoTxContext`)
-- Handle panic recovery in transactions (`Tx` rolls back on panic)
+**Pool settings:**
+| Setting | Value |
+|---------|-------|
+| MaxLifetime | 60s |
+| MaxIdleTime | 10s |
+| MaxOpenConns | 50 |
+| MaxIdleConns | 50 |
 
-## DAL Metrics
+- Connection created via `database.NewSQL()` with retry logic
+- Passed to adapters as `*database.SQL`
+- Health check: `r.Health()` via `hellofresh/health-go`
 
-| Metric | Type | Labels |
-|--------|------|--------|
-| `{namespace}_{subsystem}_errors_total` | Counter | `func` |
-| `{namespace}_{subsystem}_call_duration_seconds` | Histogram | `func` |
+**Metrics (pool):**
+| Metric | Description |
+|--------|-------------|
+| `db_open_connections` | Active connections |
+| `db_idle_connections` | Idle connections |
+| `db_wait_count_total` | Total connection waits |
+| `db_wait_duration_seconds_total` | Total wait time |
 
-Registered via `database.NewMetrics()`. Method names extracted automatically from DAL struct.
+## 5. Query Patterns
 
-## Adding a New Table
+### Repository Pattern
 
-1. Create `migrate/{next_number}.description.sql` with `-- up` and `-- down` sections
-2. Write adapter in `internal/adapters/` implementing a core interface
-3. Use `db.Tx()` or `db.NoTxContext()` for data access
-4. Register DAL metrics via `database.NewMetrics()`
+`internal/adapters/registry/registry.go` implements `core.Registry`:
+
+```go
+// Get plugin by group/name/version
+func (r *Registry) Get(ctx context.Context, group, name, version string) (Plugin, error)
+
+// List with filter using parameterized queries
+func (r *Registry) List(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
+
+// Create with unique constraint check
+func (r *Registry) Create(ctx context.Context, req CreatePluginRequest) (*PluginInfo, error)
+```
+
+### Transaction Management
+
+```go
+// internal/database/sql.go
+func (s *SQL) Tx(ctx context.Context, fn func(*sqlx.Tx) error) error {
+    tx, err := s.db.BeginTxx(ctx, nil)
+    // ... defer rollback on panic
+    if err := fn(tx); err != nil {
+        tx.Rollback()
+        return err
+    }
+    return tx.Commit()
+}
+```
+
+### Tag Filtering
+
+PostgreSQL array containment operator for tag filtering:
+```sql
+SELECT ... FROM plugins WHERE tags @> $1
+```
+
+## 6. Seed Data
+
+Example plugins seeded via `migrate/2.example_plugins.sql`:
+
+| Group | Name | Version | Docker Config |
+|-------|------|---------|--------------|
+| protocolbuffers | go | v1.36.10 | network=none, memory=128m, cpus=1.0, user=nobody |
+| grpc | go | v1.5.1 | network=none, memory=128m, cpus=1.0, user=nobody |
+| community | pseudomuto-doc | v1.5.1 | network=none, memory=256m, cpus=1.0, user=nobody |
+| grpc-ecosystem | openapiv2 | v2.27.3 | network=none, memory=128m, cpus=1.0, user=nobody |
+| grpc-ecosystem | gateway | v2.27.3 | network=none, memory=128m, cpus=1.0, user=nobody |
+
+## 7. Indexes
+
+| Table | Index | Columns | Type |
+|-------|-------|---------|------|
+| `plugins` | PK | `id` | B-tree |
+| `plugins` | UNIQUE | `(group_name, name, version)` | B-tree |
+| `plugins` | `idx_plugins_tags` | `tags` | GIN |
+| `audit_log` | PK | `id` | B-tree |
+| `audit_log` | `idx_audit_log_created_at` | `created_at` | B-tree |
+| `audit_log` | `idx_audit_log_operation_type` | `operation_type` | B-tree |

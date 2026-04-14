@@ -1,3 +1,4 @@
+<!-- scope: **/*error*, **/*errs* -->
 # Errors Documentation Template
 
 ## What This Generates

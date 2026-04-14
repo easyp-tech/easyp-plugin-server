@@ -1,3 +1,4 @@
+<!-- scope: **/client*, **/sdk/* -->
 # Clients Documentation Template
 
 ## What This Generates

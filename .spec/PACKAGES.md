@@ -1,146 +1,175 @@
-<!-- generated: 2026-04-03, template: core.md -->
+<!-- generated: 2026-04-14, template: core.md -->
 # Packages
 
 ## Application Layer
 
 ### `internal/core`
-**Domain types, interfaces, business logic, worker pool.**
+**Domain types, interfaces, and business logic.**
 
 | File | Description |
 |------|-------------|
-| `domain.go` | All domain types (`Plugin`, `PluginInfo`, `PluginFilter`, `GenerateCodeRequest`, `GenerateCodeResponse`, `CreatePluginRequest`, `UpdatePluginRequest`, `AuditEntry`), interfaces (`Registry`, `Plugin`, `Metrics`, `AuditLog`, `FeatureGate`, `CoreService`), sentinel errors |
-| `core.go` | `Core` struct: `Generate()` (parse name → registry get → plugin generate → record metrics), `ListPlugins()`, `CreatePlugin()` (validate + MaxPlugins check + registry create), `UpdatePlugin()` (validate + registry update), `DeletePlugin()` (validate + registry delete) |
-| `crud_test.go` | CRUD unit tests: preservation tests, create/update/delete success and error paths, validation table-driven tests. Manual mocks. |
-| `pool.go` | `WorkerPool`: bounded goroutine pool implementing `Registry`, backpressure, retry on transient Docker errors, configurable timeout. Pass-through for Create/Update/Delete |
-| `pool_test.go` | Config normalization, get/shutdown, retry logic, backpressure tests. Manual mocks. |
+| `domain.go` | All domain types, interfaces (`Registry`, `Plugin`, `CoreService`, `Metrics`, `AuditLog`, `FeatureGate`), sentinel errors, Feature enum, audit constants |
+| `core.go` | `Core` struct implements `CoreService` — Generate, ListPlugins, CreatePlugin, UpdatePlugin, DeletePlugin |
+| `pool.go` | `WorkerPool` wraps `Registry` to limit Docker concurrency. Non-blocking `Get()`, configurable workers/queue/timeout/retries |
 
-### `internal/api`
-**gRPC transport layer — handlers and interceptors.**
-
-| File | Description |
-|------|-------------|
-| `api.go` | `API` struct implementing `ServiceAPIServer`. `GenerateCode()`, `Plugins()`, `CreatePlugin()`, `UpdatePlugin()`, `DeletePlugin()`. `ErrorToStatus()` maps domain → gRPC codes |
-| `audit_interceptor.go` | `AuditInterceptor`: non-blocking channel send of `core.AuditEntry` per request |
-| `license_interceptor.go` | `LicenseInterceptor`: maps RPC method → `license.Feature`, denies with `PermissionDenied` if disabled |
+Key details:
+- Single source of truth for domain types
+- `Core` delegates to `Registry` + `Metrics` + `FeatureGate`
+- `WorkerPool` classifies transient vs permanent errors for retry logic
 
 ## Adapters Layer
 
-### `internal/adapters/registry`
-**PostgreSQL plugin catalog + Docker container execution. Implements `core.Registry` and `core.Plugin`.**
-
 ### `internal/adapters/audit`
-**PostgreSQL audit log storage + background channel worker. Implements `core.AuditLog`.**
-
-### `internal/adapters/metrics`
-**Prometheus business metrics. Implements `core.Metrics`. Also provides `DBCollector` and `BusinessMetricsCollector`.**
-
-## Infrastructure Layer
-
-### `internal/database`
-**sqlx wrapper with automatic metrics and tracing.**
+**Async audit log writer.**
 
 | File | Description |
 |------|-------------|
-| `sql.go` | `SQL` struct wrapping `sqlx.DB`. `NewSQL()`, `Tx()`, `NoTx()`, `NoTxContext()`. Pool defaults: 50 open, 50 idle, 60s lifetime, 10s idle time |
-| `metrics.go` | `MetricCollector` interface, `NewMetrics()` — auto-generates Prometheus metrics for repository methods via reflection |
-| `connectors/` | `CockroachDB`, `PostgresDB`, `Raw` DSN connectors |
-| `migrations/` | SQL migration parser (`-- up` / `-- down` delimiters) and runner |
-| `internal/` | Reflection helpers for metric auto-labeling |
+| `audit.go` | `Store` implements `core.AuditLog` — saves entries to `audit_log` PostgreSQL table |
+| `worker.go` | `Worker` reads from buffered channel (cap 1000), batch writes, Prometheus metrics |
+
+Key details:
+- Non-blocking channel send from interceptor
+- Graceful shutdown with timeout; returns lost event count
+- Metrics: `audit_events_lost_total`, `audit_queue_depth`
+
+### `internal/adapters/metrics`
+**Prometheus metrics collectors.**
+
+| File | Description |
+|------|-------------|
+| `metrics.go` | `Metrics` implements `core.Metrics` — `generated_plugin_code_total`, `generation_duration_seconds`, `generation_errors_total`, `generation_retries_total` |
+| `business_collector.go` | `BusinessMetricsCollector` — `plugins_total`, `plugins_by_group`, `audit_log_total`, `audit_log_by_operation`, `plugin_versions_count`, `audit_log_last_24h` |
+| `db_collector.go` | `DBCollector` — `db_open_connections`, `db_idle_connections`, `db_wait_count_total`, `db_wait_duration_seconds_total` |
+
+### `internal/adapters/registry`
+**Plugin storage + Docker execution.**
+
+| File | Description |
+|------|-------------|
+| `registry.go` | `Registry` implements `core.Registry` — SQL CRUD + Docker container execution for code generation |
+
+Key details:
+- Docker flags: `--network=none`, `--memory=128m`, `--cpus=1.0`, `--user=nobody`
+- Plugin config stored as JSONB in `plugins` table
+- Supports `latest` version alias
+- Tags filtered via PostgreSQL array operators (`@>`)
+
+## Transport Layer
+
+### `internal/api`
+**gRPC handlers and interceptors.**
+
+| File | Description |
+|------|-------------|
+| `api.go` | `API` implements `generator.ServiceAPIServer` — GenerateCode, Plugins, CreatePlugin, UpdatePlugin, DeletePlugin, ErrorToStatus |
+| `api_test.go` | API handler tests |
+| `audit_interceptor.go` | `AuditInterceptor` — maps gRPC methods to audit operations, records duration/status/metadata |
+| `license_interceptor.go` | `LicenseInterceptor` — checks FeatureGate per gRPC method |
+| `mcp.go` | MCP server setup with StreamableHTTP transport |
+| `mcp_tools.go` | MCP tool handlers (plugin listing, config description) |
 
 ### `internal/grpchelper`
 **gRPC server/client factories and middleware.**
 
 | File | Description |
 |------|-------------|
-| `server.go` | `NewServer()`: builds interceptor chain, creates `grpc.Server` + `health.Server` |
-| `client.go` | gRPC client dial helper with standard options |
+| `server.go` | `NewServer()` — creates gRPC server with full interceptor chain, reflection, health service |
+| `client.go` | gRPC client factory |
 | `errors.go` | `errInternal` sentinel |
-| `grpc_codes.go` | `GRPCCodesConverterHandler` type, `UnaryConvertCodesServerInterceptor`, `StreamConvertCodesServerInterceptor` |
-| `grpc_logs.go` | `interceptorLogger` adapter: `slog.Logger` → `logging.Logger` |
-| `logger.go` | Logging utilities |
-| `metrics.go` | `NewServerMetrics()` — Prometheus gRPC server metrics |
-| `trace_logging.go` | `TraceLoggingUnary/StreamServerInterceptor` — injects trace/span IDs into logger |
+| `grpc_codes.go` | `UnaryConvertCodesServerInterceptor` / `StreamConvertCodesServerInterceptor` |
+| `grpc_logs.go` | `interceptorLogger()` adapter for slog → gRPC logging middleware |
+| `logger.go` | Logging interceptor |
+| `metrics.go` | `NewServerMetrics()` — Prometheus gRPC metrics |
+| `trace_logging.go` | `TraceLoggingUnaryServerInterceptor` — injects trace_id into slog context |
+
+## Infrastructure
+
+### `internal/database`
+**SQL wrapper with metrics and tracing.**
+
+| File | Description |
+|------|-------------|
+| `sql.go` | `SQL` wraps `sqlx.DB` — `NoTx()`, `Tx()`, `NoTxContext()` with automatic metrics and error wrapping |
+| `metrics.go` | DAL metrics registration factory |
+| `connectors/` | PostgreSQL and CockroachDB connection string builders |
+| `migrations/` | Migration parser and runner (up/down) |
+
+Key details:
+- Connection pool: MaxLifetime 60s, MaxIdleTime 10s, MaxOpen/Idle 50
+- Retries on connection with exponential backoff
+- Transaction wraps with defer rollback on panic
 
 ### `internal/license`
-**PASETO v4 license management and feature gating.**
+**PASETO v4 license management.**
 
 | File | Description |
 |------|-------------|
-| `features.go` | `Feature` enum (8 values: `FeatureCodeGeneration`..`FeatureAudit`), `IsEnterprise()`, `String()` |
-| `claims.go` | `Claims` struct (tier, features, limits, expiry), `CommunityDefaults()` |
-| `manager.go` | `LicenseManager`: parse PASETO token, thread-safe claims access, expiration watcher (60s) |
-| `gate.go` | `FeatureGate`: `Enabled(feature)`, `MaxWorkers()`, `MaxPlugins()` |
-| `errors.go` | License-specific errors |
-| `metrics.go` | `LicenseMetrics`: tier gauge, feature denied counter, expiration gauge |
-| `claims_test.go` | Claims parsing and validation tests |
-| `features_test.go` | Feature enum, community defaults, enterprise checks |
-
-### `internal/mcpserver`
-**MCP protocol server for plugin discovery.**
-
-| File | Description |
-|------|-------------|
-| `server.go` | `New()`: creates MCP server with Streamable HTTP transport |
-| `tools_plugins.go` | `plugins_list` tool: ListPlugins with group/name/version/tags filters |
-| `server_test.go` | Integration test with `httptest.Server` + real MCP client |
-
-### `internal/ratelimiter`
-**Per-IP token bucket rate limiter with FeatureGate integration.**
-
-| File | Description |
-|------|-------------|
-| `ratelimiter.go` | `RateLimiter` struct: `sync.Map` of per-IP `rate.Limiter`, Prometheus metrics, cleanup goroutine |
-| `config.go` | `Config` struct (rps, burst, cleanup interval) |
-| `extractor.go` | `KeyExtractor` interface, `PeerIPExtractor` default |
+| `manager.go` | `LicenseManager` — parse/verify PASETO v4.public tokens, expiration watcher (60s), metrics |
+| `gate.go` | `FeatureGate` — checks Enabled/MaxWorkers/MaxPlugins from claims |
+| `claims.go` | `Claims` struct — tier, features, limits, timestamps |
+| `features.go` | `feature` enum with Enterprise detection, string names |
+| `errors.go` | License-specific sentinel errors |
+| `metrics.go` | `license_valid`, `license_expiry_timestamp_seconds` gauges |
 
 ### `internal/telemetry`
-**OpenTelemetry + Pyroscope initialization, tracing decorators.**
+**OpenTelemetry and profiling setup.**
 
 | File | Description |
 |------|-------------|
-| `telemetry.go` | `Init()`: OTLP exporter, tracer/meter providers, Pyroscope profiler, trace-enriched slog handler |
-| `config.go` | `Config` (OTLP endpoint, service name, Pyroscope endpoint) |
-| `tracing_core.go` | `TracingCore`: decorator for `core.CoreService`, adds spans for `Generate`, `ListPlugins`, `CreatePlugin`, `UpdatePlugin`, `DeletePlugin` |
-| `tracing_registry.go` | `TracingRegistry`: decorator for `core.Registry`, adds spans for `Get`, `List`, `Create`, `Update`, `Delete` |
-| `tracing_plugin.go` | `TracingPlugin`: decorator for `core.Plugin`, adds spans for `Generate`, `Info` |
-| `trace_handler.go` | `TraceHandler`: slog handler that enriches log records with trace/span IDs |
-| `trace_handler_test.go` | Tests for trace context propagation into logs |
+| `telemetry.go` | `Init()` — OTLP gRPC exporter, TracerProvider, MeterProvider (15s), Pyroscope profiler |
+| `config.go` | `Config` struct (OTLP endpoint, service name, Pyroscope endpoint) |
+| `tracing_core.go` | `TracingCore` decorator for `CoreService` |
+| `tracing_registry.go` | `TracingRegistry` decorator for `Registry` |
+| `tracing_plugin.go` | `TracingPlugin` decorator for `Plugin` |
+| `trace_handler.go` | Trace context slog handler |
+
+### `internal/ratelimiter`
+**Per-IP token bucket rate limiter.**
+
+| File | Description |
+|------|-------------|
+| `ratelimiter.go` | `RateLimiter` — per-IP buckets via `golang.org/x/time/rate`, feature-gated, cleanup goroutine, Prometheus metrics |
+| `config.go` | `Config` — requests per second, burst, cleanup interval |
+| `extractor.go` | `PeerIPExtractor` — extract client IP from gRPC peer context |
 
 ### `internal/monitor`
-**Context-aware structured logger.**
+**Context-aware logging.**
 
 | File | Description |
 |------|-------------|
-| `log.go` | `WithContext()`, `FromContext()` — store/retrieve `slog.Logger` in `context.Context` |
+| `log.go` | `WithContext()` / `FromContext()` — attach/retrieve `*slog.Logger` from context |
 
 ### `internal/flags`
 **CLI flag types.**
 
 | File | Description |
 |------|-------------|
-| `file.go` | `File` type: `flag.Value` for reading config files with size limit |
-| `level.go` | `Level` type: `flag.Value` for slog log levels |
-
-## Client SDK
-
-### `sdk`
-**Go client SDK for EasyP service consumers.**
-
-| File | Description |
-|------|-------------|
-| `client.go` | `Client` struct, `NewClient()`, `GenerateCode()`, `ListPlugins()`, `Close()` |
-| `config.go` | Functional options: `WithInsecure`, `WithMaxRetries`, `WithGenerateCodeTimeout`, etc. |
-| `retry.go` | `retryUnaryInterceptor`: exponential backoff with jitter for `Unavailable`, `ResourceExhausted`, `DeadlineExceeded` |
-| `health.go` | `healthMonitor`: background goroutine checking gRPC health service |
-| `filter.go` | `FilterPlugins()`: client-side filtering of plugin lists |
-| `interceptors.go` | `LoggingInterceptor`, `MetricsInterceptor` for client-side observability |
-| `doc.go` | Package documentation |
+| `file.go` | `File` flag type — reads config file with size limit |
+| `level.go` | `Level` flag type — slog level parsing |
 
 ## Generated Code
 
 ### `api/generator/v1`
-**Protobuf contract and generated stubs.**
+**Protobuf-generated stubs.**
 
-- `generator.proto` — source of truth (5 RPCs: `GenerateCode`, `Plugins`, `CreatePlugin`, `UpdatePlugin`, `DeletePlugin`)
-- `*.pb.go`, `*_grpc.pb.go` — generated gRPC stubs
-- `generator.mcp.go` — auto-generated MCP tool bindings (protoc-gen-mcp)
+| File | Description |
+|------|-------------|
+| `generator.proto` | API contract: ServiceAPI with 5 RPCs |
+| `generator.pb.go` | Generated protobuf types |
+| `generator_grpc.pb.go` | Generated gRPC client/server stubs |
+| `generator.mcp.go` | Generated MCP tool bindings |
+
+## Client SDK
+
+### `sdk/`
+**Go client SDK.**
+
+| File | Description |
+|------|-------------|
+| `client.go` | `Client` — NewClient, GenerateCode, ListPlugins, Close |
+| `config.go` | Functional options: WithInsecure, WithMaxRetries, WithTimeout, etc. |
+| `filter.go` | `PluginFilter` for client-side filtering |
+| `health.go` | Background health monitor (30s interval) |
+| `interceptors.go` | Client-side logging and metrics interceptors |
+| `retry.go` | Retry with exponential backoff (max 3) |
+| `doc.go` | Package documentation |

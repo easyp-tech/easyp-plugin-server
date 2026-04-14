@@ -1,0 +1,17 @@
+{
+  "feature": "audit-logs-rework",
+  "phase": "done",
+  "created_at": "2026-04-14T12:50:50Z",
+  "current_artifact": null,
+  "history": [
+    {"phase": "explore", "artifact": ".spec/features/audit-logs-rework/explore.md", "approved_at": "2026-04-14T13:38:43Z"},
+    {"phase": "requirements", "artifact": ".spec/features/audit-logs-rework/requirements.md", "approved_at": "2026-04-14T13:52:26Z"},
+    {"phase": "design", "artifact": ".spec/features/audit-logs-rework/design.md", "approved_at": "2026-04-14T14:04:10Z"},
+    {"phase": "task-plan", "artifact": ".spec/features/audit-logs-rework/task-plan.md", "approved_at": "2026-04-14T14:16:58Z"},
+    {"phase": "implementation", "artifact": ".spec/features/audit-logs-rework/implementation.md", "approved_at": "2026-04-14T15:03:14Z"},
+    {"phase": "review", "artifact": ".spec/features/audit-logs-rework/review.md", "approved_at": "2026-04-14T17:07:38Z"}
+  ],
+  "review_base_commit": "f6a2e03c2b349d89656d6bb8a0f45b58e65f1d1a",
+  "branch": null,
+  "last_completed_task": null
+}

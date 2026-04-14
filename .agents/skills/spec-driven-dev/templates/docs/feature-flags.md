@@ -1,3 +1,4 @@
+<!-- scope: **/*flag*, **/*toggle*, **/*feature* -->
 # Feature Flags Documentation Template
 
 ## What This Generates

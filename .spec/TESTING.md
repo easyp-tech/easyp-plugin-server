@@ -1,157 +1,115 @@
-<!-- generated: 2026-04-03, template: development.md -->
+<!-- generated: 2026-04-14, template: development.md -->
 # Testing
 
-## Test Package Naming
+## 1. Test Package Naming
 
-Tests use **internal test packages** (same package as production code):
+Tests use the same package as the code under test (internal test package):
 
 ```go
-package core  // not core_test — tests can access unexported types
+package core  // in core/crud_test.go
+package api   // in api/api_test.go
 ```
 
-This allows testing unexported functions like `isTransient()`, `getGroup()`, etc.
+## 2. Test File Structure
 
-## Test File Structure
-
-Example from `internal/core/pool_test.go`:
+Typical test from the project (`internal/core/crud_test.go`):
 
 ```go
 package core
 
-// --- Mock types (at file top) ---
+import (
+    "context"
+    "testing"
+)
 
-type mockRegistry struct {
-    getFn  func(ctx context.Context, group, name, version string) (Plugin, error)
-    listFn func(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
-}
-
-func (m *mockRegistry) Get(ctx context.Context, group, name, version string) (Plugin, error) {
-    return m.getFn(ctx, group, name, version)
-}
-
-type mockPlugin struct {
-    generateFn func(ctx context.Context, req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error)
-    infoFn     func(ctx context.Context) *PluginInfo
-}
-
-type mockMetrics struct{}  // no-op implementation
-
-// --- Helper ---
-func noopLogger() *slog.Logger {
-    return slog.New(slog.NewTextHandler(nopWriter{}, nil))
-}
-
-// --- Table-driven tests ---
-func TestNewWorkerPool_ConfigNormalization(t *testing.T) {
-    tests := []struct {
-        name string
-        in   WorkerPoolConfig
-        want WorkerPoolConfig
-    }{
-        {
-            name: "valid config unchanged",
-            in:   WorkerPoolConfig{Workers: 4, QueueSize: 16, ...},
-            want: WorkerPoolConfig{Workers: 4, QueueSize: 16, ...},
-        },
-    }
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            // assertions
-        })
-    }
+func TestCore_CreatePlugin(t *testing.T) {
+    // Setup mock dependencies
+    // Create Core instance
+    // Call method
+    // Assert result
 }
 ```
 
-## Key Patterns
-
-### Manual Mocks
-
-All mocks are **manually defined** in test files — no `mockgen` or `testify/mock`:
-
-```go
-type mockRegistry struct {
-    getFn  func(ctx context.Context, group, name, version string) (Plugin, error)
-    listFn func(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
-}
-```
-
-Mock behavior is injected via function fields, allowing per-test customization.
+## 3. Key Patterns
 
 ### Table-Driven Tests
 
-Standard Go pattern with subtests:
+Used throughout for parameterized testing:
 
 ```go
 tests := []struct {
-    name string
-    in   SomeInput
-    want SomeOutput
-}{...}
+    name    string
+    input   SomeInput
+    want    SomeOutput
+    wantErr error
+}{
+    {name: "success case", ...},
+    {name: "not found", ...},
+}
 
 for _, tt := range tests {
     t.Run(tt.name, func(t *testing.T) {
-        // test logic
+        // test body
     })
 }
 ```
 
-### MCP Integration Tests
+### Mocks Defined in Test Files
 
-`internal/mcpserver/server_test.go` uses `httptest.Server` with a real MCP client:
+Mocks are hand-written in test files, not generated:
 
 ```go
-func TestMCPServer(t *testing.T) {
-    // Create real MCP server with mock CoreService
-    // Start httptest.Server
-    // Connect real MCP client
-    // Call plugins_list tool
-    // Assert results
+// Mock implements core.Registry for testing
+type mockRegistry struct {
+    getFunc    func(...) (Plugin, error)
+    listFunc   func(...) ([]PluginInfo, error)
+    // ... other methods
 }
 ```
 
-### No-op Logger Helper
+### Test Helpers
 
-Used across test files to suppress log output:
+Common setup patterns extracted into helper functions within test files.
 
-```go
-func noopLogger() *slog.Logger {
-    return slog.New(slog.NewTextHandler(nopWriter{}, nil))
-}
-```
+## 4. Mock Generation
 
-## Test Files
+- **No mock generation tool** — all mocks are hand-written
+- Mocks live alongside tests in the same `_test.go` file
+- Mocks implement core interfaces (`Registry`, `Plugin`, `Metrics`, `FeatureGate`)
 
-| Package | Test File | Focus |
-|---------|-----------|-------|
-| `core` | `pool_test.go` | WorkerPool: config normalization, get/shutdown, retry, backpressure |
-| `license` | `claims_test.go` | Claims parsing, community defaults |
-| `license` | `features_test.go` | Feature enum, `IsEnterprise()`, `Valid()`, `String()` |
-| `mcpserver` | `server_test.go` | MCP server integration with httptest |
-| `sdk` | `client_test.go` | Client creation, GenerateCode, ListPlugins, Close |
-| `sdk` | `retry_test.go` | Retry interceptor: backoff, jitter, retryable codes |
-| `sdk` | `health_test.go` | Health monitor start/stop |
-| `sdk` | `filter_test.go` | Plugin list filtering |
-| `sdk` | `interceptors_test.go` | Logging and metrics interceptors |
-| `telemetry` | `trace_handler_test.go` | Trace context propagation into slog records |
+## 5. Integration Tests
 
-## Commands
+The registry adapter has integration tests that test SQL migrations and data preservation:
+
+- `internal/adapters/registry/registry_migration_test.go` — migration correctness
+- `internal/adapters/registry/registry_preservation_test.go` — data preserved across migrations
+
+These require a running PostgreSQL instance.
+
+## 6. Commands
 
 ```bash
-# All unit tests
+# Unit tests
 go test ./...
-
-# Specific package
-go test ./internal/core/...
-
-# MCP integration test
-go test ./internal/mcpserver -run TestMCPServer -count=1
 
 # With race detector
 go test -race ./...
 
-# With coverage
+# Single package
+go test ./internal/core/...
+
+# Verbose
+go test -v ./internal/api/...
+
+# Specific test
+go test -run TestCore_CreatePlugin ./internal/core/...
+
+# Coverage
 go test -cover ./...
 
-# Verbose output
-go test -v ./internal/license/...
+# Coverage with report
+go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out
+
+# MCP integration test
+task test-mcp
 ```

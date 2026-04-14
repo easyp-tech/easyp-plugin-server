@@ -1,9 +1,9 @@
-<!-- generated: 2026-04-03, template: core.md -->
+<!-- generated: 2026-04-14, template: core.md -->
 # Domain Model
 
-All domain types and interfaces are defined in `internal/core/domain.go`.
+All domain types are defined in `internal/core/domain.go` — single source of truth.
 
-## Core Entities
+## 1. Core Entities
 
 ### GenerateCodeRequest
 ```go
@@ -23,44 +23,44 @@ type GenerateCodeResponse struct {
 ### PluginInfo
 ```go
 type PluginInfo struct {
-    ID        uuid.UUID
-    Group     string
-    Name      string
-    Version   string
-    Tags      []string
-    CreatedAt time.Time
-}
-```
-
-### PluginFilter
-```go
-type PluginFilter struct {
-    Group   string
-    Name    string
-    Version string
-    Tags    []string
+    ID        uuid.UUID   // Auto-generated UUID
+    Group     string      // Plugin group (e.g., "protocolbuffers")
+    Name      string      // Plugin name (e.g., "go")
+    Version   string      // Semver or "latest" (e.g., "v1.36.10")
+    Tags      []string    // Categorization tags
+    CreatedAt time.Time   // Registration timestamp
 }
 ```
 
 ### CreatePluginRequest
 ```go
 type CreatePluginRequest struct {
-    Group   string
-    Name    string
-    Version string
+    Group   string          // ^[a-z][a-z0-9-]*$
+    Name    string          // ^[a-z][a-z0-9-]*$
+    Version string          // ^v\d+\.\d+\.\d+$ or "latest"
+    Config  json.RawMessage // Docker execution config (JSONB)
     Tags    []string
-    Config  json.RawMessage
 }
 ```
 
 ### UpdatePluginRequest
 ```go
 type UpdatePluginRequest struct {
-    Group   string
-    Name    string
-    Version string
-    Tags    []string
-    Config  json.RawMessage
+    Group   string          // Immutable lookup key
+    Name    string          // Immutable lookup key
+    Version string          // Immutable lookup key
+    Config  json.RawMessage // New config
+    Tags    []string        // New tags
+}
+```
+
+### PluginFilter
+```go
+type PluginFilter struct {
+    Group   string    // Filter by group (exact match)
+    Name    string    // Filter by name (exact match)
+    Version string    // Filter by version (exact match)
+    Tags    []string  // Filter by tags (array containment)
 }
 ```
 
@@ -68,82 +68,62 @@ type UpdatePluginRequest struct {
 ```go
 type AuditEntry struct {
     ID            uuid.UUID
-    OperationType string         // "GENERATE_CODE", "LIST_PLUGINS", "CREATE_PLUGIN", "UPDATE_PLUGIN", "DELETE_PLUGIN"
-    PluginName    string
-    CallerAddress string
+    OperationType string         // GENERATE_CODE, LIST_PLUGINS, CREATE_PLUGIN, UPDATE_PLUGIN, DELETE_PLUGIN
+    PluginName    string         // Target plugin name
+    CallerAddress string         // Client IP
     Status        string         // "success" or "error"
-    ErrorCode     string
-    ErrorMessage  string
-    DurationMs    int64
-    Metadata      map[string]any
-    CreatedAt     time.Time
+    ErrorCode     string         // gRPC status code (on error)
+    ErrorMessage  string         // Error description (on error)
+    DurationMs    int64          // Operation duration in milliseconds
+    Metadata      map[string]any // Extra data (file counts, plugin counts, etc.)
+    CreatedAt     time.Time      // Event timestamp
 }
 ```
 
-### WorkerPoolConfig
+## 2. Enums / Value Objects
+
+### Feature
 ```go
-type WorkerPoolConfig struct {
-    Workers           int           // Default: 4
-    QueueSize         int           // Default: 16
-    GenerationTimeout time.Duration // Default: 120s
-    MaxRetries        int           // Default: 2
-    ShutdownTimeout   time.Duration // Default: 30s
-}
+type Feature int
+
+const (
+    FeatureCodeGeneration  Feature = iota // Community
+    FeaturePluginListing                  // Community
+    FeatureMCPServerTools                 // Community
+    FeatureRateLimiting                   // Community
+    FeaturePluginCRUD                     // Community
+    FeatureMultiTenancy                   // Enterprise only
+    FeatureResponseCaching                // Enterprise only
+    FeatureAudit                          // Enterprise only
+)
 ```
 
-## Interfaces
-
-### Registry
+### Audit Operation Types
 ```go
-type Registry interface {
-    Get(ctx context.Context, pluginGroup, pluginName, pluginVersion string) (Plugin, error)
-    List(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
-    Create(ctx context.Context, req CreatePluginRequest) (*PluginInfo, error)
-    Update(ctx context.Context, req UpdatePluginRequest) (*PluginInfo, error)
-    Delete(ctx context.Context, group, name, version string) error
-}
+const (
+    OperationGenerateCode = "GENERATE_CODE"
+    OperationListPlugins  = "LIST_PLUGINS"
+    OperationCreatePlugin = "CREATE_PLUGIN"
+    OperationUpdatePlugin = "UPDATE_PLUGIN"
+    OperationDeletePlugin = "DELETE_PLUGIN"
+)
 ```
-Implementations: `adapters/registry` (PostgreSQL + Docker), `core.WorkerPool` (decorator), `telemetry.TracingRegistry` (decorator).
 
-### Plugin
+### Audit Statuses
 ```go
-type Plugin interface {
-    Generate(ctx context.Context, req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error)
-    Info(ctx context.Context) *PluginInfo
-}
+const (
+    AuditStatusSuccess = "success"
+    AuditStatusError   = "error"
+)
 ```
-Implementations: `adapters/registry` (Docker exec), `core.poolPlugin` (timeout + retry decorator), `telemetry.TracingPlugin` (decorator).
 
-### Metrics
-```go
-type Metrics interface {
-    GenerateCode(ctx context.Context, info PluginInfo) error
-    ObserveGenerationDuration(ctx context.Context, pluginName string, duration time.Duration)
-    IncGenerationErrors(ctx context.Context, pluginName string, errorType string)
-    IncGenerationRetries(ctx context.Context, pluginName string)
-}
-```
-Implementation: `adapters/metrics`.
+## 3. Business Errors
 
-### AuditLog
-```go
-type AuditLog interface {
-    Save(ctx context.Context, entry AuditEntry) error
-}
-```
-Implementation: `adapters/audit`.
+For the full business error catalog (codes, gRPC mapping, retry policy) see `ERRORS.md`.
 
-### FeatureGate
-```go
-type FeatureGate interface {
-    Enabled(feature int) bool  // int (not license.Feature) to avoid cyclic imports
-    MaxWorkers() int
-    MaxPlugins() int           // -1 = unlimited
-}
-```
-Implementation: `license.FeatureGate` (via adapter in `cmd/main.go`).
+## 4. Interfaces
 
-### CoreService
+### CoreService — Business Logic Facade
 ```go
 type CoreService interface {
     Generate(ctx context.Context, req GenerateCodeRequest) (*GenerateCodeResponse, error)
@@ -153,32 +133,48 @@ type CoreService interface {
     DeletePlugin(ctx context.Context, group, name, version string) error
 }
 ```
-Implementations: `core.Core`, `telemetry.TracingCore` (decorator).
 
-## Business Errors
-
-For the full business error catalog (codes, gRPC mapping, retry policy) see `ERRORS.md`.
-
-## Plugin Name Format
-
-Format: `{group}/{name}:{version}`
-
-- Example: `protocolbuffers/go:v1.36.10`
-- Version `"latest"` resolves via `ORDER BY version DESC LIMIT 1`
-- Validation regex: `^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*:(v\d+\.\d+\.\d+|latest)$`
-
-## Audit Constants
-
+### Registry — Plugin Storage + Execution
 ```go
-const (
-    OperationGenerateCode = "GENERATE_CODE"
-    OperationListPlugins  = "LIST_PLUGINS"
-    OperationCreatePlugin = "CREATE_PLUGIN"
-    OperationUpdatePlugin = "UPDATE_PLUGIN"
-    OperationDeletePlugin = "DELETE_PLUGIN"
-)
-const (
-    AuditStatusSuccess = "success"
-    AuditStatusError   = "error"
-)
+type Registry interface {
+    Get(ctx context.Context, pluginGroup, pluginName, pluginVersion string) (Plugin, error)
+    List(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
+    Create(ctx context.Context, req CreatePluginRequest) (*PluginInfo, error)
+    Update(ctx context.Context, req UpdatePluginRequest) (*PluginInfo, error)
+    Delete(ctx context.Context, group, name, version string) error
+}
+```
+
+### Plugin — Code Generator
+```go
+type Plugin interface {
+    Generate(ctx context.Context, req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error)
+    Info(ctx context.Context) *PluginInfo
+}
+```
+
+### Metrics — Business Metrics
+```go
+type Metrics interface {
+    GenerateCode(ctx context.Context, info PluginInfo) error
+    ObserveGenerationDuration(ctx context.Context, pluginName string, duration time.Duration)
+    IncGenerationErrors(ctx context.Context, pluginName string, errorType string)
+    IncGenerationRetries(ctx context.Context, pluginName string)
+}
+```
+
+### AuditLog — Audit Event Persistence
+```go
+type AuditLog interface {
+    Save(ctx context.Context, entry AuditEntry) error
+}
+```
+
+### FeatureGate — License Feature Checks
+```go
+type FeatureGate interface {
+    Enabled(feature Feature) bool
+    MaxWorkers() int
+    MaxPlugins() int  // -1 = unlimited
+}
 ```

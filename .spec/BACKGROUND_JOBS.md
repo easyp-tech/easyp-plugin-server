@@ -1,154 +1,114 @@
-<!-- generated: 2026-04-04, template: background_jobs.md -->
+<!-- generated: 2026-04-14, template: background-jobs.md -->
 # Background Jobs
 
-## Overview
+## 1. Overview
 
-Two background subsystems run as goroutines alongside the gRPC server:
+Two background processing systems:
+- **WorkerPool** — Bounded concurrency for Docker plugin execution (channel-based goroutine pool)
+- **AuditWorker** — Async audit log writer (single goroutine consuming from buffered channel)
 
-1. **Worker Pool** — bounded concurrency for Docker plugin execution
-2. **Audit Worker** — async persistence of audit log entries
+Both are in-process (same binary), use Go channels as transport, no external queue.
 
-## Worker Pool (`internal/core/pool.go`)
+## 2. Job Inventory
 
-### Purpose
+| Job | Trigger | Concurrency | Timeout | Retry | Priority |
+|-----|---------|-------------|---------|-------|----------|
+| Plugin execution | `GenerateCode` RPC | N workers (default 4) | 120s | 2× | normal |
+| Audit log write | gRPC interceptor | 1 worker | — | 0 | low |
+| License expiration check | Timer | 1 (ticker) | — | 0 | low |
+| Rate limiter cleanup | Timer | 1 (ticker) | — | 0 | low |
 
-Limits parallel Docker container executions to prevent resource exhaustion. Implements `core.Registry` interface, wrapping the real Registry.
+## 3. Architecture
 
-### Configuration
+### Worker Pool (Plugin Execution)
+
+```
+API.GenerateCode()
+  → Core.Generate()
+    → WorkerPool.Get() [enqueue job to channel]
+      ↓ (non-blocking, ErrServerOverloaded if full)
+    Worker goroutine #1..N
+      → Registry.Get() [SQL query]
+      → poolPlugin.Generate() [Docker run with retry]
+        ↓ (timeout context)
+      ← Result / Error
+    ← Return to caller via result channel
+```
+
+### Audit Worker
+
+```
+AuditInterceptor (gRPC)
+  → channel send (non-blocking, cap 1000)
+    ↓ (overflow → log warning, increment lost counter)
+  AuditWorker goroutine
+    → AuditStore.Save() [SQL INSERT]
+```
+
+## 4. Retry & Error Handling
+
+### WorkerPool Retries
+- **Max retries**: Configurable (default 2)
+- **Backoff**: None (immediate retry)
+- **Transient errors**: Docker daemon errors, connection refused → retry
+- **Permanent errors**: `context.DeadlineExceeded` → no retry
+- **Timeout**: Generation timeout per attempt (default 120s)
+
+### Audit Worker
+- **No retry**: Single attempt per event
+- **Overflow**: Channel full → event dropped, `audit_events_lost_total` incremented, warning logged
+- **Graceful shutdown**: Drain remaining events with 5s timeout, return lost count
+
+## 5. Concurrency & Ordering
+
+### WorkerPool
+- **Worker count**: Configurable (default 4), overridden by license `MaxWorkers`
+- **Queue size**: Configurable (default 16)
+- **Parallelism**: Multiple jobs execute concurrently (one per worker)
+- **Ordering**: No ordering guarantees — FIFO within queue, but workers process independently
+- **Backpressure**: `Get()` is non-blocking — returns `ErrServerOverloaded` immediately when queue full
+
+### Audit Worker
+- **Single goroutine**: Sequential writes, preserves order within channel
+- **Channel capacity**: Fixed at 1000
+
+## 6. Monitoring
+
+| Metric | Type | Job | Description |
+|--------|------|-----|-------------|
+| `pool_active_workers` | Gauge | WorkerPool | Currently busy workers |
+| `pool_rejected_total` | Counter | WorkerPool | Jobs rejected (queue full) |
+| `pool_jobs_total` | Counter | WorkerPool | Total jobs processed |
+| `pool_queue_depth` | Gauge | WorkerPool | Current queue depth |
+| `audit_events_lost_total` | Counter | Audit | Events dropped (channel overflow) |
+| `audit_queue_depth` | Gauge | Audit | Current audit channel depth |
+
+## 7. Scaling
+
+- **WorkerPool**: Scale workers via `worker_pool.workers` config or license claims
+- **Queue size**: Via `worker_pool.queue_size` config
+- **No horizontal scaling**: Both systems are in-process, single-instance
+- **Backpressure**: WorkerPool rejects immediately, Audit drops events silently
+
+## 8. Configuration
 
 ```yaml
 worker_pool:
   workers: 4               # Number of goroutines
   queue_size: 16            # Buffered channel capacity
-  generation_timeout: 120s  # Per-generation context timeout
-  max_retries: 3            # Retry attempts for transient errors
-  shutdown_timeout: 30s     # Max wait for in-flight jobs
+  generation_timeout: 120s  # Per-plugin execution timeout
+  max_retries: 2            # Retry count for transient errors
+  shutdown_timeout: 30s     # Graceful shutdown drain time
 ```
 
-Normalization: `workers < 1 → 1`, `queue_size < 0 → 0`, `generation_timeout == 0 → 120s`, `max_retries == 0 → 2`, `shutdown_timeout == 0 → 30s`.
+Audit worker: Fixed 1000-event channel, 5s shutdown timeout (hardcoded in `cmd/main.go`).
 
-### Flow
+## 9. Key Files
 
-```
-Client → pool.Get() ─select→ jobs channel ─worker→ inner.Get() → poolPlugin
-                      │                              ↓
-                      └─default→ ErrServerOverloaded  poolPlugin.Generate()
-                                                       ├─ timeout (120s)
-                                                       ├─ retry (transient)
-                                                       └─ metrics
-```
-
-1. `Get()` creates a job and attempts non-blocking send to buffered channel
-2. If channel full → `ErrServerOverloaded` (gRPC `RESOURCE_EXHAUSTED`)
-3. Worker picks job, calls `inner.Get()` to fetch plugin from registry
-4. Returns `poolPlugin` wrapper that adds timeout + retry to `Generate()`
-
-### Retry Logic
-
-`poolPlugin.Generate()` retries on transient errors:
-
-```go
-func isTransient(err error) bool {
-    // context.DeadlineExceeded → NOT transient
-    // exec.ExitError with codes 125, 126, 127 → transient (Docker errors)
-    // Error message contains "connection refused", "daemon", "temporary failure" → transient
-}
-```
-
-### Shutdown
-
-```go
-func (p *WorkerPool) Shutdown(timeout time.Duration) int {
-    p.closed.Store(true)  // Reject new jobs with ErrShuttingDown
-    close(p.jobs)          // Signal workers to drain
-    // Wait for workers or timeout
-    // Returns count of lost jobs
-}
-```
-
-### Metrics
-
-| Metric | Type | Description |
-|--------|------|-------------|
-| `pool_active_workers` | Gauge | Workers currently processing |
-| `pool_rejected_total` | Counter | Jobs rejected (queue full) |
-| `pool_jobs_total` | Counter | Jobs accepted |
-| `pool_queue_depth` | GaugeFunc | Current queue length |
-
-### Tracing
-
-- `pool.Get` span with plugin attributes + `pool.queue_wait_ms`
-- Pyroscope tag: `operation=worker.process_job`
-
-## Audit Worker (`internal/adapters/audit/worker.go`)
-
-### Purpose
-
-Decouples audit log persistence from the gRPC request path. Reads entries from a buffered channel and writes to PostgreSQL.
-
-### Architecture
-
-```
-gRPC Request → AuditInterceptor → chan core.AuditEntry (buffered) → Worker → audit.Store → PostgreSQL
-                 (non-blocking send)                                  (blocking)
-```
-
-### Configuration
-
-- Buffer size: set at `NewWorker()` call (typically 1000)
-- Channel is shared: `NewWorker()` returns `(worker, chan<- core.AuditEntry)`
-
-### AuditInterceptor (`internal/api/audit_interceptor.go`)
-
-For each gRPC call:
-1. Map method → operation type (`GENERATE_CODE` / `LIST_PLUGINS`)
-2. Extract peer IP address
-3. Call handler, measure duration
-4. Build `core.AuditEntry` with UUID, metadata
-5. Non-blocking send to channel (`select` with `default` → log warning)
-
-### Worker Loop
-
-```go
-func (w *Worker) Run(ctx context.Context) {
-    defer close(w.done)
-    for entry := range w.entries {
-        w.saveEntry(ctx, entry)  // With tracing span
-    }
-}
-```
-
-### Shutdown
-
-```go
-func (w *Worker) Shutdown(timeout time.Duration) int {
-    close(w.entriesCh)  // Stop accepting new entries
-    // Wait for done signal or timeout
-    // Returns count of lost events
-}
-```
-
-### Metrics
-
-| Metric | Type | Description |
-|--------|------|-------------|
-| `audit_events_lost_total` | Counter | Events dropped (timeout) |
-| `audit_queue_depth` | GaugeFunc | Current buffer occupancy |
-
-### Tracing
-
-Each `saveEntry()` creates span `"audit.save"` with attributes: `db.system=postgresql`, `audit.operation_type`, `audit.entry_id`.
-
-## License Expiration Watcher
-
-A third background goroutine:
-
-```go
-// internal/license/manager.go
-func (lm *LicenseManager) StartExpirationWatcher(ctx context.Context) {
-    // Ticker every 60s → checkExpiration()
-    // Reverts to CommunityDefaults on expiry
-}
-```
-
-Stopped via `lm.Stop()` or context cancellation.
+| File | Description |
+|------|-------------|
+| `internal/core/pool.go` | WorkerPool implementation |
+| `internal/core/pool_test.go` | WorkerPool tests |
+| `internal/adapters/audit/worker.go` | AuditWorker implementation |
+| `internal/adapters/audit/audit.go` | AuditStore (SQL persistence) |
+| `internal/api/audit_interceptor.go` | Audit event producer |

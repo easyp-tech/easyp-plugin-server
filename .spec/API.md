@@ -1,118 +1,159 @@
-<!-- generated: 2026-04-04, template: api.md -->
+<!-- generated: 2026-04-14, template: api.md -->
 # API
 
-## Transport
+## 1. Overview
 
-gRPC on port **8080** (H2, insecure credentials in-container). Reflection enabled.
+gRPC API defined in `api/generator/v1/generator.proto`. Framework: `google.golang.org/grpc`.
 
-## Service Definition
+Secondary API: MCP over HTTP at `/mcp` for LLM tool integration.
 
-```
-service ServiceAPI {
-    rpc GenerateCode(GenerateCodeRequest) returns (GenerateCodeResponse);
-    rpc Plugins(PluginsRequest) returns (PluginsResponse);
-    rpc CreatePlugin(CreatePluginRequest) returns (CreatePluginResponse);
-    rpc UpdatePlugin(UpdatePluginRequest) returns (UpdatePluginResponse);
-    rpc DeletePlugin(DeletePluginRequest) returns (DeletePluginResponse);
+## 2. Middleware Stack (Interceptor Chain)
+
+Request processing order (unary):
+
+| Order | Interceptor | Purpose | Package |
+|-------|------------|---------|---------|
+| 1 | TraceLogging | Inject trace_id into slog context | `grpchelper` |
+| 2 | RealIP | Extract client IP from headers | `go-grpc-middleware/realip` |
+| 3 | Prometheus | Record gRPC metrics (latency, codes) | `go-grpc-middleware/prometheus` |
+| 4 | Structured Logging | Log request start/finish with payload | `go-grpc-middleware/logging` |
+| 5 | Recovery | Catch panics → `codes.Internal` + counter | `go-grpc-middleware/recovery` |
+| 6 | Validator | Protobuf field validation | `go-grpc-middleware/validator` |
+| 7 | Code Conversion | Domain errors → gRPC status codes | `grpchelper` |
+| 8 | Rate Limit | Per-IP token bucket | `go-grpc-middleware/ratelimit` |
+| 9 | License | Feature gate check per method | `api` |
+| 10 | Audit | Record operation to async channel | `api` |
+
+## 3. Endpoint Reference
+
+**Service: `api.generator.v1.ServiceAPI`**
+
+| RPC | Request | Response | Description |
+|-----|---------|----------|-------------|
+| `GenerateCode` | `GenerateCodeRequest` | `GenerateCodeResponse` | Execute protobuf plugin in Docker, return generated files |
+| `Plugins` | `PluginsRequest` | `PluginsResponse` | List available plugins with optional filters |
+| `CreatePlugin` | `CreatePluginRequest` | `CreatePluginResponse` | Register a new plugin |
+| `UpdatePlugin` | `UpdatePluginRequest` | `UpdatePluginResponse` | Update plugin config and tags |
+| `DeletePlugin` | `DeletePluginRequest` | `DeletePluginResponse` | Remove a plugin |
+
+**Handler source:** `internal/api/api.go`
+
+## 4. Request / Response Types
+
+### GenerateCodeRequest
+```protobuf
+message GenerateCodeRequest {
+  google.protobuf.compiler.CodeGeneratorRequest code_generator_request = 1;
+  string plugin_name = 2;  // Format: "group/name:version"
 }
 ```
 
-Proto source: `api/generator/v1/`
+### PluginsRequest (filtering)
+```protobuf
+message PluginsRequest {
+  optional string group = 1;
+  optional string name = 2;
+  optional string version = 3;
+  repeated string tags = 4;
+}
+```
 
-## Handlers (`internal/api/api.go`)
+### PluginsResponse
+```protobuf
+message PluginsResponse {
+  repeated PluginInfo plugins = 1;
+  int32 total = 2;
+}
+```
 
-### GenerateCode
+### PluginInfo
+```protobuf
+message PluginInfo {
+  string id = 1;
+  string group = 2;
+  string name = 3;
+  string version = 4;
+  google.protobuf.Timestamp created_at = 5;
+  repeated string tags = 6;
+}
+```
 
-1. Converts proto request → `core.GenerateCodeRequest{PluginName, Payload}`
-2. Calls `core.CoreService.Generate(ctx, req)`
-3. Returns `CodeGeneratorResponse` payload or error
+## 5. Error Mapping
 
-### Plugins
+Domain errors are mapped to gRPC status codes by `ErrorToStatus()` in `internal/api/api.go`:
 
-1. Trims/compacts filter fields from `PluginsRequest`
-2. Builds `core.PluginFilter{Group, Name, Version, Tags}`
-3. Calls `core.CoreService.ListPlugins(ctx, filter)`
-4. Converts `[]core.PluginInfo` → `[]*generator.PluginInfo` with `timestamppb`
+| Domain Error | gRPC Code | When |
+|-------------|-----------|------|
+| `ErrNotFound` | `NotFound` | Plugin not in registry |
+| `ErrInvalidPluginName` | `InvalidArgument` | Name fails regex validation |
+| `ErrGenerationFailed` | `Internal` | Docker execution failed |
+| `ErrServerOverloaded` | `ResourceExhausted` | Worker pool queue full |
+| `ErrAlreadyExists` | `AlreadyExists` | Plugin already registered |
+| `ErrMaxPluginsExceeded` | `ResourceExhausted` | License plugin limit reached |
+| `ErrShuttingDown` | `Unavailable` | Server shutting down |
+| `ErrFeatureDenied` | `PermissionDenied` | Feature not in license |
+| `context.DeadlineExceeded` | `DeadlineExceeded` | Timeout |
+| `context.Canceled` | `Canceled` | Client canceled |
+| (default) | `Internal` | Unknown error |
 
-### CreatePlugin
+## 6. Rate Limiting
 
-1. Converts `*structpb.Struct` config → `json.RawMessage` via `protojson.Marshal`
-2. Trims/compacts fields, builds `core.CreatePluginRequest`
-3. Calls `core.CoreService.CreatePlugin(ctx, req)`
-4. Returns `CreatePluginResponse` with created `PluginInfo`
-5. Enterprise-only: gated by `FeaturePluginCRUD` via `LicenseInterceptor`
+- **Strategy**: Per-IP token bucket (`golang.org/x/time/rate`)
+- **Defaults**: 10 req/sec, burst 20
+- **Feature-gated**: Only active when `FeatureRateLimiting` is enabled
+- **Headers returned**:
+  - `x-ratelimit-limit` — Configured burst
+  - `x-ratelimit-remaining` — Tokens left
+  - `x-ratelimit-reset` — Seconds until token replenishment
+- **Configuration**:
+  ```yaml
+  rate_limit:
+    requests_per_second: 10.0
+    burst: 20
+    cleanup_interval: 10m
+  ```
 
-### UpdatePlugin
+## 7. Proto Schema
 
-1. Converts `*structpb.Struct` config → `json.RawMessage` via `protojson.Marshal`
-2. Trims/compacts fields, builds `core.UpdatePluginRequest`
-3. Calls `core.CoreService.UpdatePlugin(ctx, req)`
-4. Returns `UpdatePluginResponse` with updated `PluginInfo`
-5. Enterprise-only: gated by `FeaturePluginCRUD` via `LicenseInterceptor`
+**File**: `api/generator/v1/generator.proto`
 
-### DeletePlugin
+**Generation command**:
+```bash
+easyp --cfg easyp.yaml generate
+```
 
-1. Trims group/name/version fields
-2. Calls `core.CoreService.DeletePlugin(ctx, group, name, version)`
-3. Returns empty `DeletePluginResponse`
-4. Enterprise-only: gated by `FeaturePluginCRUD` via `LicenseInterceptor`
+**Generated files**:
+- `generator.pb.go` — Protobuf types
+- `generator_grpc.pb.go` — gRPC client/server stubs
+- `generator.mcp.go` — MCP tool bindings
 
-## Error Mapping
+## 8. MCP API
 
-`ErrorToStatus()` in `internal/api/api.go`:
+**Endpoint**: `GET/POST http://host:8083/mcp`
+**Transport**: StreamableHTTP
+**Server name**: `easyp-service-mcp`
 
-| Domain Error | gRPC Code |
-|-------------|-----------|
-| `core.ErrNotFound` | `NOT_FOUND` |
-| `core.ErrInvalidPluginName` | `INVALID_ARGUMENT` |
-| `core.ErrGenerationFailed` | `INTERNAL` || `core.ErrAlreadyExists` | `ALREADY_EXISTS` |
-| `core.ErrMaxPluginsExceeded` | `RESOURCE_EXHAUSTED` || `core.ErrServerOverloaded` | `RESOURCE_EXHAUSTED` |
-| `core.ErrShuttingDown` | `UNAVAILABLE` |
-| `context.DeadlineExceeded` | `DEADLINE_EXCEEDED` |
-| `context.Canceled` | `CANCELED` |
-| (default) | `INTERNAL` |
+**Tools exposed**:
+- `plugins_list` — List available plugins
+- `generate_code` — Execute code generation
+- `easyp_config_describe` — Describe easyp configuration
 
-Registered as `GRPCCodesConverterHandler` in `grpchelper.NewServer`.
+**Source**: `internal/api/mcp.go`, `internal/api/mcp_tools.go`
 
-## Interceptor Chain
+## 9. Validation
 
-Built in `grpchelper.NewServer` → `buildUnaryInterceptors()`. Order matters:
+- **Protobuf validation**: `grpc_validator.UnaryServerInterceptor()` validates protobuf field constraints
+- **Business validation**: `core.Core` validates plugin names with regex:
+  - Group/Name: `^[a-z][a-z0-9-]*$`
+  - Version: `^v\d+\.\d+\.\d+$` or `latest`
+- **Input sanitization**: `strings.TrimSpace()` on all string inputs in API handlers
+- **Empty tag filtering**: `compactStrings()` removes empty/whitespace-only tags
 
-| # | Interceptor | Package | Purpose |
-|---|------------|---------|---------|
-| 1 | TraceLogging | `grpchelper` | Injects trace/span IDs into slog |
-| 2 | RealIP | `realip` | Extracts client IP from headers |
-| 3 | ServerMetrics | `grpc-prometheus` | Prometheus request metrics |
-| 4 | Logging | `logging` | Structured request/response logging |
-| 5 | Recovery | `grpc_recovery` | Panic → `INTERNAL` + counter |
-| 6 | Validator | `grpc_validator` | Proto field validation |
-| 7 | CodeConverter | `grpchelper` | `ErrorToStatus()` conversion |
-| 8 | RateLimit | `ratelimiter` | Per-IP token bucket (extra) |
-| 9 | License | `api.LicenseInterceptor` | Feature gate check (extra) |
-| 10 | Audit | `api.AuditInterceptor` | Async audit log (extra) |
+## 10. Server Configuration
 
-Interceptors 1-7 are built-in; 8-10 are passed via `extraUnary`/`extraStream`.
-
-## MCP Endpoint
-
-Port **8083**, path `/mcp`. Streamable HTTP (not SSE).
-
-Tools:
-- `plugins_list` — plugin discovery (from `ServiceAPI.Plugins`)
-- `easyp_config_describe` — easyp.yaml schema helpers (from `easyp` library)
-
-See `internal/mcpserver/server.go`.
-
-## Health Check
-
-gRPC Health Check Protocol on the same port (8080). Status set to `SERVING` on registration.
-HTTP health on port **8082**.
-
-## Adding a New RPC
-
-1. Add to `api/generator/v1/*.proto`
-2. Run `easyp --cfg easyp.yaml generate`
-3. Add handler method on `API` struct in `internal/api/api.go`
-4. Map new domain errors in `ErrorToStatus()` if needed
-5. If Enterprise-only: `licenseInterceptor.RegisterMethodFeature(fullMethodName, feature)`
-6. Update audit `methodToOperationType()` mapping in `audit_interceptor.go`
+gRPC server features:
+- Insecure credentials (TLS terminated by reverse proxy)
+- OpenTelemetry instrumentation (`otelgrpc.NewServerHandler()`)
+- Keepalive: 50s idle, 10s timeout, 30s min between pings
+- gRPC reflection enabled
+- Health service registered

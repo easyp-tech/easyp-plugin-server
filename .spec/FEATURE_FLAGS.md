@@ -1,91 +1,100 @@
-<!-- generated: 2026-04-04, template: feature_flags.md -->
+<!-- generated: 2026-04-14, template: feature-flags.md -->
 # Feature Flags
 
-## Overview
+## 1. Overview
 
-EasyP uses a license-based feature gate system instead of traditional feature flags. Features are controlled by the PASETO license token, not runtime toggles.
+- **System**: Custom license-based `FeatureGate` (not a third-party feature flag service)
+- **Architecture**: Features defined as Go enum constants, checked via `FeatureGate.Enabled()`
+- **Evaluation**: Synchronous, in-memory — claims loaded from PASETO token on startup
+- **Default behavior**: Community tier features always enabled (fail-open for Community)
 
-## Architecture
+## 2. Feature Inventory
 
-```
-License Token (PASETO v4.public)
-    ↓ parsed by
-LicenseManager (internal/license/manager.go)
-    ↓ cached Claims
-FeatureGate (internal/license/gate.go)
-    ↓ Enabled(feature) / MaxWorkers() / MaxPlugins()
-Consumers: LicenseInterceptor, RateLimiter, Core (via adapter)
-```
+| Flag | Type | Tier | Description | Default |
+|------|------|------|-------------|---------|
+| `FeatureCodeGeneration` | boolean | Community | Protobuf code generation | Enabled |
+| `FeaturePluginListing` | boolean | Community | List available plugins | Enabled |
+| `FeatureMCPServerTools` | boolean | Community | MCP protocol tools | Enabled |
+| `FeatureRateLimiting` | boolean | Community | Per-IP rate limiting | Enabled |
+| `FeaturePluginCRUD` | boolean | Community | Create/Update/Delete plugins | Enabled |
+| `FeatureMultiTenancy` | boolean | Enterprise | Multi-tenant isolation | Disabled |
+| `FeatureResponseCaching` | boolean | Enterprise | Response caching | Disabled |
+| `FeatureAudit` | boolean | Enterprise | Audit logging | Disabled |
 
-## Feature Registry
+## 3. Lifecycle
 
+1. **Definition**: Features defined as `Feature` enum in `internal/core/domain.go` and mirrored as `feature` in `internal/license/features.go`
+2. **Activation**: Enabled by license claims (claims contains `Features []string`)
+3. **Evaluation**: `FeatureGate.Enabled(feature)` checks tier + claims
+4. **Permanent**: Features are tied to license tiers, not toggled dynamically
+
+## 4. Implementation Pattern
+
+### Feature Definition
 ```go
-// internal/license/features.go
+// internal/core/domain.go
+type Feature int
+
 const (
-    FeatureCodeGeneration  Feature = iota // Community — basic code generation
-    FeaturePluginListing                  // Community — list available plugins
-    FeatureMCPServerTools                 // Community — MCP tool access
-    FeatureRateLimiting                   // Community — per-IP rate limiting
-    FeaturePluginCRUD                     // Community — plugin management
-    FeatureMultiTenancy                   // Enterprise — multi-tenant isolation
-    FeatureResponseCaching                // Enterprise — response caching
-    FeatureAudit                          // Enterprise — audit logging
+    FeatureCodeGeneration  Feature = iota
+    FeaturePluginListing
+    FeatureMCPServerTools
+    FeatureRateLimiting
+    FeaturePluginCRUD
+    FeatureMultiTenancy
+    FeatureResponseCaching
+    FeatureAudit
 )
 ```
 
-## Decision Algorithm
-
-`FeatureGate.Enabled(feature)`:
-
-1. `!feature.Valid()` → **false**
-2. `claims.Tier == "enterprise"` → **true** (all features)
-3. `feature.IsEnterprise()` → increment `feature_denied` metric → **false**
-4. Check `feature ∈ claims.Features` → result
-
-## Resource Limits
-
-Beyond feature toggles, the license controls resource limits:
-
-| Method | Community Default | Enterprise |
-|--------|------------------|------------|
-| `MaxWorkers()` | 4 | Per-token |
-| `MaxPlugins()` | 10 | Per-token (-1 = unlimited) |
-
-WorkerPool reads `MaxWorkers()` to size the goroutine pool. Core reads `MaxPlugins()` to limit plugin registry size.
-
-## Consumers
-
-| Consumer | Feature Checked | Action on Deny |
-|----------|----------------|----------------|
-| `LicenseInterceptor` | Method → Feature map (CRUD → `FeaturePluginCRUD`) | `PERMISSION_DENIED` |
-| `RateLimiter.Limit()` | `FeatureRateLimiting` | Skip rate limiting (pass-through) |
-| `Core.CreatePlugin()` | `MaxPlugins()` | `ErrMaxPluginsExceeded` |
-| Worker Pool (planned) | `MaxWorkers()` | Limit pool size |
-
-## Core FeatureGate Interface
-
-To avoid circular dependency `core ↔ license`, core defines its own interface with `int` feature IDs:
-
+### Feature Check
 ```go
-// internal/core/domain.go
-type FeatureGate interface {
-    Enabled(feature int) bool
-    MaxWorkers() int
-    MaxPlugins() int
+// internal/license/gate.go
+func (g *FeatureGate) Enabled(feature Feature) bool {
+    // Enterprise → all features enabled
+    // Community → community features + claims.Features
 }
 ```
 
-Bridged via `featureGateAdapter` in `cmd/main.go`.
+### Enterprise Detection
+```go
+// internal/license/features.go
+func (f feature) IsEnterprise() bool {
+    return f == featureMultiTenancy || f == featureResponseCaching || f == featureAudit
+}
+```
 
-## Adding a New Feature Flag
+### Usage in Business Logic
+```go
+// internal/core/core.go
+if !c.gate.Enabled(FeaturePluginCRUD) {
+    return nil, ErrFeatureDenied
+}
+```
 
-1. Add constant to `internal/license/features.go` (before `featureCount`)
-2. Add name to `featureNames` array
-3. If enterprise-only: add to `IsEnterprise()` switch
-4. Check in consumer: call `gate.Enabled(feature)` or `licenseInterceptor.RegisterMethodFeature()`
-5. Update `communityFeatures()` if it should be available in Community tier
-6. Add metric label handling if needed
+### Usage in Interceptor
+```go
+// internal/api/license_interceptor.go
+// Maps gRPC methods to required features
+// Returns PermissionDenied if feature disabled
+```
 
-## Hot Reload
+## 5. Configuration
 
-`LicenseManager.Reload(token)` re-parses and caches new claims without service restart. The expiration watcher (60s ticker) automatically reverts to Community defaults on token expiry.
+Features are not configured individually — they're derived from the license tier:
+
+| Tier | Features | Workers | Plugins |
+|------|----------|---------|---------|
+| Community | CodeGeneration, PluginListing, MCPServerTools, RateLimiting, PluginCRUD | 4 | 10 |
+| Enterprise | All features | Configurable | Configurable (-1 = unlimited) |
+
+License token contains explicit feature list in claims.
+
+## 6. Adding a New Feature
+
+1. Add constant to `Feature` enum in `internal/core/domain.go`
+2. Add string name to `featureNames` array in `domain.go`
+3. Mirror in `internal/license/features.go` (add constant + string)
+4. Update `IsEnterprise()` if Enterprise-only
+5. Add check in business logic: `if !c.gate.Enabled(FeatureNewFeature) { return ErrFeatureDenied }`
+6. Optionally add to license interceptor for gRPC method-level gating

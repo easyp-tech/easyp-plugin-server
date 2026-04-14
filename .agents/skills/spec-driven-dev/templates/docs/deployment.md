@@ -1,3 +1,4 @@
+<!-- scope: Dockerfile*, docker-compose*, **/deploy/*, **/k8s/* -->
 # Deployment Documentation Template
 
 ## What This Generates

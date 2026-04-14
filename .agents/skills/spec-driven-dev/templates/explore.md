@@ -10,27 +10,41 @@ You **explore**: ask questions, read code, compare options, surface constraints 
 
 ---
 
-## Pipeline Integration
-
-Before starting, check the current pipeline state:
-```
-sh ./scripts/pipeline.sh status
-```
-
-After the user approves the exploration document:
-1. Save the document to `.spec-driven-dev/state/<feature-name>-explore.md`
-2. Register: `sh ./scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-explore.md`
-3. Wait for user to confirm, then: `sh ./scripts/pipeline.sh approve`
+Read `./templates/_preamble.md` for Pipeline Integration and Project Context instructions.
+- **Phase rule key:** `rules.explore`
+- **Input artifacts:** none (this is the first phase)
+- **Output:** `.spec/features/<feature-name>/explore.md`
 
 ---
 
-## Project Context
+### Fast-track mode
 
-If `.spec-driven-dev/config.yaml` exists, read it now and apply:
-- **`context`** → treat as background knowledge about this project.
-- **`rules.explore`** → treat as additional rules for THIS phase (appended to the rules below, not replacing them).
+When the user describes a bug with a known reproduction or a small scoped change:
 
-If the file does not exist, skip this step.
+- **Intent:** 1 paragraph (not 3–5). State the problem and the expected fix direction.
+- **Investigation:** confirm the bug exists, cite the relevant file(s) and line(s). No deep architectural survey.
+- **Options:** single recommended approach. Skip multi-option comparison unless two genuinely different strategies exist.
+- **Scope boundaries:** list only must-have (v1). Omit deferred/spike unless the user raised them.
+- **Assumptions:** 2–3 critical assumptions max.
+- **Open questions:** omit if none. Do not fabricate questions.
+- **Build Tooling:** still required (later phases depend on it).
+
+Target artifact size: **≤ 1 page**.
+
+---
+
+## Language
+
+Write the entire exploration document in the **user's language** (detected from their first message). This includes:
+- Section headers (e.g., translate "Intent", "Investigation", "Options Considered", etc.)
+- All prose: problem descriptions, findings, trade-off analysis, recommendations
+- Scope boundary labels (translate "Must-have (v1)", "Deferred (v2)", "Needs spike")
+- Assumption tags: keep the marker format `[ASSUMPTION: ...]` but write the assumption text in the user's language
+
+Keep in English (do not translate):
+- Code identifiers, file paths, import paths
+- Shell commands and their output
+- Build Tooling commands (the command values — labels like "Orchestrator", "Test", "Build" may be translated)
 
 ---
 
@@ -49,6 +63,8 @@ Ask the user:
 Without waiting for all answers:
 
 **Project documentation shortcut:** If the project documentation directory exists (default: `.spec/`, configurable via `docs_dir` in `config.yaml`), read `README.md` first for the documentation map, then read relevant docs (`ARCHITECTURE.md`, `PACKAGES.md`, `DOMAIN.md`) before scanning source code. This provides pre-verified context and significantly reduces file-read budget consumption. If docs exist, you may need fewer than 20 raw file reads.
+
+> **Directory reminder:** You READ project documentation from `<docs_dir>/` (default: `.spec/`). You WRITE phase artifacts to `.spec/features/<feature>/`. These are separate directories — do not mix them.
 
 - Read relevant source code, configs, and tests
 - Identify existing patterns, conventions, and constraints
@@ -162,7 +178,7 @@ Before presenting to the user:
 - [ ] Scope boundaries are suggested
 - [ ] Assumptions behind the recommendation are stated explicitly
 - [ ] Open questions are listed (if any)
-- [ ] Build Tooling section is present with orchestrator and key commands (test, build, lint, generate)
+- [ ] Build Tooling section is present with orchestrator and key commands (test, build, lint; generate if applicable)
 
 ## Done when
 
@@ -178,10 +194,4 @@ Do NOT suggest approval until **every** condition is true:
 
 ## Antipatterns
 
-| Antipattern | WRONG ❌ | RIGHT ✓ | Why |
-|---|---|---|---|
-| Premature requirements | "WHEN token expires, system SHALL refresh" | "One option is to auto-refresh tokens" | WHEN/SHALL belongs in requirements phase |
-| Solution attachment | "We should use Redis" | "Option A: Redis, Option B: in-memory — trade-offs:..." | Must show alternatives before committing |
-| Ignoring existing code | "I suggest adding a new auth module" | "Existing `src/auth` uses X pattern; we can extend it" | Always read codebase first |
-| Scope creep | "We should also add rate limiting and logging" | "Rate limiting could be v2; focus on core auth first" | Help user narrow, not expand |
-| Analysis paralysis | 5 options with no recommendation | "Option B is best because...; A is fallback if..." | Recommend clearly when path is evident |
+Antipatterns for this phase: read `./templates/reference/antipatterns.md` § Explore.

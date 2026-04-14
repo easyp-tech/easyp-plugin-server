@@ -279,7 +279,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	}()
 
 	// Core gets pool as Registry
-	module := core.New(metricsAdapter, pool, gate)
+	module := core.New(metricsAdapter, pool, gate, auditCh, log)
 
 	// Wrap Core in tracing decorator, pass to API
 	tracedCore := telemetry.NewTracingCore(module)
@@ -295,10 +295,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	})
 	reg.MustRegister(panicsCounter)
 
-	// Create audit interceptor
-	auditInterceptor := api.NewAuditInterceptor(auditCh, log)
-
-	// Create license interceptor (before audit in the chain)
+	// Create license interceptor
 	licenseInterceptor := api.NewLicenseInterceptor(gate, log)
 
 	// Create gRPC server with full middleware stack
@@ -310,7 +307,6 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 		[]grpc.UnaryServerInterceptor{
 			ratelimit.UnaryServerInterceptor(rl),
 			licenseInterceptor.UnaryServerInterceptor(),
-			auditInterceptor.UnaryServerInterceptor(),
 		},
 		[]grpc.StreamServerInterceptor{
 			ratelimit.StreamServerInterceptor(rl),

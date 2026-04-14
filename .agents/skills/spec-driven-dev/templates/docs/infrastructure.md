@@ -1,3 +1,4 @@
+<!-- scope: **/infra/*, **/redis*, **/kafka*, **/nats* -->
 # Infrastructure Documentation Template
 
 ## What This Generates

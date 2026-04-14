@@ -1,100 +1,92 @@
-<!-- generated: 2026-04-04, template: clients.md -->
-# Clients (SDK)
+<!-- generated: 2026-04-14, template: clients.md -->
+# Clients
 
-## Go SDK (`sdk/`)
+## 1. Available Clients
 
-### Quick Start
+| Client | Location | Technology | Purpose |
+|--------|----------|------------|---------|
+| Go SDK | `sdk/` | Go, gRPC | Programmatic access to EasyP service |
+| MCP Smoke Test | `cmd/mcp-smoke/` | Go, HTTP | MCP protocol smoke testing |
+| easyp CLI | External (`easyp-tech/easyp`) | Go, gRPC | Primary user-facing client (lint, generate, breaking) |
+
+## 2. Go SDK
+
+### Overview
+Full-featured gRPC client with retry, health monitoring, and filtering.
+
+**Package**: `github.com/easyp-tech/service/sdk`
+
+### API
 
 ```go
-client, err := sdk.NewClient("localhost:8080", sdk.WithInsecure())
+client, err := sdk.NewClient(ctx, "localhost:8080",
+    sdk.WithInsecure(),
+    sdk.WithMaxRetries(3),
+    sdk.WithTimeout(30*time.Second),
+)
 defer client.Close()
 
 // Generate code
-resp, err := client.GenerateCode(ctx, "protocolbuffers/go:v1.36.10", codeGenReq)
+resp, err := client.GenerateCode(ctx, pluginName, codeGenRequest)
 
 // List plugins
-plugins, err := client.ListPlugins(ctx)
-
-// List with filter
 plugins, err := client.ListPlugins(ctx, sdk.PluginFilter{Group: "grpc"})
 ```
 
-### Defaults
+### Features
 
-| Parameter | Default |
-|-----------|---------|
-| Transport | TLS (`credentials.NewTLS`) |
-| Max retries | 3 |
-| Retry base delay | 100ms |
-| Retry max delay | 5s |
-| GenerateCode timeout | 30s |
-| ListPlugins timeout | 10s |
-| Health check interval | 30s (disabled by default) |
+| Feature | Description | Default |
+|---------|-------------|---------|
+| Retry | Exponential backoff on transient errors | 3 retries |
+| Health check | Background monitor (gRPC health protocol) | 30s interval |
+| Timeout | Per-RPC deadline | 30s Generate, 10s List |
+| Keepalive | gRPC keepalive parameters | Enabled |
+| Filtering | Client-side plugin filtering | — |
+| Interceptors | Logging and metrics | Optional |
 
-### Options (Functional Options Pattern)
-
-```go
-sdk.NewClient(addr,
-    sdk.WithInsecure(),                   // Disable TLS
-    sdk.WithTransportCredentials(creds),  // Custom TLS
-    sdk.WithMaxRetries(5),                // Retry attempts
-    sdk.WithRetryBaseDelay(200*time.Millisecond),
-    sdk.WithRetryMaxDelay(10*time.Second),
-    sdk.WithGenerateCodeTimeout(60*time.Second),
-    sdk.WithListPluginsTimeout(20*time.Second),
-    sdk.WithUnaryInterceptor(interceptor), // Custom interceptor
-    sdk.WithHealthCheck(true),             // Enable health monitor
-    sdk.WithHealthCheckInterval(15*time.Second),
-    sdk.WithKeepaliveParams(params),       // gRPC keepalive
-)
-```
-
-### Retry Strategy
-
-Built-in `retryUnaryInterceptor` (first in interceptor chain):
-
-- **Transient codes:** `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `RESOURCE_EXHAUSTED`
-- **Backoff:** exponential with 25% random jitter
-- **Formula:** `min(baseDelay * 2^attempt + jitter, maxDelay)`
-- Respects context cancellation between attempts
-
-### Client-Side Filtering
-
-`sdk.PluginFilter` supports local filtering after server response:
+### Configuration (Functional Options)
 
 ```go
-type PluginFilter struct {
-    Group   string
-    Name    string
-    Version string
-    Tags    []string
-}
+sdk.WithInsecure()                    // No TLS
+sdk.WithMaxRetries(n)                 // Retry count
+sdk.WithTimeout(d)                    // RPC timeout
+sdk.WithHealthCheckInterval(d)        // Health monitor interval
+sdk.WithKeepalive(params)             // gRPC keepalive
+sdk.WithUnaryInterceptors(...)        // Custom unary interceptors
+sdk.WithStreamInterceptors(...)       // Custom stream interceptors
 ```
 
-Server-side filtering sends fields to the gRPC endpoint. If `PluginFilter.isEmpty()`, no client-side filtering is applied.
+### Files
 
-### Health Monitor
+| File | Description |
+|------|-------------|
+| `sdk/client.go` | Client struct, NewClient, GenerateCode, ListPlugins, Close |
+| `sdk/config.go` | Functional options (WithXxx) |
+| `sdk/filter.go` | PluginFilter for client-side filtering |
+| `sdk/health.go` | Background health monitor |
+| `sdk/interceptors.go` | Logging/metrics interceptors |
+| `sdk/retry.go` | Retry with exponential backoff |
+| `sdk/doc.go` | Package documentation |
 
-When enabled via `WithHealthCheck(true)`, a background goroutine periodically calls gRPC Health Check. Stopped on `client.Close()`.
+## 3. MCP Protocol
 
-### Interceptor Chain
+The service exposes an MCP endpoint for LLM tool integration:
 
-Client interceptor order:
-1. Retry interceptor (built-in)
-2. User-provided interceptors (via `WithUnaryInterceptor`)
+- **Endpoint**: `http://host:8083/mcp`
+- **Transport**: StreamableHTTP
+- **Tools**: `plugins_list`, `generate_code`, `easyp_config_describe`
+- **MCP smoke test**: `go run ./cmd/mcp-smoke --endpoint http://localhost:8083/mcp`
 
-### Timeout Handling
+## 4. API Communication
 
-`withTimeout()` picks the earlier of:
-- User's existing context deadline
-- `now + defaultTimeout` (per-method)
-
-If user's deadline is earlier, it is preserved.
-
-## MCP Clients
-
-Any MCP-compatible client can connect to `http://localhost:8083/mcp` (Streamable HTTP).
-
-Available tools:
-- `plugins_list` — discover available plugins
-- `easyp_config_describe` — easyp.yaml schema reference
+```
+┌──────────────┐  gRPC (:8080)  ┌──────────────┐
+│  Go SDK      │──────────────→│  EasyP       │
+│  easyp CLI   │                │  Service     │
+└──────────────┘                │              │
+                                │              │
+┌──────────────┐  HTTP (:8083)  │              │
+│  LLM / MCP   │──────────────→│              │
+│  Client      │  /mcp          └──────────────┘
+└──────────────┘
+```

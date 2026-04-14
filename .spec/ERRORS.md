@@ -1,55 +1,87 @@
-<!-- generated: 2026-04-03, template: errors.md -->
+<!-- generated: 2026-04-14, template: errors.md -->
 # Errors
 
-## Error Architecture
+## 1. Error Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│  gRPC Client                                 │
-│  Receives: gRPC status code + message        │
-├─────────────────────────────────────────────┤
-│  API Layer (internal/api)                    │
-│  ErrorToStatus(): domain errors → gRPC codes │
-│  Wraps with fmt.Errorf("funcName: %w", err) │
-├─────────────────────────────────────────────┤
-│  Application Layer (internal/core)           │
-│  Returns sentinel errors (ErrNotFound, etc.) │
-│  Wraps adapter errors with context           │
-├─────────────────────────────────────────────┤
-│  Adapter Layer (internal/adapters)           │
-│  Converts sql.ErrNoRows → core.ErrNotFound  │
-│  Wraps infra errors with context             │
-├─────────────────────────────────────────────┤
-│  Infrastructure                              │
-│  Raw errors: sql.ErrNoRows, exec.ExitError,  │
-│  net.Error, context.DeadlineExceeded         │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│  Transport Layer (api/)                               │
+│  ErrorToStatus() maps domain errors → gRPC codes     │
+│  Interceptors log errors, never swallow               │
+├──────────────────────────────────────────────────────┤
+│  Application Layer (core/)                            │
+│  Returns domain sentinel errors                       │
+│  Wraps adapter errors with fmt.Errorf context         │
+├──────────────────────────────────────────────────────┤
+│  Adapter Layer (adapters/)                            │
+│  Converts infra errors → domain sentinels            │
+│  Wraps unknown errors with fmt.Errorf                │
+├──────────────────────────────────────────────────────┤
+│  Infrastructure                                       │
+│  Raw errors: sql.ErrNoRows, Docker daemon errors     │
+└──────────────────────────────────────────────────────┘
 ```
 
-Errors propagate **upward**. Each layer wraps with `fmt.Errorf("funcName: %w", err)`. The API layer converts to gRPC status codes via `ErrorToStatus()`.
+- **Adapters** create/convert errors: `sql.ErrNoRows` → `core.ErrNotFound`
+- **Core** returns sentinels or wraps with context
+- **API** maps errors to gRPC status codes via `ErrorToStatus()`
+- **Errors are logged** by interceptors (structured logging), returned to client as gRPC status
 
-## Business Error Catalog
+## 2. Business Error Catalog
 
-Defined in `internal/core/domain.go`:
+All domain errors defined in `internal/core/domain.go`:
 
-| Error | gRPC Code | Description | Retryable |
-|-------|-----------|-------------|-----------|
-| `ErrNotFound` | `NotFound` | Plugin not found in registry | No |
-| `ErrInvalidPluginName` | `InvalidArgument` | Plugin name doesn't match format regex | No |
-| `ErrGenerationFailed` | `Internal` | Code generation failed (Docker execution error) | Depends* || `ErrAlreadyExists` | `AlreadyExists` | Plugin with same group/name/version already exists | No |
-| `ErrMaxPluginsExceeded` | `ResourceExhausted` | Max plugins limit reached (license) | No || `ErrServerOverloaded` | `ResourceExhausted` | WorkerPool queue full, request rejected | Yes |
-| `ErrShuttingDown` | `Unavailable` | Server is shutting down, no new requests | Yes |
-| `context.DeadlineExceeded` | `DeadlineExceeded` | Request timeout exceeded | Yes |
-| `context.Canceled` | `Canceled` | Client canceled the request | No |
-| *(any other error)* | `Internal` | Unexpected internal error | No |
+| Name | gRPC Code | Description |
+|------|-----------|-------------|
+| `ErrNotFound` | `NotFound` | Plugin or resource not found |
+| `ErrInvalidPluginName` | `InvalidArgument` | Plugin name fails regex validation |
+| `ErrGenerationFailed` | `Internal` | Docker container code generation failed |
+| `ErrServerOverloaded` | `ResourceExhausted` | WorkerPool queue full, cannot accept request |
+| `ErrShuttingDown` | `Unavailable` | Server is shutting down, rejecting new work |
+| `ErrAlreadyExists` | `AlreadyExists` | Plugin with same group/name/version already registered |
+| `ErrMaxPluginsExceeded` | `ResourceExhausted` | License plugin limit reached |
+| `ErrFeatureDenied` | `PermissionDenied` | Feature not available in current license tier |
 
-*`ErrGenerationFailed` may wrap a transient Docker error — retry is handled internally by WorkerPool.
+Context errors also mapped in `ErrorToStatus()`:
 
-## Error-to-gRPC Mapping
+| Error | gRPC Code |
+|-------|-----------|
+| `context.DeadlineExceeded` | `DeadlineExceeded` |
+| `context.Canceled` | `Canceled` |
 
-`internal/api/api.go` — `ErrorToStatus()`:
+License errors defined in `internal/license/errors.go`:
 
+| Name | Description |
+|------|-------------|
+| `ErrInvalidToken` | License token format is invalid |
+| `ErrSignatureInvalid` | PASETO signature verification failed |
+| `ErrTokenExpired` | License token has expired |
+| `ErrInvalidClaims` | Claims payload is malformed |
+| `ErrFileNotFound` | License file path does not exist |
+
+## 3. Error Wrapping Convention
+
+**Adapter → Core:**
 ```go
+// internal/adapters/registry/registry.go
+if errors.Is(err, sql.ErrNoRows) {
+    return nil, core.ErrNotFound
+}
+return nil, fmt.Errorf("get plugin %s/%s:%s: %w", group, name, version, err)
+```
+
+**Core → API:**
+```go
+// internal/api/api.go
+resp, err := api.app.Generate(ctx, core.GenerateCodeRequest{...})
+if err != nil {
+    return nil, fmt.Errorf("api.app.Generate: %w", err)
+}
+```
+
+**API → Client (ErrorToStatus):**
+```go
+// internal/api/api.go
 func ErrorToStatus(err error) *status.Status {
     code := codes.Internal
     switch {
@@ -57,87 +89,53 @@ func ErrorToStatus(err error) *status.Status {
         code = codes.NotFound
     case errors.Is(err, core.ErrInvalidPluginName):
         code = codes.InvalidArgument
-    case errors.Is(err, core.ErrGenerationFailed):
-        code = codes.Internal
-    case errors.Is(err, core.ErrAlreadyExists):
-        code = codes.AlreadyExists
-    case errors.Is(err, core.ErrMaxPluginsExceeded):
-        code = codes.ResourceExhausted
     case errors.Is(err, core.ErrServerOverloaded):
         code = codes.ResourceExhausted
-    case errors.Is(err, core.ErrShuttingDown):
-        code = codes.Unavailable
-    case errors.Is(err, context.DeadlineExceeded):
-        code = codes.DeadlineExceeded
-    case errors.Is(err, context.Canceled):
-        code = codes.Canceled
+    // ...
     }
     return status.New(code, err.Error())
 }
 ```
 
-This function is used as `GRPCCodesConverterHandler` in the interceptor chain (position 7).
+## 4. Error Response Format
 
-## Error Wrapping Convention
-
-**Adapter → Core:**
-```go
-// adapters/registry — convert infrastructure errors to domain errors
-func (r *registry) Get(ctx context.Context, group, name, version string) (Plugin, error) {
-    // ... SQL query ...
-    if errors.Is(err, sql.ErrNoRows) {
-        return nil, core.ErrNotFound  // direct sentinel, no wrap
-    }
-    return nil, fmt.Errorf("query plugin: %w", err)  // wrap unknown errors
-}
+gRPC status with code and message:
+```
+status.New(codes.NotFound, "api.app.Generate: get plugin grpc/go:v1.5.1: not found")
 ```
 
-**Core → API:**
-```go
-// core/core.go — wrap with function context
-plugin, err := c.registry.Get(ctx, group, name, version)
-if err != nil {
-    return nil, fmt.Errorf("c.registry.Get: %w", err)
-}
-```
+Client receives `status.Status` with:
+- `Code()` — gRPC status code
+- `Message()` — Error message chain (wrapping preserved)
 
-**API handler:**
-```go
-// api/api.go — wrap with function context, ErrorToStatus handles the rest
-resp, err := api.app.Generate(ctx, core.GenerateCodeRequest{...})
-if err != nil {
-    return nil, fmt.Errorf("api.app.Generate: %w", err)
-}
-```
+## 5. Sentinel Errors vs Error Types
 
-## Retry Policy
+This project uses **sentinel errors exclusively** — no typed error structs.
 
-### WorkerPool (server-side)
+**Sentinel errors** (`var ErrX = errors.New("...")`):
+- All domain errors in `core/domain.go`
+- All license errors in `license/errors.go`
+- Compared with `errors.Is()` after `fmt.Errorf("...: %w", err)` wrapping
+- Simple and sufficient for the project's error taxonomy
 
-`internal/core/pool.go` — `isTransient()` determines which errors trigger retry:
+## 6. Retry Policy
 
-| Error | Transient | Reason |
-|-------|-----------|--------|
-| `exec.ExitError` code 125 | Yes | Docker daemon error |
-| `exec.ExitError` code 126 | Yes | Permission denied (container) |
-| `exec.ExitError` code 127 | Yes | Command not found (container) |
-| `"connection refused"` in message | Yes | Docker daemon not ready |
-| `"daemon"` in message | Yes | Docker daemon issue |
-| `"temporary failure"` in message | Yes | Transient network error |
-| `context.DeadlineExceeded` | **No** | User's deadline, don't retry |
-| Everything else | No | Permanent error |
+| Error | Retryable | Strategy |
+|-------|-----------|----------|
+| `ErrServerOverloaded` | Yes | Client-side exponential backoff (SDK) |
+| `ErrShuttingDown` | Yes | Reconnect to different server |
+| `ErrGenerationFailed` | Yes | WorkerPool auto-retries (configurable max_retries) |
+| Docker transient errors | Yes | WorkerPool classifies and retries |
+| `ErrNotFound` | No | — |
+| `ErrInvalidPluginName` | No | — |
+| `ErrFeatureDenied` | No | — |
+| `ErrAlreadyExists` | No | — |
+| `context.DeadlineExceeded` | No | Permanent in WorkerPool |
 
-Max retries: `WorkerPoolConfig.MaxRetries` (default: 2, so 3 total attempts).
+## 7. Error Logging
 
-### SDK (client-side)
-
-`sdk/retry.go` — retries on specific gRPC codes with exponential backoff + jitter:
-
-| gRPC Code | Retried |
-|-----------|---------|
-| `Unavailable` | Yes |
-| `ResourceExhausted` | Yes |
-| `DeadlineExceeded` | Yes |
-| All others | No |
-
-Max retries: `config.maxRetries` (default: 3). Base delay: 100ms. Max delay: 5s.
+- **Interceptor layer** logs all errors via structured logging middleware
+- **gRPC recovery interceptor** logs panics as Error level, increments `panics_total` counter
+- **Audit interceptor** records error_code and error_message in audit entries
+- **Never double-logged**: errors are logged by the interceptor chain, handlers just return them
+- **Audit worker** logs overflow warnings when channel is full

@@ -1,159 +1,160 @@
-<!-- generated: 2026-04-04, template: observability.md -->
+<!-- generated: 2026-04-14, template: infrastructure.md -->
 # Observability
 
-## Stack
+## 1. Overview
+
+Full observability stack: OpenTelemetry for traces and metrics, Prometheus for scraping, Pyroscope for profiling, Grafana for visualization. All backends are part of the Grafana LGTM stack.
 
 ```
-App → Alloy (collector) → Mimir (metrics) + Loki (logs) + Tempo (traces)
-App → Pyroscope (profiles)
-Grafana → Mimir + Loki + Tempo + Pyroscope (visualization)
+Service (OTLP gRPC)
+  → Alloy (OTEL collector, :4317)
+    → Tempo (traces)
+    → Mimir (metrics)
+    → Loki (logs)
+  → Pyroscope (profiles, :4040)
+  → Prometheus (scraped, :8081/metrics)
+    → Grafana (:3000) ← dashboards
 ```
 
-All backends use **RustFS** (S3-compatible) for storage.
+## 2. Components
 
-## Telemetry Init (`internal/telemetry/telemetry.go`)
+| Component | Image | Port | Config | Purpose |
+|-----------|-------|------|--------|---------|
+| Alloy | grafana/alloy | 4317 | `configs/alloy/config.alloy` | OTEL collector (receives OTLP, forwards to backends) |
+| Tempo | grafana/tempo | — | `configs/tempo/tempo.yaml` | Distributed trace storage |
+| Mimir | grafana/mimir | — | `configs/mimir/mimir.yaml` | Long-term metrics storage (Cortex-compatible) |
+| Loki | grafana/loki | — | `configs/loki/loki.yml` | Log aggregation |
+| Pyroscope | grafana/pyroscope | 4040 | `configs/pyroscope/pyroscope.yaml` | Continuous profiling |
+| Grafana | grafana/grafana | 3000 | `configs/grafana/` | Dashboards, data source provisioning |
+| RustFS | — | 9000-9001 | — | S3-compatible storage for Tempo/Mimir/Loki/Pyroscope |
 
-`telemetry.Init()` configures:
-1. **TracerProvider** — OTLP gRPC exporter to Alloy
-2. **MeterProvider** — OTLP gRPC exporter, 15s periodic reader
-3. **W3C TraceContext** propagation
-4. **Pyroscope** profiler (CPU, alloc, inuse, goroutines)
-5. **slog handler** wrapping with trace/span ID injection
+## 3. Backend Integration
 
-Config:
+### Initialization (`internal/telemetry/telemetry.go`)
+
+```go
+func Init(ctx context.Context, cfg Config, baseHandler slog.Handler) (ShutdownFunc, *slog.Logger, error)
+```
+
+Creates:
+- **TracerProvider**: OTLP gRPC exporter → Alloy → Tempo
+- **MeterProvider**: OTLP periodic reader (15s interval) → Alloy → Mimir
+- **Propagator**: W3C TraceContext
+- **Pyroscope profiler**: CPU, allocations, goroutines, inuse objects/space
+- **Telemetry-enriched logger**: slog handler that adds trace_id to log entries
+
+### Configuration
 ```go
 type Config struct {
-    OTLPEndpoint      string // default "localhost:4317"
-    ServiceName       string // default "easyp-api-service"
-    PyroscopeEndpoint string // default "http://localhost:4040"
+    OTLPEndpoint      string  // default "localhost:4317"
+    ServiceName       string  // default "easyp-api-service"
+    PyroscopeEndpoint string  // default "http://localhost:4040"
 }
 ```
 
-Graceful degradation: if any exporter fails to connect, service continues without that signal.
+## 4. Instrumentation Layers
 
-## Tracing
+| Layer | Package | Technology | Span/Metric Pattern |
+|-------|---------|------------|---------------------|
+| gRPC transport | `grpchelper` | otelgrpc StatsHandler | Auto: `/{service}/{method}` |
+| gRPC interceptors | `grpchelper` | go-grpc-middleware/prometheus | `grpc_server_*` metrics |
+| Business logic | `telemetry` | TracingCore decorator | `Core.Generate`, `Core.ListPlugins`, etc. |
+| Registry | `telemetry` | TracingRegistry decorator | `Registry.Get`, `Registry.List`, etc. |
+| Plugin execution | `telemetry` | TracingPlugin decorator | `Plugin.Generate` |
+| Database | `database` | Custom metrics wrapper | `dal_*` operation metrics |
+| Rate limiter | `ratelimiter` | Prometheus counters | `rate_limit_requests_total` |
+| Audit | `adapters/audit` | Prometheus counters | `audit_events_lost_total` |
+| License | `license` | Prometheus gauges | `license_valid`, `license_expiry_*` |
+| Worker pool | `core` | Prometheus gauges/counters | `pool_active_workers`, `pool_jobs_total` |
 
-### Decorator Pattern
+## 5. Trace-Log Correlation
 
-Three tracing decorators — wrap core interfaces without modifying business logic:
+`TraceLoggingUnaryServerInterceptor` (`internal/grpchelper/trace_logging.go`):
+- Extracts `trace_id` from OpenTelemetry span context
+- Injects into slog logger attached to request context
+- All downstream log calls include `trace_id` field
 
-| Decorator | File | Wraps |
-|-----------|------|-------|
-| `TracingCore` | `telemetry/tracing_core.go` | `core.CoreService` |
-| `TracingRegistry` | `telemetry/tracing_registry.go` | `core.Registry` |
-| `TracingPlugin` | `telemetry/tracing_plugin.go` | `core.Plugin` |
+## 6. Tracing Decorators
 
-Example:
+Non-invasive tracing via Decorator pattern:
+
 ```go
 // telemetry/tracing_core.go
-func (c *TracingCore) Generate(ctx context.Context, req core.GenerateCodeRequest) (*core.GenerateCodeResponse, error) {
-    ctx, span := c.tracer.Start(ctx, "core.Generate",
-        trace.WithAttributes(attribute.String("plugin.name", req.PluginName)))
+type TracingCore struct {
+    inner core.CoreService
+}
+func (t *TracingCore) Generate(ctx context.Context, req GenerateCodeRequest) (*GenerateCodeResponse, error) {
+    ctx, span := tracer.Start(ctx, "Core.Generate")
     defer span.End()
-    resp, err := c.inner.Generate(ctx, req)
-    if err != nil {
-        span.RecordError(err)
-        span.SetStatus(codes.Error, err.Error())
-    }
-    return resp, err
+    return t.inner.Generate(ctx, req)
 }
 ```
 
-**TracingCore spans:** `core.Generate`, `core.ListPlugins`, `core.CreatePlugin`, `core.UpdatePlugin`, `core.DeletePlugin`
+Same pattern for `TracingRegistry` and `TracingPlugin`.
 
-**TracingRegistry spans:** `registry.Get`, `registry.List`, `registry.Create`, `registry.Update`, `registry.Delete`
+## 7. Prometheus Metrics
 
-**TracingPlugin spans:** `plugin.Generate`, `plugin.Info`
+**Scrape endpoint**: `http://host:8081/metrics`
 
-### gRPC Tracing
-
-- `otelgrpc.NewServerHandler()` as gRPC stats handler (automatic span creation per RPC)
-- `TraceLoggingUnaryServerInterceptor` injects trace_id/span_id into slog context
-
-### Database Tracing
-
-`database.SQL.Tx()` and `NoTxContext()` create spans named after the calling method (via `internal.CallerMethodName`).
-
-### Audit Worker Tracing
-
-Each `audit.Worker.saveEntry()` creates a span `"audit.save"` with `db.system=postgresql` attribute.
-
-### Worker Pool Tracing
-
-`WorkerPool.Get()` creates span `"pool.Get"` with plugin group/name/version attributes and queue wait time.
-
-## Metrics
-
-### Prometheus Endpoints
-
-Port **8081**, path `/metrics`.
-
-### gRPC Metrics
-
-Via `grpc-prometheus` ServerMetrics interceptor (position 3 in chain):
-- `grpc_server_handled_total`
-- `grpc_server_handling_seconds`
-- `grpc_server_msg_received_total` / `grpc_server_msg_sent_total`
-
-### Database Metrics
-
+**Business metrics** (`internal/adapters/metrics/`):
 | Metric | Type | Labels |
 |--------|------|--------|
-| `{ns}_{subsystem}_errors_total` | Counter | `func` |
-| `{ns}_{subsystem}_call_duration_seconds` | Histogram | `func` |
+| `generated_plugin_code_total` | Counter | plugin |
+| `generation_duration_seconds` | Histogram | plugin |
+| `generation_errors_total` | Counter | plugin, error_type |
+| `generation_retries_total` | Counter | plugin |
+| `plugins_total` | Gauge | — |
+| `plugins_by_group` | Gauge | group |
+| `audit_log_total` | Gauge | — |
+| `audit_log_by_operation` | Gauge | operation |
+| `audit_log_by_status` | Gauge | status |
+| `plugin_versions_count` | Gauge | group, name |
+| `audit_log_last_24h` | Gauge | — |
 
-Plus standard `sql.DBStats` exported via `database.SQL.UnderlyingDB()`.
-
-### Worker Pool Metrics
-
-| Metric | Type |
-|--------|------|
-| `pool_active_workers` | Gauge |
-| `pool_rejected_total` | Counter |
-| `pool_jobs_total` | Counter |
-| `pool_queue_depth` | GaugeFunc |
-
-### Rate Limiter Metrics
-
-| Metric | Type | Labels |
+**Infrastructure metrics:**
+| Metric | Type | Source |
 |--------|------|--------|
-| `easyp_rate_limit_requests_total` | Counter | `status`, `client_ip` |
-| `easyp_rate_limit_active_clients` | Gauge | — |
+| `db_open_connections` | Gauge | DB pool |
+| `db_idle_connections` | Gauge | DB pool |
+| `db_wait_count_total` | Counter | DB pool |
+| `db_wait_duration_seconds_total` | Counter | DB pool |
+| `rate_limit_requests_total` | Counter | Rate limiter |
+| `rate_limit_active_clients` | Gauge | Rate limiter |
+| `pool_active_workers` | Gauge | Worker pool |
+| `pool_rejected_total` | Counter | Worker pool |
+| `pool_jobs_total` | Counter | Worker pool |
+| `pool_queue_depth` | Gauge | Worker pool |
+| `audit_events_lost_total` | Counter | Audit worker |
+| `audit_queue_depth` | Gauge | Audit worker |
+| `panics_total` | Counter | gRPC recovery |
+| `license_valid` | Gauge | License manager |
+| `license_expiry_timestamp_seconds` | Gauge | License manager |
 
-### Audit Metrics
+## 8. Grafana
 
-| Metric | Type |
-|--------|------|
-| `audit_events_lost_total` | Counter |
-| `audit_queue_depth` | GaugeFunc |
+**Access**: http://localhost:3000
+**Config**: `configs/grafana/config.ini`
+**Data sources**: Auto-provisioned via `configs/grafana/provisioning/datasources/`
+**Dashboards**: Auto-provisioned via `configs/grafana/provisioning/dashboards/`
 
-### License Metrics
+## 9. Key Files
 
-| Metric | Type | Labels |
-|--------|------|--------|
-| `license_tier` | Gauge | `tier` |
-| `license_valid` | Gauge | — |
-| `license_expiry_seconds` | Gauge | — |
-| `license_feature_denied_total` | Counter | `feature` |
-
-### Panic Metrics
-
-`grpc_recovery` interceptor increments `panics_total` counter via `grpchelper.Metrics.PanicsTotal()`.
-
-## Logging
-
-Structured JSON via `slog`. The `TraceHandler` (`telemetry/trace_handler.go`) injects `trace_id` and `span_id` into every log record when a span is active.
-
-Log level configurable via `-log_level` flag (debug/info/warn/error).
-
-## Profiling
-
-Pyroscope continuous profiling:
-- CPU, AllocObjects, AllocSpace, InuseObjects, InuseSpace, Goroutines
-- `pyroscope.TagWrapper` used in WorkerPool to label operations
-
-## Grafana Dashboards
-
-Pre-provisioned via `configs/grafana/provisioning/`. Data sources: Mimir, Loki, Tempo, Pyroscope.
-
-Access: `http://localhost:3000` (or `easyp.grafana.localhost` via Traefik).
+| File | Description |
+|------|-------------|
+| `internal/telemetry/telemetry.go` | OTLP + Pyroscope initialization |
+| `internal/telemetry/config.go` | Telemetry configuration struct |
+| `internal/telemetry/tracing_core.go` | TracingCore decorator |
+| `internal/telemetry/tracing_registry.go` | TracingRegistry decorator |
+| `internal/telemetry/tracing_plugin.go` | TracingPlugin decorator |
+| `internal/telemetry/trace_handler.go` | Trace context slog handler |
+| `internal/adapters/metrics/metrics.go` | Business metrics (core.Metrics impl) |
+| `internal/adapters/metrics/business_collector.go` | DB-sourced business metrics |
+| `internal/adapters/metrics/db_collector.go` | Connection pool metrics |
+| `internal/grpchelper/metrics.go` | gRPC server metrics factory |
+| `internal/grpchelper/trace_logging.go` | Trace-log correlation interceptor |
+| `configs/alloy/config.alloy` | Alloy OTEL collector config |
+| `configs/tempo/tempo.yaml` | Tempo trace backend config |
+| `configs/mimir/mimir.yaml` | Mimir metrics backend config |
+| `configs/loki/loki.yml` | Loki log backend config |
+| `configs/pyroscope/pyroscope.yaml` | Pyroscope profiling config |
+| `configs/grafana/` | Grafana config + provisioning |

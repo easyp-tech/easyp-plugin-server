@@ -1,50 +1,62 @@
-<!-- generated: 2026-04-03, template: bootstrap.md -->
-# Agent Rules
+<!-- generated: 2026-04-14, template: bootstrap.md -->
+# Agent Rules — EasyP Service
 
-Mandatory rules for AI agents working on this project.
+Rules for AI agents working on this project.
 
 ## Code Style
 
-- Follow standard Go conventions (Effective Go, Go Code Review Comments)
-- Tracing is added via **decorator pattern** (`telemetry/tracing_*.go`) — never mix tracing into business logic
-- Domain errors are **sentinel** (`var ErrX = errors.New(...)`) — never wrap with `fmt.Errorf` at definition site
-- Error wrapping at call site: `fmt.Errorf("funcName: %w", err)` — always include the function name as context
-- Keep `core` package free of infrastructure imports (no SQL, no Docker, no gRPC)
-- Adapters implement core interfaces — placed in `internal/adapters/`
+- Go 1.26+, follow Effective Go and Go Code Review Comments
+- Use `log/slog` for structured logging via `monitor.FromContext(ctx)`
+- No external test frameworks — standard `testing` package only
+- Imports: stdlib → third-party → project (sorted within groups)
+- Line length soft limit: 120 chars
+- No `init()` functions
 
 ## Naming Conventions
 
-- **Plugin names:** `{group}/{name}:{version}` — regex `^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*:(v\d+\.\d+\.\d+|latest)$`
-- **Files:** one primary type per file, file named after the type (lowercase, underscores for multi-word)
-- **Interfaces:** defined in `internal/core/domain.go` — single source of truth
-- **Test files:** `*_test.go` in the same package (internal tests), mocks defined in test files
-- **Migration files:** `{number}.{description}.sql` — numeric prefix determines order
-- **Adapters:** directory name matches the interface they implement (e.g., `adapters/registry/` → `Registry`)
+- Files: `snake_case.go`, test files: `*_test.go`
+- Packages: lowercase, single word when possible
+- Interfaces: verb-based (`Registry`, `Plugin`, `AuditLog`), not `IRegistry`
+- Errors: `Err` prefix (`ErrNotFound`, `ErrInvalidPluginName`)
+- Constants: `CamelCase` for exported, `camelCase` for unexported
+- Feature flags: `Feature` prefix enum (`FeatureCodeGeneration`)
 
 ## Error Handling
 
-- Domain errors live in `internal/core/domain.go`: `ErrNotFound`, `ErrInvalidPluginName`, `ErrGenerationFailed`, `ErrServerOverloaded`, `ErrShuttingDown`
-- Error-to-gRPC mapping in `internal/grpchelper/grpc_codes.go` via `GRPCCodesConverterHandler`
-- Audit interceptor uses **non-blocking channel send** — drops events if buffer full (capacity 1000)
-- WorkerPool classifies Docker exit codes 125/126/127 as **transient** (retryable)
+- Domain errors are sentinel: `var ErrX = errors.New("description")`
+- Wrap with context: `fmt.Errorf("operation: %w", err)`
+- Map domain → gRPC in `api.ErrorToStatus()`
+- Never swallow errors; log at the top, wrap at the bottom
+- Use `errors.Is()` for comparison, not `==`
 
 ## Testing
 
-- Standard `go test` — no external test framework
-- Test mocks are **manually defined** in test files — no code generation (mockgen, etc.)
-- Table-driven tests with subtests (`t.Run`)
-- MCP integration tests use `httptest.Server` + real MCP client
-- SDK tests use subtests for retry, health, interceptors
+- Standard `go test`, no external framework
+- Mocks defined in test files, not generated
+- Table-driven tests preferred
+- Test functions: `TestFunctionName` or `TestType_Method`
+- Use `t.Helper()` in test helpers
+- Integration tests use build tags when needed
 
 ## Dependencies
 
-- Database access **always** through `database.SQL` wrapper — never raw `sqlx.DB`
-- gRPC server/client creation through `grpchelper` package — never raw `grpc.NewServer()`
-- Telemetry initialized via `telemetry.Setup()` — never manual OTel provider setup
-- License management through `license.Manager` — never parse PASETO tokens directly
+- Dependency injection via constructor functions (`New()`)
+- No global state; pass dependencies explicitly
+- Interfaces defined by consumers, not implementors
+- `go mod tidy` after adding/removing dependencies
+
+## Architecture Rules
+
+- Domain types and interfaces only in `internal/core/domain.go`
+- Business logic only in `internal/core/core.go`
+- Adapters implement core interfaces; placed in `internal/adapters/`
+- Tracing via decorator pattern (`telemetry/tracing_*.go`), never in business logic
+- Database access only through `database.SQL` wrapper
+- gRPC interceptor order matters — see `grpchelper.NewServer()`
 
 ## Formatting
 
-- `gofmt` / `goimports` for all Go files
-- Import order: stdlib → external → internal (separated by blank lines)
-- No `init()` functions — explicit initialization in `cmd/main.go`
+- `gofmt` / `goimports` applied automatically
+- Protobuf: run `easyp lint` before committing `.proto` changes
+- YAML config: 2-space indent
+- SQL migrations: `-- up` / `-- down` markers, sequential numbering

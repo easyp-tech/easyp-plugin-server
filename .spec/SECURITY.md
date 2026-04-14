@@ -1,95 +1,117 @@
-<!-- generated: 2026-04-04, template: security.md -->
+<!-- generated: 2026-04-14, template: security.md -->
 # Security
 
-## Trust Boundaries
+## 1. Security Overview
+
+Service executes untrusted code (protoc plugins) in isolated Docker containers. No user authentication — licensing via PASETO v4 tokens. gRPC API with rate limiting.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  External Network                                    │
-│  ┌─────────────┐                                     │
-│  │ gRPC Client  │──→ :8080                           │
-│  └─────────────┘                                     │
-├─────────────────────────────────────────────────────┤
-│  EasyP Service (container)                           │
-│  ┌──────────┐  ┌──────────────┐  ┌───────────────┐  │
-│  │ gRPC API  │→│ Core (pool)  │→│ Docker Socket   │  │
-│  └──────────┘  └──────────────┘  └───────┬───────┘  │
-├─────────────────────────────────────────────────────┤
-│  Plugin Containers (sandboxed)            │          │
-│  ┌────────────────────────────────────────▼────────┐ │
-│  │ --network=none --memory=128m --cpus=1.0         │ │
-│  │ --user=nobody  (scratch image, static binary)   │ │
-│  └─────────────────────────────────────────────────┘ │
-├─────────────────────────────────────────────────────┤
-│  Internal Network                                    │
-│  PostgreSQL :5432 │ Docker Registry :5005             │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│  External (untrusted)                            │
+│  ┌──────────┐  ┌──────────┐                     │
+│  │ easyp CLI│  │ SDK      │                     │
+│  └────┬─────┘  └────┬─────┘                     │
+│       └──────┬───────┘                           │
+├──────────────┼───────────────────────────────────┤
+│  Transport   │                                    │
+│  ┌───────────▼────────────────────┐              │
+│  │  gRPC Server + Interceptors   │              │
+│  │  (rate limit, license, audit) │              │
+│  └───────────┬────────────────────┘              │
+├──────────────┼───────────────────────────────────┤
+│  Internal    │                                    │
+│  ┌───────────▼──────────┐  ┌──────────────────┐ │
+│  │  Core + WorkerPool   │  │  PostgreSQL      │ │
+│  └───────────┬──────────┘  └──────────────────┘ │
+│              │                                    │
+│  ┌───────────▼──────────────────┐                │
+│  │  Docker (isolated plugins)   │                │
+│  │  --network=none --memory=128m│                │
+│  │  --cpus=1.0 --user=nobody    │                │
+│  └──────────────────────────────┘                │
+└─────────────────────────────────────────────────┘
 ```
 
-## Plugin Sandboxing
+## 2. Input Validation
 
-Every plugin runs in an isolated Docker container with:
+- **Protobuf validation**: Automatic via `grpc_validator.UnaryServerInterceptor()`
+- **Business validation**: Plugin name regex `^[a-z][a-z0-9-]*$`, version `^v\d+\.\d+\.\d+$`
+- **Input sanitization**: `strings.TrimSpace()` on all string inputs
+- **SQL injection**: Prevented — all queries use parameterized `sqlx` queries, never string concatenation
+- **Command injection**: Docker container names derived from DB-stored config, validated at registration
 
-| Constraint | Value | Purpose |
-|-----------|-------|---------|
-| `--network=none` | No network | Prevents data exfiltration |
-| `--memory=128m` | 128 MB limit | Prevents OOM of host |
-| `--cpus=1.0` | 1 CPU | Prevents CPU starvation |
-| `--user=nobody` | Non-root | Limits filesystem access |
-| Base image | `scratch` | Minimal attack surface |
-| Binary | Static, UPX-compressed | No dynamic libraries |
+| Input | Location | Validation |
+|-------|----------|------------|
+| plugin_name | GenerateCode RPC | Regex: `^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*:(v\d+\.\d+\.\d+\|latest)$` |
+| group, name | CreatePlugin RPC | Regex: `^[a-z][a-z0-9-]*$` |
+| version | CreatePlugin RPC | Regex: `^v\d+\.\d+\.\d+$` |
+| tags | CreatePlugin/Update | TrimSpace + empty filter |
+| config | CreatePlugin/Update | JSONB marshaling validation |
 
-Plugin images are pre-built as multi-stage Docker images (`golang:alpine` → `scratch`).
+## 3. Plugin Container Isolation
 
-## Rate Limiting
+Plugins execute in **strongly isolated Docker containers**:
 
-Per-client IP token bucket via `internal/ratelimiter/`:
+| Control | Setting | Purpose |
+|---------|---------|---------|
+| Network | `--network=none` | No network access |
+| Memory | `--memory=128m` | OOM protection |
+| CPU | `--cpus=1.0` | CPU throttling |
+| User | `--user=nobody` | Non-root execution |
+| Timeout | Configurable (120s default) | Prevent infinite execution |
+| Filesystem | `--rm` (auto-cleanup) | No persistent state |
+| I/O | stdin/stdout only | Protobuf request/response pipe |
 
-| Parameter | Default | Config key |
-|-----------|---------|------------|
-| Tokens/sec | 10.0 | `rate_limit.requests_per_second` |
-| Burst | 20 | `rate_limit.burst` |
-| Cleanup | 10min | `rate_limit.cleanup_interval` |
+## 4. Rate Limiting
 
-- Key extraction: `PeerIPExtractor` uses `peer.FromContext()` (set by `realip` interceptor)
-- Empty key → fail-open (no limiting)
-- Gated by `FeatureGate.Enabled(FeatureRateLimiting)`
-- Returns `RESOURCE_EXHAUSTED` when denied
-- Sets rate limit headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+- Per-IP token bucket via `golang.org/x/time/rate`
+- Feature-gated (requires `FeatureRateLimiting`)
+- Default: 10 req/sec, burst 20
+- Background cleanup of stale buckets (10m interval)
+- Returns standard rate limit headers
 
-## License Token Security
+## 5. License Security
 
-- **Algorithm:** PASETO v4.public (Ed25519 signatures)
-- **Public key:** embedded at compile time via `-ldflags`
-- **No symmetric secrets** stored on server — only public key for verification
-- **Expiration watcher:** 60s ticker, reverts to Community on expiry
-- **Token sources:** env var (`LICENSE_KEY`) or file (`LICENSE_FILE`), env takes priority
+- **PASETO v4.public**: Asymmetric tokens (Ed25519), not JWT
+- Public key injected at build time — cannot be overridden at runtime
+- Token signature verified on every parse
+- Expiration checked every 60 seconds
+- Fallback to Community mode on any license error (fail-safe)
 
-## gRPC Security
+## 6. Secrets Management
 
-- **Panic recovery:** `grpc_recovery` interceptor catches panics → `INTERNAL` (never leaks stack traces)
-- **Validation:** `grpc_validator` rejects malformed requests before handler
-- **Error sanitization:** `ErrorToStatus()` maps internal errors to safe gRPC codes
-- **Keepalive:** server enforces min 30s between pings, 10s timeout
+| Secret | Storage | Risk |
+|--------|---------|------|
+| DB connection string | Config file / env var | Contains credentials |
+| License key | Config file / env var | PASETO token |
+| License public key | Compiled into binary | Ed25519 public key (not secret) |
 
-## Audit Trail
+Recommendations:
+- Use environment variables in production, not config files
+- Rotate DB credentials regularly
+- Never log connection strings or license tokens
 
-All gRPC calls to `GenerateCode` and `Plugins` produce audit entries with:
-- Caller IP address, operation type, plugin name
-- Status (success/error), error code/message
-- Duration, metadata, timestamps
-- Stored in PostgreSQL `audit_log` table
-- Non-blocking: buffer overflow drops events (logged as warning)
+## 7. OWASP Top 10 Mapping
 
-## Database
+| # | Category | Mitigation | Status |
+|---|----------|-----------|--------|
+| A01 | Broken Access Control | License-based FeatureGate, no user model | ✅ Mitigated |
+| A02 | Cryptographic Failures | PASETO v4 (Ed25519), no custom crypto | ✅ Mitigated |
+| A03 | Injection | Parameterized SQL queries, no string concat | ✅ Mitigated |
+| A04 | Insecure Design | Docker isolation, worker pool limits, rate limiting | ✅ Mitigated |
+| A05 | Security Misconfiguration | Sensible defaults, explicit config | ✅ Mitigated |
+| A06 | Vulnerable Components | `go.sum` lock file committed | ⚠️ Partial (no automated scanning) |
+| A07 | Auth Failures | N/A — no user authentication | N/A |
+| A08 | Data Integrity Failures | License token signature verification | ✅ Mitigated |
+| A09 | Logging & Monitoring | Full OTEL stack, audit logging, structured logs | ✅ Mitigated |
+| A10 | SSRF | `--network=none` on plugin containers, no user-controlled URLs | ✅ Mitigated |
 
-- Connection via DSN, `sslmode=disable` in dev (configure `sslmode=require` in production)
-- No raw SQL outside `database.SQL` wrapper
-- Transactions auto-rollback on panic
+## 8. Audit Trail
 
-## Docker Socket
+All API operations are recorded to `audit_log` table:
+- Operation type, plugin name, caller IP
+- Status (success/error), error details
+- Duration, metadata (file counts, etc.)
+- Async write via buffered channel (cap 1000)
 
-⚠️ The service requires Docker socket access (`/var/run/docker.sock`). In production, consider:
-- Running with a restricted Docker socket proxy
-- Using rootless Docker
-- Applying AppArmor/SELinux profiles
+See `DATABASE.md` for schema details.

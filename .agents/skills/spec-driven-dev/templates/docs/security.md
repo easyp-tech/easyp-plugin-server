@@ -1,3 +1,4 @@
+<!-- scope: **/*security*, **/*crypto*, **/*cert* -->
 # Security Documentation Template
 
 ## What This Generates

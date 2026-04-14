@@ -1,3 +1,4 @@
+<!-- scope: Makefile, Taskfile*, scripts/*, **/ci/* -->
 # Development Documentation Template
 
 ## What This Generates

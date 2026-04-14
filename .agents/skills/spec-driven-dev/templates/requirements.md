@@ -6,28 +6,42 @@
 
 ---
 
-## Pipeline Integration
-
-Before starting, check the current pipeline state:
-```
-sh ./scripts/pipeline.sh status
-```
-The exploration document path is in `history[0].artifact` (or shown in status output under completed phases). Read it for context on what was investigated.
-
-After the user approves the requirements document:
-1. Save the document to `.spec-driven-dev/state/<feature-name>-requirements.md`
-2. Register the artifact: `sh ./scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-requirements.md`
-3. Wait for user to confirm, then: `sh ./scripts/pipeline.sh approve`
+Read `./templates/_preamble.md` for Pipeline Integration and Project Context instructions.
+- **Phase rule key:** `rules.requirements`
+- **Input artifacts:** read `history[0].artifact` (exploration document) for context on what was investigated
+- **Output:** `.spec/features/<feature-name>/requirements.md`
 
 ---
 
-## Project Context
+### Fast-track mode
 
-If `.spec-driven-dev/config.yaml` exists, read it now and apply:
-- **`context`** → treat as background knowledge about this project.
-- **`rules.requirements`** → treat as additional rules for THIS phase (appended to the rules below, not replacing them).
+When the exploration artifact indicates a small bug fix with known reproduction:
 
-If the file does not exist, skip this step.
+- **Interview:** skip if the bug reproduction and expected behavior are already clear from exploration. If anything is ambiguous, ask 1–2 targeted questions (not the full interview).
+- **Overview:** 2–3 sentences.
+- **Requirements:** 1–2 REQs only (e.g., fix behavior + error case). Each still uses `WHEN/SHALL` format.
+- **Glossary:** omit unless a new domain term was introduced.
+- **User Stories:** omit (bug fix = no end-user role change).
+- **Topological Order:** omit.
+
+Target artifact size: **≤ 1 page**.
+
+---
+
+## Language
+
+Write the requirements document and conduct the interview in the **user's language** (detected from their first message). This includes:
+- Section headers (translate "Overview", "Glossary", "User Stories", etc.)
+- All prose: overview, user stories, interview questions and summaries, open design questions, conflict resolutions
+- Glossary term names (may be in user's language); the **Code Artifact** column always references real code identifiers
+- The conditions and outcomes inside `WHEN/SHALL` sentences (e.g., `**REQ-1.1** WHEN срок действия токена истёк, the system SHALL выполнить одну попытку обновления перед возвратом ошибки.`)
+
+Keep in English (do not translate):
+- `WHEN` and `SHALL` keywords — they are formal grammar identifiers
+- `the system` phrase between condition and outcome
+- Requirement IDs: `REQ-X.Y`
+- Verification Commands table: action labels (`Test`, `Build`, `Lint`, `Generate`) may be translated, but commands must be verbatim
+- Code identifiers, file paths, shell commands
 
 ---
 
@@ -41,7 +55,7 @@ You are a **Requirements Engineer**. Your task: through a structured interview w
 
 ---
 
-## Phase 1: Feature Interview (Context Gathering)
+## Step 1: Feature Interview (Context Gathering)
 
 ### Questioning Strategy
 
@@ -78,6 +92,8 @@ Only proceed to Phase 2 once the user confirms the summary.
 - What are the default values for configurable parameters?
 - What does "not set" or "empty" mean in this context?
 - Are there technology, platform, or environment constraints?
+- Are there latency, throughput, memory, or resource usage constraints?
+- Are there rate limits or quotas to respect?
 
 ### Layer 4: Verification
 
@@ -101,7 +117,7 @@ Only proceed to Phase 2 once the user confirms the summary.
 
 ---
 
-## Phase 2: Requirements Document Generation
+## Step 2: Requirements Document Generation
 
 Once the interview is complete and the user has confirmed the summary, generate the requirements document using the structure below.
 
@@ -283,12 +299,4 @@ Do NOT suggest approval until **every** condition is true:
 
 ## Antipatterns — What This Document Must Never Contain
 
-| Antipattern | WRONG ❌ | RIGHT ✓ | Why |
-|---|---|---|---|
-| Architectural solution | "Use a Redis cache for token storage" | "WHEN cache miss occurs, SHALL return fresh data within 100ms" | Prescribes HOW, not WHAT |
-| Code or pseudocode | `if token.expired { refresh() }` | "WHEN token is expired, SHALL attempt refresh" | Implementation detail |
-| Diagram | Mermaid sequence diagram | Prose description of the flow | Belongs in design phase |
-| Vague wording | "The system should handle errors gracefully" | "WHEN refresh fails, SHALL return 401 with error code" | Not verifiable |
-| Combined SHALLs | "…SHALL refresh the token and log the event" | Two REQs: one for refresh, one for logging | Must be one SHALL per REQ |
-| Unconfirmed requirement | Agent adds REQ-3.1 user never mentioned | Only requirements confirmed by user in interview | Hallucinated scope |
-| Technology lock-in | "Use JWT with RS256 signing" | "WHEN issuing tokens, SHALL use cryptographic signing" | Constrains design without user mandate |
+Antipatterns for this phase: read `./templates/reference/antipatterns.md` § Requirements.

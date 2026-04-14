@@ -8,32 +8,48 @@ You **design** the solution: architecture, interfaces, data models, correctness 
 
 ---
 
-## Pipeline Integration
-
-Before starting, read the approved requirements document:
-```
-sh ./scripts/pipeline.sh status
-```
-The requirements document path is in `history[1].artifact` (or shown in status output under completed phases).
-
-After the user approves the design document:
-1. Save the document to `.spec-driven-dev/state/<feature-name>-design.md`
-2. Register: `sh ./scripts/pipeline.sh artifact .spec-driven-dev/state/<feature-name>-design.md`
-3. Wait for user to confirm, then: `sh ./scripts/pipeline.sh approve`
+Read `./templates/_preamble.md` for Pipeline Integration and Project Context instructions.
+- **Phase rule key:** `rules.design`
+- **Input artifacts:** read `history[0..1].artifact` (exploration, requirements documents)
+- **Output:** `.spec/features/<feature-name>/design.md`
 
 ---
 
-## Project Context
+### Fast-track mode
 
-If `.spec-driven-dev/config.yaml` exists, read it now and apply:
-- **`context`** → treat as background knowledge about this project.
-- **`rules.design`** → treat as additional rules for THIS phase (appended to the rules below, not replacing them).
+When the requirements artifact contains 1–2 REQs for a small bug fix:
 
-If the file does not exist, skip this step.
+- **§2.1 Overview:** 1 paragraph.
+- **§2.2 Architecture:** simplified diagram — only the modified component(s). Omit unchanged context unless needed for understanding.
+- **§2.3 Components:** only files requiring changes + 1–2 unchanged files for context. Skip exhaustive "NOT Requiring Changes" list.
+- **§2.4 Key Decisions:** 1 ADR max. Omit if the fix is straightforward with no meaningful alternatives.
+- **§2.5 Data Models:** omit entirely if no new types or schema changes.
+- **§2.6 Correctness Properties:** 2–3 properties focused on the bug scenario. Skip categories that don't apply.
+- **§2.7 Error Handling:** 1–2 rows (main error path + fallback if applicable).
+- **§2.8 Testing Strategy:** reference existing test infrastructure. No new test patterns needed unless the bug exposed a gap.
+
+Target artifact size: **≤ 1.5 pages**.
 
 ---
 
-## Phase 1: Context Clarification (optional)
+## Language
+
+Write the design document in the **user's language** (detected from their first message). This includes:
+- Section headers (translate "Overview", "Architecture", "Key Decisions", "Error Handling", etc.)
+- All prose: overviews, ADR context/rationale/consequences, error scenario descriptions, test descriptions
+- File change descriptions in §2.3 tables (the "Description" column)
+- Correctness Property statements: write in the user's language, but keep the formal frame in English — `Property N`, `Category`, the quantifier `For all`, and `Validates: Requirements X.Y`
+
+Keep in English (do not translate):
+- Code signatures, type definitions, field names, import paths
+- Mermaid diagram node labels (they reference code constructs)
+- File paths in §2.3 tables
+- Project Commands table values (commands must be verbatim)
+- Tag names in test tables: `Feature/<name>`, `Property/<N>`
+
+---
+
+## Step 1: Context Clarification (optional)
 
 Ask clarifying questions when:
 - The requirements admit multiple substantially different architectural solutions
@@ -44,7 +60,7 @@ Group 2–4 questions in a single message. If the requirements are self-containe
 
 ---
 
-## Phase 2: Design Document Generation
+## Step 2: Design Document Generation
 
 Produce a design document with the following sections. All marked **[REQUIRED]** must appear in every design document. Sections marked **[IF APPLICABLE]** should be included when relevant.
 
@@ -112,6 +128,11 @@ For each significant design decision, document an Architecture Decision Record (
 
 Include at least one ADR per non-trivial design choice. Every ADR must capture a **choice between alternatives** — not a restatement of the requirements.
 
+If the feature changes a public API, wire protocol, database schema, or configuration contract, include a **Versioning & Backward Compatibility ADR**:
+- **Versioning strategy** — how old clients/schemas coexist with new (e.g., URL versioning, header negotiation, schema migration with rollback)
+- **Breaking change assessment** — what breaks if deployed without coordination
+- **Migration path** — steps for consumers to adopt the new version
+
 ---
 
 ### 2.5 Data Models [IF APPLICABLE]
@@ -165,6 +186,9 @@ Validates: Requirements <X.Y>
 - Every property must include a `Validates: Requirements X.Y` reference
 - Every requirement from the requirements document must be covered by at least one property
 - Properties must be verifiable — not vague assertions
+- When referenced in tables (Coverage Matrix, Traceability Matrix), use the abbreviated form `CP-N` (e.g., `CP-1`, `CP-2`). The full form `Property N` is used only in definitions above.
+
+**Worked examples** of each category (Equivalence, Absence, Round-trip, Propagation, Exclusion) with §2.6 definitions and §2.8 test table entries: read `./templates/reference/correctness-properties-examples.md`.
 
 ---
 
@@ -188,16 +212,7 @@ Cover edge cases, not just happy-path failures. Include:
 
 #### Test Style Source
 
-Before specifying any tests, determine the test style source using this priority cascade:
-
-1. **Dedicated test skill** — if `.spec-driven-dev/config.yaml` contains `test_skill: <name>`, that skill owns test design. Reference it and defer test specification to it, passing Correctness Properties (§2.6) and the requirements document as input. Skip the rest of §2.8.
-2. **Adjacent existing tests** — if `.spec-driven-dev/config.yaml` contains `test_reference: <paths/glob>`, use those files. Otherwise, scan test files adjacent to affected modules (§2.3 file list). Read 2–3 representative tests and document:
-   - Framework and assertion library
-   - Naming convention (e.g., `TestXxx`, `test_xxx`, `describe/it`)
-   - Structure (table-driven, subtests, fixtures, setup/teardown)
-   - Helper functions and shared utilities
-   - Mock/stub strategy
-3. **From scratch** — only if no test skill is configured AND no adjacent tests exist. Document the absence explicitly and design the test approach based on project conventions from `config.yaml` context.
+Before specifying any tests, determine the test style source using the priority cascade defined in `./templates/task-plan.md` § Test Infrastructure Discovery. If `test_skill` is configured, delegate test specification to that skill and skip the rest of §2.8.
 
 **Output:** Include a `Test Style Source` block at the top of §2.8:
 
@@ -245,6 +260,7 @@ Use a property-based testing library appropriate for the project's language. For
 
 **Rules:**
 - Every correctness property from section 2.6 must have a corresponding property-based test
+- If no property-based testing library is available for the project's language, substitute targeted unit tests covering representative inputs for each correctness property. Mark them `prop_<name>` and tag with `Property/<N>` as usual. In the Test Style Source block, note: "PBT unavailable — using targeted unit tests as substitute."
 - Every unit test must reference at least one `Feature/` or `Property/` tag
 - Tests are specified by **what they verify** — not by implementation
 
@@ -262,6 +278,7 @@ Before presenting the design document, verify:
 - [ ] All data types referenced in interfaces are fully defined in section 2.5 (if applicable)
 - [ ] Error handling covers edge cases and partial failure states
 - [ ] Test Style Source (§2.8) is documented with tier and evidence
+- [ ] If the feature changes public APIs, database schemas, or protocols, a versioning/backward-compatibility ADR is present in §2.4
 - [ ] The document is self-contained: a reader unfamiliar with prior context can understand the design
 
 ---
@@ -274,7 +291,7 @@ Do NOT suggest approval until **every** condition is true:
 2. Every correctness property has a corresponding property-based test in §2.8.
 3. The "Files NOT Requiring Changes" table in §2.3 is non-empty.
 4. Mermaid diagrams use correct color coding: green (`#90EE90`) = new, yellow (`#FFD700`) = modified, default = unchanged.
-5. At least one ADR is present in §2.4.
+5. At least one ADR is present in §2.4. If changing API/schema/protocol contracts, a versioning ADR is included.
 6. Test Style Source is documented in §2.8 with tier selection and evidence.
 7. Artifact is registered via `pipeline.sh artifact <path>`.
 
@@ -282,14 +299,4 @@ Do NOT suggest approval until **every** condition is true:
 
 ## Antipatterns to Avoid
 
-| Antipattern | WRONG ❌ | RIGHT ✓ | Why |
-|---|---|---|---|
-| Function bodies | `func refresh() { cache.Get(key)... }` | `func refresh(token Token) (Token, error)` | Interfaces show signatures only |
-| Task lists | "Step 1: create file, Step 2: add tests" | Architecture + interfaces + properties | This is design, not work breakdown |
-| Skipping unchanged files | "Files NOT Requiring Changes" table is empty | Explicitly list files in scope that won't change | Omission suggests scope not fully considered |
-| Existential properties | "There exists a case where refresh works" | "For all expired tokens, refresh returns valid token" | Properties must use universal quantifier |
-| Unlinked properties | "Property 3: tokens are secure" | "Property 3: ... Validates: REQ-1.2" | Every property must trace to a requirement |
-| Vague modification scope | `[MODIFIED]` — "various authentication changes" | `[MODIFIED]` — "adds refreshToken(), modifies authenticate() return type" | Must state what exactly changes |
-| Scope creep | Designing rate limiting not in requirements | Only design what requirements specify | Stay within approved requirements |
-| Silent assumption | Choosing a caching strategy without stating why | `[ASSUMPTION: write-through preferred]` — ask user or mark explicitly | Unstated beliefs cause surprises during implementation |
-| Ignoring existing test patterns | Agent invents new test structure (e.g., flat assertions) | Agent follows existing pattern: `auth/token_test.go:TestRefresh` uses table-driven subtests | Tests must be consistent with the project's existing style |
+Antipatterns for this phase: read `./templates/reference/antipatterns.md` § Design.

@@ -133,12 +133,26 @@ easyp --cfg easyp.yaml generate  # Protobuf codegen (requires running service)
 | 5005 | Docker Registry | HTTP (v2 API) |
 | 5432/5433 | PostgreSQL | TCP |
 
-## Spec-Driven Development
+## Skills
 
-This project uses the **spec-driven-dev** skill (`.agents/skills/spec-driven-dev/SKILL.md`) for structured feature development.
+This project includes agent skills in `.agents/skills/`. Each skill provides domain-specific knowledge and workflows.
 
-**When to use:** new features, "implement X", "build X", spec-first approach.
+| Skill | Path | When to Use |
+|-------|------|-------------|
+| **spec-driven-dev** | `.agents/skills/spec-driven-dev/SKILL.md` | New features, "implement X", "build X", spec-first approach. 6-phase pipeline with human approval gates. |
+| **protobuf-expert-skill** | `.agents/skills/protobuf-expert-skill/SKILL.md` | Writing/reviewing `.proto` files, configuring `easyp.yaml`, lint rules, code generation plugins, proto dependencies, breaking changes, debugging easyp errors. |
+| **protoc-gen-mcp-skill** | `.agents/skills/protoc-gen-mcp-skill/SKILL.md` | Building MCP servers from protobuf definitions, generating MCP tools from proto files, adding MCP annotations, `protoc-gen-mcp` code generation. |
 
-**Pipeline:** Explore → Requirements → Design → Implementation Plan. Each phase requires explicit human approval before advancing.
+### Spec-Driven Development
+
+**Pipeline:** Explore → Requirements → Design → Task Plan → Implementation → Review. Each phase requires explicit human approval before advancing.
 
 **How to start:** tell the agent "I want to add feature X" — the skill activates automatically via keyword matching.
+
+### Protobuf Expert
+
+Covers the full EasyP CLI toolkit: `easyp lint`, `easyp generate`, `easyp breaking`, `easyp mod`, `easyp init`. Includes lint rule selection, managed mode configuration, CI/CD integration, and migration from buf.build.
+
+### protoc-gen-mcp
+
+Generates type-safe Go MCP tool bindings (`*.mcp.go`) from annotated protobuf services. Proto is the source of truth — define service once in `.proto`, generate both `*.pb.go` and `*.mcp.go`, implement the handler interface, and serve.

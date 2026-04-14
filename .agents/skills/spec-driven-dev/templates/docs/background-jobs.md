@@ -1,3 +1,4 @@
+<!-- scope: **/*worker*, **/*job*, **/*queue*, **/*cron* -->
 # Background Jobs Documentation Template
 
 ## What This Generates

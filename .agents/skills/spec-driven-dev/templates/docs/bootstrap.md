@@ -1,3 +1,4 @@
+<!-- scope: * -->
 # Bootstrap Documentation Template
 
 ## What This Generates

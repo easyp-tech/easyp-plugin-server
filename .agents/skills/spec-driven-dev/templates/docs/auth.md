@@ -1,3 +1,4 @@
+<!-- scope: **/*auth*, **/*oauth*, **/*login*, **/*session* -->
 # Auth Documentation Template
 
 ## What This Generates

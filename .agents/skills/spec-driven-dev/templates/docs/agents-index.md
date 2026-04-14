@@ -1,3 +1,4 @@
+<!-- scope: .copilot/*, .cursor/*, .github/copilot* -->
 # Agents Index Documentation Template
 
 ## What This Generates

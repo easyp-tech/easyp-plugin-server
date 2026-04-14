@@ -1,3 +1,4 @@
+<!-- scope: cmd/*, internal/*, pkg/*, src/*, app/*, domain/* -->
 # Core Documentation Template
 
 ## What This Generates

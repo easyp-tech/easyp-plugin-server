@@ -1,3 +1,4 @@
+<!-- scope: **/routes/*, **/handlers/*, **/api/*, *.proto, **/openapi* -->
 # API Documentation Template
 
 ## What This Generates

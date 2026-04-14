@@ -1,3 +1,4 @@
+<!-- scope: **/migrations/*, **/schema*, **/*repo*, **/*store* -->
 # Database Documentation Template
 
 ## What This Generates

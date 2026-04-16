@@ -204,4 +204,48 @@ type (
 		UpdatePlugin(ctx context.Context, req UpdatePluginRequest) (*PluginInfo, error)
 		DeletePlugin(ctx context.Context, group, name, version string) error
 	}
+
+	// LicenseClaims holds the data returned by the license server.
+	LicenseClaims struct {
+		// Tier is the license level: "community" or "enterprise".
+		Tier string
+		// Features is the list of permitted features.
+		Features []Feature
+		// MaxWorkers is the maximum number of concurrent workers; -1 means unlimited.
+		MaxWorkers int
+		// MaxPlugins is the maximum number of registered plugins; -1 means unlimited.
+		MaxPlugins int
+	}
+
+	// LicenseClient is the interface for communicating with the license server.
+	LicenseClient interface {
+		// ValidateLicense fetches and returns the current LicenseClaims.
+		ValidateLicense(ctx context.Context) (LicenseClaims, error)
+	}
 )
+
+const (
+	LicenseTierCommunity  = "community"
+	LicenseTierEnterprise = "enterprise"
+
+	communityMaxWorkers = 4
+	communityMaxPlugins = 10
+)
+
+// CommunityLicenseClaims returns the default LicenseClaims used in community mode
+// (no license server configured, or when the server is unreachable).
+func CommunityLicenseClaims() LicenseClaims {
+	communityFeatures := []Feature{
+		FeatureCodeGeneration,
+		FeaturePluginListing,
+		FeatureMCPServerTools,
+		FeatureRateLimiting,
+		FeaturePluginCRUD,
+	}
+	return LicenseClaims{
+		Tier:       LicenseTierCommunity,
+		Features:   communityFeatures,
+		MaxWorkers: communityMaxWorkers,
+		MaxPlugins: communityMaxPlugins,
+	}
+}

@@ -88,8 +88,7 @@ type (
 		ShutdownTimeout   time.Duration `env:"SHUTDOWN_TIMEOUT,default=30s"    yaml:"shutdown_timeout"`
 	}
 	licenseConfig struct {
-		Key  string `env:"KEY"  yaml:"key"`
-		File string `env:"FILE" yaml:"file"`
+		CacheTTL time.Duration `env:"LICENSE_CACHE_TTL" yaml:"cache_ttl"`
 	}
 	rateLimitConfig struct {
 		RequestsPerSecond float64       `env:"REQUESTS_PER_SECOND,default=10.0" yaml:"requests_per_second"`
@@ -101,8 +100,6 @@ type (
 var (
 	cfgFile  = &flags.File{DefaultPath: "", MaxSize: configFileSize}
 	logLevel = &flags.Level{Level: slog.LevelDebug}
-
-	licensePublicKey string // set via -ldflags "-X main.licensePublicKey=..."
 )
 
 // grpcMetrics implements grpchelper.Metrics for the recovery interceptor.
@@ -235,15 +232,14 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	}()
 
 	// Create LicenseManager
-	lm, err := license.NewManager(licensePublicKey, license.Config{
-		Key:  cfg.License.Key,
-		File: cfg.License.File,
+	licenseClient := license.NewMockLicenseClient()
+	lm, err := license.NewManager(licenseClient, license.Config{
+		CacheTTL: cfg.License.CacheTTL,
 	}, log, reg, namespace)
 	if err != nil {
 		log.Warn("license initialization error, continuing in community mode", "error", err)
 	}
-	lm.StartExpirationWatcher(ctx)
-	defer lm.Stop()
+	lm.StartRefreshWatcher(ctx)
 
 	// Create FeatureGate
 	gate := license.NewFeatureGate(lm)

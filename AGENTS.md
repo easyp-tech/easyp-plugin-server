@@ -70,13 +70,14 @@ easyp --cfg easyp.yaml generate  # Protobuf codegen (requires running service)
 - **Plugin Docker images:** multi-stage (`golang:alpine` → `scratch`), static binary + `upx`, run as `nobody`, `--network=none --memory=128m --cpus=1.0`
 - **Testing:** standard `go test`, no external framework; mocks defined in test files
 - **Config priority:** CLI flags > env vars > YAML file. See [docs/configuration.md](docs/configuration.md)
+- **Comments:** English only; every exported symbol must have a godoc comment starting with its name; no inline comments on `if`/`for`/`return` lines unless genuinely non-obvious. See [.spec/CODE_STYLE.md](.spec/CODE_STYLE.md) §11.
 
 ## Pitfalls & Gotchas
 
 - **Docker socket required** — service mounts `/var/run/docker.sock` to execute plugin containers
 - **Port 5432 conflict** — if postgres already runs locally, minimal stack uses port 5433 (`EASYP_POSTGRES_PORT`)
 - **Plugin images must exist** — run `task local-push-registry` (or `local-push-required`) before the service can generate code
-- **License public key** — injected at build time via `go build -ldflags "-X main.licensePublicKey=..."`. Without it, runs in Community mode
+- **License:** `MockLicenseClient` always returns Enterprise (production placeholder; TODO: replace with real gRPC client when license server is ready)
 - **`easyp generate` needs running service** — the generate command calls localhost:8080 gRPC
 - **Migration order matters** — files are sorted by numeric prefix; never reorder
 - **Audit channel capacity** — fixed at 1000; if exceeded, events are silently dropped (logged as warning)

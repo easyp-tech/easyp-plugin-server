@@ -168,3 +168,45 @@ case errors.Is(err, core.ErrNotFound):
 | Logging | Via context | Via context | Via interceptors |
 | Tracing | Via decorator | Direct (OTLP) | Via interceptors |
 | Testing | Mock interfaces | Integration tests | Mock CoreService |
+
+## 11. Comments
+
+**Language:** all comments MUST be written in English. Russian or any other language is not allowed.
+
+**Style — godoc only:**
+
+- Every exported symbol (type, function, method, const, var) MUST have a doc comment starting with the symbol name.
+- Comments describe *what* a thing is or does, not *how* it works internally.
+- Do NOT add inline comments on individual `if`, `for`, `return`, or field-assignment lines unless the logic is genuinely non-obvious.
+- Do NOT number algorithm steps in exported doc comments (`// 1. Convert ...`).
+- Field comments use the `// Text.` form (single line above the field, or end-of-line `// text`).
+
+```go
+// Good — exported type
+// FeatureGate checks feature availability against the current license.
+type FeatureGate struct { ... }
+
+// Good — exported method
+// Enabled reports whether the given feature is permitted by the current license.
+// Returns false for unrecognised Feature values.
+func (fg *FeatureGate) Enabled(feat core.Feature) bool { ... }
+
+// Good — field comment
+type Config struct {
+    // CacheTTL is the interval between license refresh calls.
+    // Defaults to 5 minutes when zero or negative.
+    CacheTTL time.Duration
+}
+
+// Bad — Russian
+// Enabled возвращает true, если функция разрешена.
+
+// Bad — numbered algorithm steps in exported doc comment
+// Enabled checks the feature.
+// 1. Convert core.Feature → private feature.
+// 2. Get claims from Manager.
+
+// Bad — inline comment on an if
+if err != nil { // handle error
+```
+

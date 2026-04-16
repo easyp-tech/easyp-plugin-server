@@ -3,9 +3,6 @@ package license
 import "errors"
 
 var (
-	ErrInvalidToken     = errors.New("license: invalid token format")
-	ErrSignatureInvalid = errors.New("license: signature verification failed")
-	ErrTokenExpired     = errors.New("license: token expired")
-	ErrInvalidClaims    = errors.New("license: invalid claims")
-	ErrFileNotFound     = errors.New("license: license file not found")
+	// ErrNoClient is returned when NewManager is called with a nil client.
+	ErrNoClient = errors.New("license: client must not be nil")
 )

@@ -6,13 +6,13 @@ import (
 	"github.com/easyp-tech/service/internal/core"
 )
 
-// FeatureGate предоставляет проверку доступности функций на основе текущей лицензии.
+// FeatureGate checks feature availability against the current license.
 type FeatureGate struct {
 	manager *Manager
 	metrics *Metrics
 }
 
-// NewFeatureGate создаёт FeatureGate, привязанный к LicenseManager.
+// NewFeatureGate creates a FeatureGate bound to the given Manager.
 func NewFeatureGate(manager *Manager) *FeatureGate {
 	return &FeatureGate{
 		manager: manager,
@@ -20,15 +20,8 @@ func NewFeatureGate(manager *Manager) *FeatureGate {
 	}
 }
 
-// Enabled возвращает true, если функция разрешена текущей лицензией.
-// Для невалидных значений Feature возвращает false.
-//
-// Алгоритм:
-// 1. Конвертировать core.Feature в приватный feature; если невалиден → false
-// 2. Получить claims из LicenseManager (потокобезопасно)
-// 3. Если tier == Enterprise → true
-// 4. Если feature.IsEnterprise() → инкремент метрики denied, false
-// 5. Проверить наличие feature в claims.Features → результат.
+// Enabled reports whether the given feature is permitted by the current license.
+// Returns false for unrecognised Feature values.
 func (fg *FeatureGate) Enabled(feat core.Feature) bool {
 	// Step 1: Convert and validate.
 	lf := feature(feat)
@@ -40,7 +33,7 @@ func (fg *FeatureGate) Enabled(feat core.Feature) bool {
 	claims := fg.manager.Claims()
 
 	// Step 3: Enterprise tier → all features enabled.
-	if claims.Tier == TierEnterprise {
+	if claims.Tier == core.LicenseTierEnterprise {
 		return true
 	}
 
@@ -52,16 +45,15 @@ func (fg *FeatureGate) Enabled(feat core.Feature) bool {
 	}
 
 	// Step 5: Check if feature is in claims.Features.
-	return slices.Contains(claims.Features, lf)
+	return slices.Contains(claims.Features, feat)
 }
 
-// MaxWorkers возвращает лимит воркеров из текущей лицензии.
+// MaxWorkers returns the worker concurrency limit from the current license.
 func (fg *FeatureGate) MaxWorkers() int {
 	return fg.manager.Claims().MaxWorkers
 }
 
-// MaxPlugins возвращает лимит плагинов из текущей лицензии.
-// -1 означает отсутствие ограничения.
+// MaxPlugins returns the maximum number of registered plugins. -1 means unlimited.
 func (fg *FeatureGate) MaxPlugins() int {
 	return fg.manager.Claims().MaxPlugins
 }

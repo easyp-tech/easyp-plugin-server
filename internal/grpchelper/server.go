@@ -36,15 +36,15 @@ type Metrics interface {
 
 // NewServer creates and returns a gRPC server.
 func NewServer(
-	m Metrics,
+	metr Metrics,
 	log *slog.Logger,
 	serverMetrics *grpc_prometheus.ServerMetrics,
 	converter GRPCCodesConverterHandler,
 	extraUnary []grpc.UnaryServerInterceptor,
 	extraStream []grpc.StreamServerInterceptor,
 ) (*grpc.Server, *health.Server) {
-	unaryInterceptor := buildUnaryInterceptors(m, log, serverMetrics, converter, extraUnary)
-	streamInterceptor := buildStreamInterceptors(m, log, serverMetrics, converter, extraStream)
+	unaryInterceptor := buildUnaryInterceptors(metr, log, serverMetrics, converter, extraUnary)
+	streamInterceptor := buildStreamInterceptors(metr, log, serverMetrics, converter, extraStream)
 
 	server := grpc.NewServer(
 		grpc.Creds(insecure.NewCredentials()),
@@ -76,7 +76,7 @@ func NewServer(
 }
 
 func buildUnaryInterceptors(
-	m Metrics,
+	metr Metrics,
 	log *slog.Logger,
 	serverMetrics *grpc_prometheus.ServerMetrics,
 	converter GRPCCodesConverterHandler,
@@ -97,14 +97,14 @@ func buildUnaryInterceptors(
 		callerIPUnaryInterceptor(),
 		serverMetrics.UnaryServerInterceptor(),
 		logging.UnaryServerInterceptor(interceptorLogger(log), loggingOpts...),
-		grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc(m, errInternal))),
+		grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc(metr, errInternal))),
 		grpc_validator.UnaryServerInterceptor(),
 		UnaryConvertCodesServerInterceptor(converter),
 	}, extraUnary...)
 }
 
 func buildStreamInterceptors(
-	m Metrics,
+	metr Metrics,
 	log *slog.Logger,
 	serverMetrics *grpc_prometheus.ServerMetrics,
 	converter GRPCCodesConverterHandler,
@@ -125,7 +125,7 @@ func buildStreamInterceptors(
 		callerIPStreamInterceptor(),
 		serverMetrics.StreamServerInterceptor(),
 		logging.StreamServerInterceptor(interceptorLogger(log), loggingOpts...),
-		grpc_recovery.StreamServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc(m, errInternal))),
+		grpc_recovery.StreamServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc(metr, errInternal))),
 		grpc_validator.StreamServerInterceptor(),
 		StreamConvertCodesServerInterceptor(converter),
 	}, extraStream...)

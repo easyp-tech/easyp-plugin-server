@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/easyp-tech/service/internal/database"
 	"github.com/jmoiron/sqlx"
+
+	"github.com/easyp-tech/service/internal/database"
 )
 
 // Command of migration.

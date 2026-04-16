@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"google.golang.org/grpc"
@@ -34,7 +33,7 @@ func NewLicenseInterceptor(gate core.FeatureGate, logger *slog.Logger) *LicenseI
 
 // checkFeature проверяет, разрешён ли вызов метода текущей лицензией.
 // Возвращает nil, если метод не требует проверки (Community) или функция разрешена.
-func (li *LicenseInterceptor) checkFeature(fullMethod string) error {
+func (li *LicenseInterceptor) checkFeature(fullMethod string) error { //nolint:funcorder,lll // checkFeature is used by interceptors defined above it
 	feature, ok := li.methodFeatures[fullMethod]
 	if !ok {
 		// Community method — no license check needed.
@@ -56,7 +55,8 @@ func (li *LicenseInterceptor) checkFeature(fullMethod string) error {
 // UnaryServerInterceptor возвращает grpc.UnaryServerInterceptor.
 func (li *LicenseInterceptor) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if err := li.checkFeature(info.FullMethod); err != nil {
+		err := li.checkFeature(info.FullMethod)
+		if err != nil {
 			return nil, err
 		}
 
@@ -67,6 +67,7 @@ func (li *LicenseInterceptor) UnaryServerInterceptor() grpc.UnaryServerIntercept
 // wrappedStream wraps grpc.ServerStream to preserve context.
 type wrappedStream struct {
 	grpc.ServerStream
+
 	ctx context.Context
 }
 
@@ -78,7 +79,8 @@ func (w *wrappedStream) Context() context.Context {
 // StreamServerInterceptor возвращает grpc.StreamServerInterceptor.
 func (li *LicenseInterceptor) StreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if err := li.checkFeature(info.FullMethod); err != nil {
+		err := li.checkFeature(info.FullMethod)
+		if err != nil {
 			return err
 		}
 
@@ -92,6 +94,6 @@ func (li *LicenseInterceptor) RegisterMethodFeature(fullMethod string, feature c
 	li.methodFeatures[fullMethod] = feature
 	li.logger.Info("registered license check",
 		"method", fullMethod,
-		"feature", fmt.Sprintf("%s", feature),
+		"feature", feature.String(),
 	)
 }

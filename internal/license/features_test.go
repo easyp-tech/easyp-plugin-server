@@ -48,7 +48,7 @@ func TestFeature_IsEnterprise(t *testing.T) {
 
 func TestFeature_Valid(t *testing.T) {
 	// All defined features should be valid.
-	for f := featureCodeGeneration; f < featureCount; f++ {
+	for f := range featureCount {
 		assert.True(t, f.Valid(), "%s should be valid", f)
 	}
 

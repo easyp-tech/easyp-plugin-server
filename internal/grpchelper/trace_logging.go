@@ -4,9 +4,10 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/easyp-tech/service/internal/monitor"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
+
+	"github.com/easyp-tech/service/internal/monitor"
 )
 
 // TraceLoggingUnaryServerInterceptor adds trace_id and span_id to the logger in context.

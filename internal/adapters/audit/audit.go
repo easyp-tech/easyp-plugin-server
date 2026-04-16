@@ -37,8 +37,10 @@ func (s *Store) Save(ctx context.Context, entry core.AuditEntry) error {
 		metadata = []byte("{}")
 	}
 
-	const query = `INSERT INTO audit_log (id, operation_type, plugin_name, caller_address, status, error_code, error_message, duration_ms, metadata, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+	const query = `INSERT INTO audit_log (
+	id, operation_type, plugin_name, caller_address, status,
+	error_code, error_message, duration_ms, metadata, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
 	err = s.db.NoTxContext(ctx, func(db *sqlx.DB) error {
 		_, execErr := db.ExecContext(ctx, query,
@@ -53,7 +55,12 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 			metadata,
 			entry.CreatedAt,
 		)
-		return execErr
+
+		if execErr != nil {
+			return fmt.Errorf("db.ExecContext: %w", execErr)
+		}
+
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("s.db.NoTxContext: %w", err)

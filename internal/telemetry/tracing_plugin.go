@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/grafana/pyroscope-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -14,7 +15,6 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 
 	"github.com/easyp-tech/service/internal/core"
-	"github.com/grafana/pyroscope-go"
 )
 
 // Compile-time interface check.
@@ -33,6 +33,7 @@ func NewTracingPlugin(inner core.Plugin, tracer trace.Tracer) *TracingPlugin {
 	hist, _ := meter.Float64Histogram("plugin.execution.duration",
 		metric.WithUnit("s"),
 		metric.WithDescription("Duration of plugin code generation"))
+
 	return &TracingPlugin{inner: inner, tracer: tracer, duration: hist}
 }
 
@@ -83,6 +84,7 @@ func (p *TracingPlugin) Generate(ctx context.Context, req *pluginpb.CodeGenerato
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+
 		return nil, err
 	}
 

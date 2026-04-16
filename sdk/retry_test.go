@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -16,11 +17,13 @@ import (
 // is exhausted every subsequent call returns nil (success).
 func mockInvoker(errs []error) (grpc.UnaryInvoker, *atomic.Int32) {
 	var calls atomic.Int32
+
 	return func(_ context.Context, _ string, _, _ any, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
 		idx := int(calls.Add(1)) - 1
 		if idx < len(errs) {
 			return errs[idx]
 		}
+
 		return nil
 	}, &calls
 }
@@ -129,7 +132,7 @@ func TestRetry_ContextCancelledDuringBackoff(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 

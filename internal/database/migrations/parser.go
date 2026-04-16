@@ -36,7 +36,7 @@ func parse(f fs.File) (*Migration, error) {
 		return nil, fmt.Errorf("parseFileName: %w", err)
 	}
 
-	m := Migration{
+	migration := Migration{
 		Version: version,
 		Name:    name,
 	}
@@ -57,9 +57,9 @@ func parse(f fs.File) (*Migration, error) {
 
 		switch currentParse {
 		case stateUp:
-			m.Up += str
+			migration.Up += str
 		case stateDown:
-			m.Down += str
+			migration.Down += str
 		}
 	}
 
@@ -68,7 +68,7 @@ func parse(f fs.File) (*Migration, error) {
 		return nil, fmt.Errorf("scan: %w", err)
 	}
 
-	return &m, nil
+	return &migration, nil
 }
 
 func parseFileName(fName string) (uint, string, error) {

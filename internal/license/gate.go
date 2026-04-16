@@ -1,15 +1,19 @@
 package license
 
-import "github.com/easyp-tech/service/internal/core"
+import (
+	"slices"
+
+	"github.com/easyp-tech/service/internal/core"
+)
 
 // FeatureGate предоставляет проверку доступности функций на основе текущей лицензии.
 type FeatureGate struct {
-	manager *LicenseManager
-	metrics *LicenseMetrics
+	manager *Manager
+	metrics *Metrics
 }
 
 // NewFeatureGate создаёт FeatureGate, привязанный к LicenseManager.
-func NewFeatureGate(manager *LicenseManager) *FeatureGate {
+func NewFeatureGate(manager *Manager) *FeatureGate {
 	return &FeatureGate{
 		manager: manager,
 		metrics: manager.Metrics(),
@@ -24,10 +28,10 @@ func NewFeatureGate(manager *LicenseManager) *FeatureGate {
 // 2. Получить claims из LicenseManager (потокобезопасно)
 // 3. Если tier == Enterprise → true
 // 4. Если feature.IsEnterprise() → инкремент метрики denied, false
-// 5. Проверить наличие feature в claims.Features → результат
-func (fg *FeatureGate) Enabled(f core.Feature) bool {
+// 5. Проверить наличие feature в claims.Features → результат.
+func (fg *FeatureGate) Enabled(feat core.Feature) bool {
 	// Step 1: Convert and validate.
-	lf := feature(f)
+	lf := feature(feat)
 	if !lf.Valid() {
 		return false
 	}
@@ -42,18 +46,13 @@ func (fg *FeatureGate) Enabled(f core.Feature) bool {
 
 	// Step 4: Enterprise-only feature in non-Enterprise mode → deny + metric.
 	if lf.IsEnterprise() {
-		fg.metrics.featureDenied.WithLabelValues(f.String()).Inc()
+		fg.metrics.featureDenied.WithLabelValues(lf.String()).Inc()
+
 		return false
 	}
 
 	// Step 5: Check if feature is in claims.Features.
-	for _, cf := range claims.Features {
-		if cf == lf {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(claims.Features, lf)
 }
 
 // MaxWorkers возвращает лимит воркеров из текущей лицензии.

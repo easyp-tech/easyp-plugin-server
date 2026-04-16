@@ -8,6 +8,9 @@ type Tier string
 const (
 	TierCommunity  Tier = "community"
 	TierEnterprise Tier = "enterprise"
+
+	communityMaxWorkers = 4
+	communityMaxPlugins = 10
 )
 
 // Claims содержит данные из PASETO-токена лицензии.
@@ -28,18 +31,19 @@ func CommunityDefaults() Claims {
 	return Claims{
 		Tier:       TierCommunity,
 		Features:   communityFeatures(),
-		MaxWorkers: 4,
-		MaxPlugins: 10,
+		MaxWorkers: communityMaxWorkers,
+		MaxPlugins: communityMaxPlugins,
 	}
 }
 
 // communityFeatures возвращает список всех не-Enterprise функций.
 func communityFeatures() []feature {
 	var features []feature
-	for f := feature(0); f < featureCount; f++ {
+	for f := range featureCount {
 		if !f.IsEnterprise() {
 			features = append(features, f)
 		}
 	}
+
 	return features
 }

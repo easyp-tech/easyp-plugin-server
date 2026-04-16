@@ -2,6 +2,8 @@ package core
 
 import "context"
 
+const unknownValue = "unknown"
+
 type callerIPKey struct{}
 
 // WithCallerIP returns a new context with the caller IP address stored.
@@ -15,5 +17,6 @@ func CallerIPFromContext(ctx context.Context) string {
 	if ip, ok := ctx.Value(callerIPKey{}).(string); ok && ip != "" {
 		return ip
 	}
-	return "unknown"
+
+	return unknownValue
 }

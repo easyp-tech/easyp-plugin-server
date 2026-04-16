@@ -22,7 +22,7 @@ type Metrics struct {
 
 // New creates and returns a new Metrics adapter.
 func New(reg *prometheus.Registry, namespace string) *Metrics {
-	m := &Metrics{
+	metrics := &Metrics{
 		generated: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: namespace,
@@ -57,18 +57,19 @@ func New(reg *prometheus.Registry, namespace string) *Metrics {
 		),
 	}
 
-	reg.MustRegister(m.generated)
-	reg.MustRegister(m.generationDuration)
-	reg.MustRegister(m.generationErrors)
-	reg.MustRegister(m.generationRetries)
+	reg.MustRegister(metrics.generated)
+	reg.MustRegister(metrics.generationDuration)
+	reg.MustRegister(metrics.generationErrors)
+	reg.MustRegister(metrics.generationRetries)
 
-	return m
+	return metrics
 }
 
 // GenerateCode implements the core.Metrics interface.
 func (m Metrics) GenerateCode(_ context.Context, info core.PluginInfo) error {
 	plugin := info.Group + "/" + info.Name + ":" + info.Version
 	m.generated.WithLabelValues(plugin).Inc()
+
 	return nil
 }
 

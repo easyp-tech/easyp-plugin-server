@@ -21,6 +21,7 @@ import (
 // registrySourcePath returns the absolute path to registry.go.
 func registrySourcePath() string {
 	_, filename, _, _ := runtime.Caller(0)
+
 	return filepath.Join(filepath.Dir(filename), "registry.go")
 }
 
@@ -36,14 +37,14 @@ func parseRegistryAST(t *testing.T) *ast.File {
 	if err != nil {
 		t.Fatalf("failed to parse registry.go: %v", err)
 	}
+
 	return f
 }
 
 // TestFaultCondition_RegistryStoresDatabaseSQL checks that the Registry struct
 // stores *database.SQL (not *sqlx.DB). On unfixed code the field is `sql *sqlx.DB`.
 func TestFaultCondition_RegistryStoresDatabaseSQL(t *testing.T) {
-	r := &Registry{}
-	rt := reflect.TypeOf(r).Elem()
+	rt := reflect.TypeFor[Registry]()
 
 	// After the fix the field should be named "db" with type *database.SQL.
 	field, ok := rt.FieldByName("db")
@@ -60,7 +61,7 @@ func TestFaultCondition_RegistryStoresDatabaseSQL(t *testing.T) {
 // TestFaultCondition_DBReturnsDatabaseSQL checks that DB() returns *database.SQL.
 // On unfixed code DB() returns *sqlx.DB.
 func TestFaultCondition_DBReturnsDatabaseSQL(t *testing.T) {
-	rt := reflect.TypeOf(&Registry{})
+	rt := reflect.TypeFor[*Registry]()
 
 	method, ok := rt.MethodByName("DB")
 	if !ok {
@@ -168,6 +169,7 @@ func methodBodyContains(f *ast.File, methodName, target string) bool {
 		// Walk the AST body looking for the target identifier.
 		return astContainsIdent(fn.Body, target)
 	}
+
 	return false
 }
 
@@ -182,9 +184,12 @@ func astContainsIdent(node ast.Node, name string) bool {
 		ident, ok := n.(*ast.Ident)
 		if ok && ident.Name == name {
 			found = true
+
 			return false
 		}
+
 		return true
 	})
+
 	return found
 }

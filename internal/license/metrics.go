@@ -2,16 +2,16 @@ package license
 
 import "github.com/prometheus/client_golang/prometheus"
 
-// LicenseMetrics содержит Prometheus-метрики лицензирования.
-type LicenseMetrics struct {
+// Metrics содержит Prometheus-метрики лицензирования.
+type Metrics struct {
 	valid         prometheus.Gauge       // {namespace}_license_valid: 1=valid, 0=invalid/absent
 	expiryTS      prometheus.Gauge       // {namespace}_license_expiry_timestamp_seconds
 	featureDenied *prometheus.CounterVec // {namespace}_license_feature_denied_total{feature}
 }
 
-// NewLicenseMetrics создаёт и регистрирует метрики лицензирования в реестре.
-func NewLicenseMetrics(reg *prometheus.Registry, namespace string) *LicenseMetrics {
-	m := &LicenseMetrics{
+// NewMetrics создаёт и регистрирует метрики лицензирования в реестре.
+func NewMetrics(reg *prometheus.Registry, namespace string) *Metrics {
+	metricObj := &Metrics{
 		valid: prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "license_valid",
@@ -30,8 +30,8 @@ func NewLicenseMetrics(reg *prometheus.Registry, namespace string) *LicenseMetri
 	}
 
 	if reg != nil {
-		reg.MustRegister(m.valid, m.expiryTS, m.featureDenied)
+		reg.MustRegister(metricObj.valid, metricObj.expiryTS, metricObj.featureDenied)
 	}
 
-	return m
+	return metricObj
 }

@@ -25,8 +25,10 @@ func (h *captureHandler) Enabled(_ context.Context, _ slog.Level) bool { return 
 func (h *captureHandler) Handle(_ context.Context, r slog.Record) error {
 	r.Attrs(func(a slog.Attr) bool {
 		h.attrs[a.Key] = a.Value
+
 		return true
 	})
+
 	return nil
 }
 
@@ -158,6 +160,7 @@ func TestWithUnaryInterceptor_AddsToConfig(t *testing.T) {
 	called := false
 	custom := func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		called = true
+
 		return invoker(ctx, method, req, reply, cc, opts...)
 	}
 

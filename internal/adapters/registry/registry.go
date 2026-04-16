@@ -22,11 +22,13 @@ import (
 	"github.com/easyp-tech/service/internal/database"
 )
 
-var _ core.Registry = &Registry{}
-var _ core.Plugin = &plugin{}
+var (
+	_ core.Registry = &Registry{}
+	_ core.Plugin   = &plugin{}
+)
 
 type (
-	// DockerConfig represents Docker execution configuration
+	// DockerConfig represents Docker execution configuration.
 	DockerConfig struct {
 		Network    string            `json:"network,omitempty"`
 		Memory     string            `json:"memory,omitempty"`
@@ -38,7 +40,7 @@ type (
 		TmpFS      map[string]string `json:"tmpfs,omitempty"`
 	}
 
-	// PluginConfig represents the complete plugin configuration
+	// PluginConfig represents the complete plugin configuration.
 	PluginConfig struct {
 		Docker *DockerConfig `json:"docker,omitempty"`
 	}
@@ -65,49 +67,53 @@ type (
 )
 
 // New build and returns a new Registry.
-func New(ctx context.Context, db *database.SQL, domain string) (*Registry, error) {
-	u, err := url.Parse(domain)
+func New(_ context.Context, db *database.SQL, domain string) (*Registry, error) {
+	parsedURL, err := url.Parse(domain)
 	if err != nil {
 		return nil, fmt.Errorf("url.Parse: %w", err)
 	}
 
 	return &Registry{
 		db:     db,
-		domain: u,
+		domain: parsedURL,
 	}, nil
 }
 
 // Get implements core.Registry.
-func (r *Registry) Get(ctx context.Context, pluginGroup, pluginName, pluginVersion string) (p core.Plugin, err error) {
+func (r *Registry) Get(ctx context.Context, pluginGroup, pluginName, pluginVersion string) (core.Plugin, error) {
 	dbFormat := plugin{}
 
 	query := "select id, group_name, name, version, config, tags, created_at from plugins where group_name = $1 and name = $2 and version = $3"
 	args := []any{pluginGroup, pluginName, pluginVersion}
 
 	if pluginVersion == "latest" {
-		query = "select id, group_name, name, version, config, tags, created_at from plugins where group_name = $1 and name = $2 order by version desc limit 1"
+		query = "select id, group_name, name, version, config, tags, created_at" +
+			" from plugins where group_name = $1 and name = $2 order by version desc limit 1"
 		args = []any{pluginGroup, pluginName}
 	}
 
-	if err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+	err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
 		return conn.GetContext(ctx, &dbFormat, query, args...)
-	}); err != nil {
+	})
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: %s/%s:%s", core.ErrNotFound, pluginGroup, pluginName, pluginVersion)
 		}
+
 		return nil, fmt.Errorf("r.db.NoTxContext(Get): %w", err)
 	}
 
 	// Parse plugin configuration
 	if len(dbFormat.Config) > 0 {
-		if err := json.Unmarshal(dbFormat.Config, &dbFormat.pluginConfig); err != nil {
+		err := json.Unmarshal(dbFormat.Config, &dbFormat.pluginConfig)
+		if err != nil {
 			return nil, fmt.Errorf("json.Unmarshal config: %w", err)
 		}
 	}
 
 	dbFormat.domain = r.domain
-	p = &dbFormat
-	return p, nil
+
+	return &dbFormat, nil
 }
 
 // List implements core.Registry.
@@ -143,13 +149,13 @@ func (r *Registry) List(ctx context.Context, filter core.PluginFilter) ([]core.P
 		if len(nonEmptyTags) > 0 {
 			query += fmt.Sprintf(" and tags @> $%d", argID)
 			args = append(args, pq.Array(nonEmptyTags))
-			argID++
 		}
 	}
 
-	if err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+	err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
 		return conn.SelectContext(ctx, &plugins, query, args...)
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, fmt.Errorf("r.db.NoTxContext(List): %w", err)
 	}
 
@@ -163,14 +169,24 @@ func (r *Registry) List(ctx context.Context, filter core.PluginFilter) ([]core.P
 
 // Close database connection.
 func (r *Registry) Close() error {
-	return r.db.Close()
+	err := r.db.Close()
+	if err != nil {
+		return fmt.Errorf("db.Close: %w", err)
+	}
+
+	return nil
 }
 
 // Health checks the health of the registry.
 func (r *Registry) Health(ctx context.Context) error {
-	return r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+	err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
 		return conn.PingContext(ctx)
 	})
+	if err != nil {
+		return fmt.Errorf("db.NoTxContext(Health): %w", err)
+	}
+
+	return nil
 }
 
 // DB returns the underlying *database.SQL connection.
@@ -248,14 +264,15 @@ func (p *plugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorReques
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("plugin execution failed: %s, stderr: %s", err, string(exitErr.Stderr))
+			return nil, fmt.Errorf("plugin execution failed: %w, stderr: %s", err, string(exitErr.Stderr))
 		}
 
 		return nil, fmt.Errorf("cmd.Output: %w", err)
 	}
 
 	var response pluginpb.CodeGeneratorResponse
-	if err := proto.Unmarshal(output, &response); err != nil {
+	err = proto.Unmarshal(output, &response)
+	if err != nil {
 		return nil, fmt.Errorf("proto.Unmarshal: %w", err)
 	}
 
@@ -264,64 +281,68 @@ func (p *plugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorReques
 
 // Create implements core.Registry.
 func (r *Registry) Create(ctx context.Context, req core.CreatePluginRequest) (*core.PluginInfo, error) {
-	var p plugin
+	var plug plugin
 
-	if err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+	err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
 		return conn.QueryRowxContext(ctx,
 			`INSERT INTO plugins (group_name, name, version, config, tags)
-			 VALUES ($1, $2, $3, $4, $5)
-			 RETURNING id, group_name, name, version, tags, created_at`,
+                         VALUES ($1, $2, $3, $4, $5)
+                         RETURNING id, group_name, name, version, tags, created_at`,
 			req.Group, req.Name, req.Version, req.Config, pq.Array(req.Tags),
-		).StructScan(&p)
-	}); err != nil {
+		).StructScan(&plug)
+	})
+	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
 			return nil, fmt.Errorf("%w: %s/%s:%s", core.ErrAlreadyExists, req.Group, req.Name, req.Version)
 		}
+
 		return nil, fmt.Errorf("r.db.NoTxContext(Create): %w", err)
 	}
 
 	return &core.PluginInfo{
-		ID:        p.ID,
-		Group:     p.GroupName,
-		Name:      p.Name,
-		Version:   p.Version,
-		Tags:      []string(p.Tags),
-		CreatedAt: p.CreatedAt,
+		ID:        plug.ID,
+		Group:     plug.GroupName,
+		Name:      plug.Name,
+		Version:   plug.Version,
+		Tags:      []string(plug.Tags),
+		CreatedAt: plug.CreatedAt,
 	}, nil
 }
 
 // Update implements core.Registry.
 func (r *Registry) Update(ctx context.Context, req core.UpdatePluginRequest) (*core.PluginInfo, error) {
-	var p plugin
+	var plug plugin
 
-	if err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+	err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
 		return conn.QueryRowxContext(ctx,
 			`UPDATE plugins SET config = $1, tags = $2
 			 WHERE group_name = $3 AND name = $4 AND version = $5
 			 RETURNING id, group_name, name, version, tags, created_at`,
 			req.Config, pq.Array(req.Tags), req.Group, req.Name, req.Version,
-		).StructScan(&p)
-	}); err != nil {
+		).StructScan(&plug)
+	})
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: %s/%s:%s", core.ErrNotFound, req.Group, req.Name, req.Version)
 		}
+
 		return nil, fmt.Errorf("r.db.NoTxContext(Update): %w", err)
 	}
 
 	return &core.PluginInfo{
-		ID:        p.ID,
-		Group:     p.GroupName,
-		Name:      p.Name,
-		Version:   p.Version,
-		Tags:      []string(p.Tags),
-		CreatedAt: p.CreatedAt,
+		ID:        plug.ID,
+		Group:     plug.GroupName,
+		Name:      plug.Name,
+		Version:   plug.Version,
+		Tags:      []string(plug.Tags),
+		CreatedAt: plug.CreatedAt,
 	}, nil
 }
 
 // Delete implements core.Registry.
 func (r *Registry) Delete(ctx context.Context, group, name, version string) error {
-	return r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
+	err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
 		result, err := conn.ExecContext(ctx,
 			`DELETE FROM plugins WHERE group_name = $1 AND name = $2 AND version = $3`,
 			group, name, version,
@@ -341,6 +362,11 @@ func (r *Registry) Delete(ctx context.Context, group, name, version string) erro
 
 		return nil
 	})
+	if err != nil {
+		return fmt.Errorf("db.NoTxContext(Delete): %w", err)
+	}
+
+	return nil
 }
 
 // Info implements core.Plugin.

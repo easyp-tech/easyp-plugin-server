@@ -47,6 +47,7 @@ func (r *TracingRegistry) Get(ctx context.Context, pluginGroup, pluginName, plug
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+
 		return nil, err
 	}
 
@@ -68,6 +69,7 @@ func (r *TracingRegistry) List(ctx context.Context, filter core.PluginFilter) ([
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+
 		return nil, err
 	}
 
@@ -90,6 +92,7 @@ func (r *TracingRegistry) Create(ctx context.Context, req core.CreatePluginReque
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+
 		return nil, err
 	}
 
@@ -112,6 +115,7 @@ func (r *TracingRegistry) Update(ctx context.Context, req core.UpdatePluginReque
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+
 		return nil, err
 	}
 
@@ -134,6 +138,7 @@ func (r *TracingRegistry) Delete(ctx context.Context, group, name, version strin
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+
 		return err
 	}
 

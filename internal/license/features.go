@@ -10,7 +10,7 @@ const (
 	featureMCPServerTools                // MCP server tools
 	featureRateLimiting                  // Rate limiting
 	featurePluginCRUD                    // CRUD операции с плагинами
-	// Enterprise-only features
+	// Enterprise-only features.
 	featureMultiTenancy    // Мультитенантность
 	featureResponseCaching // Кэширование ответов
 	featureAudit           // Аудит
@@ -35,6 +35,7 @@ func (f feature) String() string {
 	if !f.Valid() {
 		return "unknown"
 	}
+
 	return featureNames[f]
 }
 

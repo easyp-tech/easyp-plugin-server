@@ -3,6 +3,7 @@ package license
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,37 +14,40 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// LicenseConfig содержит параметры конфигурации лицензии.
-type LicenseConfig struct {
-	Key  string `yaml:"key" env:"LICENSE_KEY"`
-	File string `yaml:"file" env:"LICENSE_FILE"`
+// ErrNoPublicKey is returned when a reload is attempted without a configured public key.
+var ErrNoPublicKey = errors.New("cannot reload: no public key configured")
+
+// Config содержит параметры конфигурации лицензии.
+type Config struct {
+	Key  string `env:"LICENSE_KEY"  yaml:"key"`
+	File string `env:"LICENSE_FILE" yaml:"file"`
 }
 
-// LicenseManager отвечает за парсинг, валидацию и кэширование лицензии.
-type LicenseManager struct {
+// Manager отвечает за парсинг, валидацию и кэширование лицензии.
+type Manager struct {
 	mu         sync.RWMutex
 	claims     Claims
 	valid      bool
 	publicKey  paseto.V4AsymmetricPublicKey
 	hasKey     bool
 	logger     *slog.Logger
-	metrics    *LicenseMetrics
+	metrics    *Metrics
 	stopTicker chan struct{}
 }
 
-// NewLicenseManager создаёт LicenseManager.
+// NewManager создаёт LicenseManager.
 // publicKeyHex — hex-encoded Ed25519 public key, встроенный через ldflags.
 // Если publicKeyHex пуст, работает в Community-режиме.
-func NewLicenseManager(
+func NewManager(
 	publicKeyHex string,
-	cfg LicenseConfig,
+	cfg Config,
 	logger *slog.Logger,
 	reg *prometheus.Registry,
 	namespace string,
-) (*LicenseManager, error) {
-	metrics := NewLicenseMetrics(reg, namespace)
+) (*Manager, error) {
+	metrics := NewMetrics(reg, namespace)
 
-	lm := &LicenseManager{
+	lm := &Manager{
 		claims:     CommunityDefaults(),
 		logger:     logger,
 		metrics:    metrics,
@@ -54,6 +58,7 @@ func NewLicenseManager(
 	if publicKeyHex == "" {
 		logger.Info("no public key provided, operating in community mode")
 		lm.updateMetrics()
+
 		return lm, nil
 	}
 
@@ -62,6 +67,7 @@ func NewLicenseManager(
 	if err != nil {
 		logger.Error("failed to decode public key, operating in community mode", "error", err)
 		lm.updateMetrics()
+
 		return lm, fmt.Errorf("decode public key: %w", err)
 	}
 	lm.publicKey = pubKey
@@ -71,12 +77,14 @@ func NewLicenseManager(
 	token, err := lm.loadToken(cfg)
 	if err != nil {
 		lm.updateMetrics()
+
 		return lm, err
 	}
 	if token == "" {
 		// No token configured → Community mode.
 		logger.Info("no license token configured, operating in community mode")
 		lm.updateMetrics()
+
 		return lm, nil
 	}
 
@@ -86,45 +94,52 @@ func NewLicenseManager(
 	}
 
 	// Steps 5-9: Parse, validate, cache.
-	if err := lm.applyToken(token); err != nil {
+	err = lm.applyToken(token)
+	if err != nil {
 		lm.updateMetrics()
+
 		return lm, err
 	}
 
 	lm.updateMetrics()
+
 	return lm, nil
 }
 
 // Claims возвращает текущие кэшированные claims (потокобезопасно).
-func (lm *LicenseManager) Claims() Claims {
+func (lm *Manager) Claims() Claims {
 	lm.mu.RLock()
 	defer lm.mu.RUnlock()
+
 	return lm.claims
 }
 
 // Valid возвращает true, если лицензия валидна.
-func (lm *LicenseManager) Valid() bool {
+func (lm *Manager) Valid() bool {
 	lm.mu.RLock()
 	defer lm.mu.RUnlock()
+
 	return lm.valid
 }
 
 // Reload загружает и валидирует новый токен, обновляя кэш.
-func (lm *LicenseManager) Reload(token string) error {
+func (lm *Manager) Reload(token string) error {
 	if !lm.hasKey {
-		return fmt.Errorf("cannot reload: no public key configured")
+		return ErrNoPublicKey
 	}
 
-	if err := lm.applyToken(token); err != nil {
+	err := lm.applyToken(token)
+	if err != nil {
 		return err
 	}
 
 	lm.updateMetrics()
+
 	return nil
 }
 
 // ParseToken парсит PASETO v4.public токен и возвращает Claims.
-func (lm *LicenseManager) ParseToken(token string) (Claims, error) {
+func (lm *Manager) ParseToken(token string) (Claims, error) {
 	if !lm.hasKey {
 		return Claims{}, fmt.Errorf("%w: no public key configured", ErrInvalidToken)
 	}
@@ -148,16 +163,23 @@ func (lm *LicenseManager) ParseToken(token string) (Claims, error) {
 func FormatToken(claims Claims, privateKey paseto.V4AsymmetricSecretKey) (string, error) {
 	token := paseto.NewToken()
 
-	if err := token.Set("tier", claims.Tier); err != nil {
+	err := token.Set("tier", claims.Tier)
+	if err != nil {
 		return "", fmt.Errorf("set tier: %w", err)
 	}
-	if err := token.Set("features", claims.Features); err != nil {
+
+	err = token.Set("features", claims.Features)
+	if err != nil {
 		return "", fmt.Errorf("set features: %w", err)
 	}
-	if err := token.Set("max_workers", claims.MaxWorkers); err != nil {
+
+	err = token.Set("max_workers", claims.MaxWorkers)
+	if err != nil {
 		return "", fmt.Errorf("set max_workers: %w", err)
 	}
-	if err := token.Set("max_plugins", claims.MaxPlugins); err != nil {
+
+	err = token.Set("max_plugins", claims.MaxPlugins)
+	if err != nil {
 		return "", fmt.Errorf("set max_plugins: %w", err)
 	}
 
@@ -171,14 +193,15 @@ func FormatToken(claims Claims, privateKey paseto.V4AsymmetricSecretKey) (string
 	}
 
 	signed := token.V4Sign(privateKey, nil)
+
 	return signed, nil
 }
 
 // StartExpirationWatcher запускает горутину с тикером (60s),
 // проверяющую истечение лицензии.
-func (lm *LicenseManager) StartExpirationWatcher(ctx context.Context) {
+func (lm *Manager) StartExpirationWatcher(ctx context.Context) {
 	go func() {
-		ticker := time.NewTicker(60 * time.Second)
+		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 
 		for {
@@ -195,7 +218,7 @@ func (lm *LicenseManager) StartExpirationWatcher(ctx context.Context) {
 }
 
 // Stop останавливает тикер проверки истечения.
-func (lm *LicenseManager) Stop() {
+func (lm *Manager) Stop() {
 	select {
 	case lm.stopTicker <- struct{}{}:
 	default:
@@ -203,12 +226,12 @@ func (lm *LicenseManager) Stop() {
 }
 
 // Metrics возвращает метрики лицензирования (для использования в FeatureGate).
-func (lm *LicenseManager) Metrics() *LicenseMetrics {
+func (lm *Manager) Metrics() *Metrics {
 	return lm.metrics
 }
 
 // loadToken загружает токен из конфигурации.
-func (lm *LicenseManager) loadToken(cfg LicenseConfig) (string, error) {
+func (lm *Manager) loadToken(cfg Config) (string, error) {
 	if cfg.Key != "" {
 		return cfg.Key, nil
 	}
@@ -218,10 +241,13 @@ func (lm *LicenseManager) loadToken(cfg LicenseConfig) (string, error) {
 		if err != nil {
 			if os.IsNotExist(err) {
 				lm.logger.Error("license file not found, operating in community mode", "file", cfg.File)
+
 				return "", fmt.Errorf("%w: %s", ErrFileNotFound, cfg.File)
 			}
+
 			return "", fmt.Errorf("read license file: %w", err)
 		}
+
 		return string(data), nil
 	}
 
@@ -229,7 +255,7 @@ func (lm *LicenseManager) loadToken(cfg LicenseConfig) (string, error) {
 }
 
 // applyToken парсит и применяет токен, обновляя кэш.
-func (lm *LicenseManager) applyToken(token string) error {
+func (lm *Manager) applyToken(token string) error {
 	claims, err := lm.ParseToken(token)
 	if err != nil {
 		lm.logger.Error("failed to parse license token, operating in community mode", "error", err)
@@ -237,6 +263,7 @@ func (lm *LicenseManager) applyToken(token string) error {
 		lm.claims = CommunityDefaults()
 		lm.valid = false
 		lm.mu.Unlock()
+
 		return err
 	}
 
@@ -248,6 +275,7 @@ func (lm *LicenseManager) applyToken(token string) error {
 		lm.claims = CommunityDefaults()
 		lm.valid = false
 		lm.mu.Unlock()
+
 		return ErrTokenExpired
 	}
 
@@ -266,7 +294,7 @@ func (lm *LicenseManager) applyToken(token string) error {
 }
 
 // checkExpiration проверяет истечение лицензии.
-func (lm *LicenseManager) checkExpiration() {
+func (lm *Manager) checkExpiration() {
 	lm.mu.RLock()
 	expiresAt := lm.claims.ExpiresAt
 	valid := lm.valid
@@ -291,7 +319,7 @@ func (lm *LicenseManager) checkExpiration() {
 }
 
 // updateMetrics обновляет Prometheus-метрики.
-func (lm *LicenseManager) updateMetrics() {
+func (lm *Manager) updateMetrics() {
 	lm.mu.RLock()
 	valid := lm.valid
 	expiresAt := lm.claims.ExpiresAt
@@ -321,8 +349,9 @@ func extractClaims(token *paseto.Token) (Claims, error) {
 		MaxPlugins int       `json:"max_plugins"`
 		RefreshURL string    `json:"refresh_url"`
 	}
-	if err := json.Unmarshal(claimsJSON, &raw); err != nil {
-		return Claims{}, fmt.Errorf("%w: %s", ErrInvalidClaims, err.Error())
+	err2 := json.Unmarshal(claimsJSON, &raw)
+	if err2 != nil {
+		return Claims{}, fmt.Errorf("%w: %s", ErrInvalidClaims, err2.Error())
 	}
 
 	// Extract time fields using the PASETO token's built-in methods (RFC3339).

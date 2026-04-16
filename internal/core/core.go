@@ -1,4 +1,3 @@
-// Package core contains the core implementation of the business logic.
 package core
 
 import (
@@ -36,7 +35,7 @@ func New(metrics Metrics, registry Registry, featureGate FeatureGate, auditCh ch
 
 // sendAudit sends an audit entry to the audit channel.
 // Blocks until the entry is sent or the context is cancelled.
-func (c *Core) sendAudit(ctx context.Context, entry AuditEntry) {
+func (c *Core) sendAudit(ctx context.Context, entry AuditEntry) { //nolint:funcorder,lll // sendAudit is a helper used by public methods above it
 	select {
 	case c.auditCh <- entry:
 	case <-ctx.Done():
@@ -50,31 +49,36 @@ func (c *Core) Generate(ctx context.Context, req GenerateCodeRequest) (*Generate
 
 	group, err := getGroup(req.PluginName)
 	if err != nil {
-		c.auditError(ctx, OperationGenerateCode, req.PluginName, start, err, nil)
+		c.auditError(ctx, OperationGenerateCode, req.PluginName, start, err)
+
 		return nil, fmt.Errorf("getGroup: %w", err)
 	}
 
 	name, version, err := getNameAndVersion(req.PluginName)
 	if err != nil {
-		c.auditError(ctx, OperationGenerateCode, req.PluginName, start, err, nil)
+		c.auditError(ctx, OperationGenerateCode, req.PluginName, start, err)
+
 		return nil, fmt.Errorf("getNameAndVersion: %w", err)
 	}
 
 	plugin, err := c.registry.Get(ctx, group, name, version)
 	if err != nil {
-		c.auditError(ctx, OperationGenerateCode, req.PluginName, start, err, nil)
+		c.auditError(ctx, OperationGenerateCode, req.PluginName, start, err)
+
 		return nil, fmt.Errorf("c.registry.Get: %w", err)
 	}
 
 	generatedCode, err := plugin.Generate(ctx, req.Payload)
 	if err != nil {
-		c.auditError(ctx, OperationGenerateCode, req.PluginName, start, err, nil)
+		c.auditError(ctx, OperationGenerateCode, req.PluginName, start, err)
+
 		return nil, fmt.Errorf("plugin.Generate: %w", err)
 	}
 
 	err = c.metrics.GenerateCode(ctx, *plugin.Info(ctx))
 	if err != nil {
-		c.auditError(ctx, OperationGenerateCode, req.PluginName, start, err, nil)
+		c.auditError(ctx, OperationGenerateCode, req.PluginName, start, err)
+
 		return nil, fmt.Errorf("c.metrics.GenerateCode: %w", err)
 	}
 
@@ -94,7 +98,8 @@ func (c *Core) ListPlugins(ctx context.Context, filter PluginFilter) ([]PluginIn
 
 	plugins, err := c.registry.List(ctx, filter)
 	if err != nil {
-		c.auditError(ctx, OperationListPlugins, "", start, err, nil)
+		c.auditError(ctx, OperationListPlugins, "", start, err)
+
 		return nil, fmt.Errorf("c.registry.List: %w", err)
 	}
 
@@ -108,7 +113,7 @@ func (c *Core) ListPlugins(ctx context.Context, filter PluginFilter) ([]PluginIn
 
 func getGroup(pluginName string) (string, error) {
 	splitArray := strings.Split(pluginName, "/")
-	if len(splitArray) != 2 {
+	if len(splitArray) != pluginNameParts {
 		return "", fmt.Errorf("%w: %s", ErrInvalidPluginName, pluginName)
 	}
 
@@ -117,12 +122,12 @@ func getGroup(pluginName string) (string, error) {
 
 func getNameAndVersion(pluginName string) (string, string, error) {
 	splitArray := strings.Split(pluginName, "/")
-	if len(splitArray) != 2 {
+	if len(splitArray) != pluginNameParts {
 		return "", "", fmt.Errorf("%w: %s", ErrInvalidPluginName, pluginName)
 	}
 
 	nameVersion := strings.Split(splitArray[1], ":")
-	if len(nameVersion) != 2 {
+	if len(nameVersion) != pluginNameParts {
 		return "", "", fmt.Errorf("%w: %s", ErrInvalidPluginName, pluginName)
 	}
 
@@ -134,6 +139,8 @@ var (
 	versionRegexp = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
 )
 
+const pluginNameParts = 2 // "{group}/{name}:{version}" splits into exactly 2 parts by "/" and ":"
+
 func validateGroupName(group, name string) error {
 	if !nameRegexp.MatchString(group) {
 		return fmt.Errorf("%w: invalid group %q", ErrInvalidPluginName, group)
@@ -141,6 +148,7 @@ func validateGroupName(group, name string) error {
 	if !nameRegexp.MatchString(name) {
 		return fmt.Errorf("%w: invalid name %q", ErrInvalidPluginName, name)
 	}
+
 	return nil
 }
 
@@ -148,18 +156,20 @@ func validateVersion(version string) error {
 	if version != "latest" && !versionRegexp.MatchString(version) {
 		return fmt.Errorf("%w: invalid version %q", ErrInvalidPluginName, version)
 	}
+
 	return nil
 }
 
 // checkFeature returns ErrFeatureDenied if the given feature is not enabled.
 // If featureGate is nil, all features are considered available.
-func (c *Core) checkFeature(feature Feature) error {
+func (c *Core) checkFeature(feature Feature) error { //nolint:funcorder // checkFeature is a helper used by public methods above it
 	if c.featureGate == nil {
 		return nil
 	}
 	if c.featureGate.Enabled(feature) {
 		return nil
 	}
+
 	return fmt.Errorf("%w: feature %s", ErrFeatureDenied, feature)
 }
 
@@ -168,16 +178,22 @@ func (c *Core) CreatePlugin(ctx context.Context, req CreatePluginRequest) (*Plug
 	start := time.Now()
 	pluginName := req.Group + "/" + req.Name + ":" + req.Version
 
-	if err := c.checkFeature(FeaturePluginCRUD); err != nil {
-		c.auditError(ctx, OperationCreatePlugin, pluginName, start, err, nil)
+	err := c.checkFeature(FeaturePluginCRUD)
+	if err != nil {
+		c.auditError(ctx, OperationCreatePlugin, pluginName, start, err)
+
 		return nil, err
 	}
-	if err := validateGroupName(req.Group, req.Name); err != nil {
-		c.auditError(ctx, OperationCreatePlugin, pluginName, start, err, nil)
+	err = validateGroupName(req.Group, req.Name)
+	if err != nil {
+		c.auditError(ctx, OperationCreatePlugin, pluginName, start, err)
+
 		return nil, err
 	}
-	if err := validateVersion(req.Version); err != nil {
-		c.auditError(ctx, OperationCreatePlugin, pluginName, start, err, nil)
+	err = validateVersion(req.Version)
+	if err != nil {
+		c.auditError(ctx, OperationCreatePlugin, pluginName, start, err)
+
 		return nil, err
 	}
 
@@ -185,19 +201,22 @@ func (c *Core) CreatePlugin(ctx context.Context, req CreatePluginRequest) (*Plug
 	if limit := c.featureGate.MaxPlugins(); limit >= 0 {
 		plugins, err := c.registry.List(ctx, PluginFilter{})
 		if err != nil {
-			c.auditError(ctx, OperationCreatePlugin, pluginName, start, err, nil)
+			c.auditError(ctx, OperationCreatePlugin, pluginName, start, err)
+
 			return nil, fmt.Errorf("c.registry.List: %w", err)
 		}
 		if len(plugins) >= limit {
 			err = fmt.Errorf("%w: current %d, limit %d", ErrMaxPluginsExceeded, len(plugins), limit)
-			c.auditError(ctx, OperationCreatePlugin, pluginName, start, err, nil)
+			c.auditError(ctx, OperationCreatePlugin, pluginName, start, err)
+
 			return nil, err
 		}
 	}
 
 	info, err := c.registry.Create(ctx, req)
 	if err != nil {
-		c.auditError(ctx, OperationCreatePlugin, pluginName, start, err, nil)
+		c.auditError(ctx, OperationCreatePlugin, pluginName, start, err)
+
 		return nil, fmt.Errorf("c.registry.Create: %w", err)
 	}
 
@@ -212,22 +231,29 @@ func (c *Core) UpdatePlugin(ctx context.Context, req UpdatePluginRequest) (*Plug
 	start := time.Now()
 	pluginName := req.Group + "/" + req.Name + ":" + req.Version
 
-	if err := c.checkFeature(FeaturePluginCRUD); err != nil {
-		c.auditError(ctx, OperationUpdatePlugin, pluginName, start, err, nil)
+	err := c.checkFeature(FeaturePluginCRUD)
+	if err != nil {
+		c.auditError(ctx, OperationUpdatePlugin, pluginName, start, err)
+
 		return nil, err
 	}
-	if err := validateGroupName(req.Group, req.Name); err != nil {
-		c.auditError(ctx, OperationUpdatePlugin, pluginName, start, err, nil)
+	err = validateGroupName(req.Group, req.Name)
+	if err != nil {
+		c.auditError(ctx, OperationUpdatePlugin, pluginName, start, err)
+
 		return nil, err
 	}
-	if err := validateVersion(req.Version); err != nil {
-		c.auditError(ctx, OperationUpdatePlugin, pluginName, start, err, nil)
+	err = validateVersion(req.Version)
+	if err != nil {
+		c.auditError(ctx, OperationUpdatePlugin, pluginName, start, err)
+
 		return nil, err
 	}
 
 	info, err := c.registry.Update(ctx, req)
 	if err != nil {
-		c.auditError(ctx, OperationUpdatePlugin, pluginName, start, err, nil)
+		c.auditError(ctx, OperationUpdatePlugin, pluginName, start, err)
+
 		return nil, fmt.Errorf("c.registry.Update: %w", err)
 	}
 
@@ -243,12 +269,17 @@ func (c *Core) DeletePlugin(ctx context.Context, group, name, version string) er
 	start := time.Now()
 	pluginName := group + "/" + name + ":" + version
 
-	if err := c.checkFeature(FeaturePluginCRUD); err != nil {
-		c.auditError(ctx, OperationDeletePlugin, pluginName, start, err, nil)
+	err := c.checkFeature(FeaturePluginCRUD)
+	if err != nil {
+		c.auditError(ctx, OperationDeletePlugin, pluginName, start, err)
+
 		return err
 	}
-	if err := c.registry.Delete(ctx, group, name, version); err != nil {
-		c.auditError(ctx, OperationDeletePlugin, pluginName, start, err, nil)
+
+	err = c.registry.Delete(ctx, group, name, version)
+	if err != nil {
+		c.auditError(ctx, OperationDeletePlugin, pluginName, start, err)
+
 		return fmt.Errorf("c.registry.Delete: %w", err)
 	}
 
@@ -300,10 +331,8 @@ func (c *Core) auditSuccess(ctx context.Context, opType, pluginName string, star
 }
 
 // auditError creates and sends an error audit entry.
-func (c *Core) auditError(ctx context.Context, opType, pluginName string, start time.Time, err error, metadata map[string]any) {
-	if metadata == nil {
-		metadata = make(map[string]any)
-	}
+func (c *Core) auditError(ctx context.Context, opType, pluginName string, start time.Time, err error) {
+	metadata := make(map[string]any)
 	id, _ := uuid.NewV4()
 	c.sendAudit(ctx, AuditEntry{
 		ID:            id,

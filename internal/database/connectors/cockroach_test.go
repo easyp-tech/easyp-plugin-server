@@ -16,14 +16,13 @@ func TestCockroachDB_Unmarshal(t *testing.T) {
 
 	testCases := map[string]struct {
 		path    string
-		decoder func([]byte, interface{}) error
+		decoder func([]byte, any) error
 	}{
-		"json": {"testdata/cockroach_db.json", func(b []byte, i interface{}) error { return json.Unmarshal(b, i) }},
-		"yaml": {"testdata/cockroach_db.yaml", func(b []byte, i interface{}) error { return yaml.Unmarshal(b, i) }},
+		"json": {"testdata/cockroach_db.json", json.Unmarshal},
+		"yaml": {"testdata/cockroach_db.yaml", yaml.Unmarshal},
 	}
 
 	for name, tc := range testCases {
-		name, tc := name, tc
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			r := require.New(t)
@@ -56,6 +55,7 @@ func TestCockroachDB_DSN(t *testing.T) {
 		t.Parameters = parameters
 
 		fn(&t)
+
 		return t
 	}
 
@@ -107,7 +107,6 @@ func TestCockroachDB_DSN(t *testing.T) {
 	}
 
 	for name, tc := range testCases {
-		name, tc := name, tc
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			r := require.New(t)

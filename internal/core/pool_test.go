@@ -33,6 +33,7 @@ func (m *mockRegistry) Create(ctx context.Context, req CreatePluginRequest) (*Pl
 	if m.createFn != nil {
 		return m.createFn(ctx, req)
 	}
+
 	return nil, nil
 }
 
@@ -40,6 +41,7 @@ func (m *mockRegistry) Update(ctx context.Context, req UpdatePluginRequest) (*Pl
 	if m.updateFn != nil {
 		return m.updateFn(ctx, req)
 	}
+
 	return nil, nil
 }
 
@@ -47,6 +49,7 @@ func (m *mockRegistry) Delete(ctx context.Context, group, name, version string) 
 	if m.deleteFn != nil {
 		return m.deleteFn(ctx, group, name, version)
 	}
+
 	return nil
 }
 
@@ -172,7 +175,7 @@ func TestNewWorkerPool_ConfigNormalization(t *testing.T) {
 
 func TestWorkerPool_Get_Success(t *testing.T) {
 	wantResp := &pluginpb.CodeGeneratorResponse{
-		Error: strPtr(""),
+		Error: new(""),
 	}
 
 	mp := &mockPlugin{
@@ -189,6 +192,7 @@ func TestWorkerPool_Get_Success(t *testing.T) {
 			if group != "grpc" || name != "go" || version != "v1.0.0" {
 				t.Errorf("unexpected params: %s/%s:%s", group, name, version)
 			}
+
 			return mp, nil
 		},
 	}
@@ -221,8 +225,6 @@ func TestWorkerPool_Get_Success(t *testing.T) {
 	}
 }
 
-func strPtr(s string) *string { return &s }
-
 // --- Test 3: Get backpressure ---
 
 func TestWorkerPool_Get_Backpressure(t *testing.T) {
@@ -238,6 +240,7 @@ func TestWorkerPool_Get_Backpressure(t *testing.T) {
 			}
 			// Block until test releases
 			<-blocked
+
 			return &mockPlugin{
 				generateFn: func(_ context.Context, _ *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
 					return &pluginpb.CodeGeneratorResponse{}, nil
@@ -335,7 +338,7 @@ func TestPoolPlugin_Generate_Timeout(t *testing.T) {
 
 func TestPoolPlugin_Generate_RetrySuccess(t *testing.T) {
 	callCount := 0
-	wantResp := &pluginpb.CodeGeneratorResponse{Error: strPtr("")}
+	wantResp := &pluginpb.CodeGeneratorResponse{Error: new("")}
 
 	mp := &mockPlugin{
 		generateFn: func(_ context.Context, _ *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
@@ -383,6 +386,7 @@ func TestPoolPlugin_Generate_RetryExhausted(t *testing.T) {
 	mp := &mockPlugin{
 		generateFn: func(_ context.Context, _ *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
 			callCount++
+
 			return nil, transientErr
 		},
 		infoFn: func(_ context.Context) *PluginInfo {
@@ -424,12 +428,14 @@ func TestWorkerPool_List_Proxy(t *testing.T) {
 	reg := &mockRegistry{
 		getFn: func(_ context.Context, _, _, _ string) (Plugin, error) {
 			t.Fatal("Get should not be called for List")
+
 			return nil, nil
 		},
 		listFn: func(_ context.Context, filter PluginFilter) ([]PluginInfo, error) {
 			if filter.Group != "protobuf" {
 				t.Errorf("unexpected filter group: %s", filter.Group)
 			}
+
 			return wantPlugins, nil
 		},
 	}

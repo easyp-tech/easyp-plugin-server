@@ -29,6 +29,7 @@ func drainAudit(t *testing.T, ch <-chan AuditEntry) AuditEntry {
 		return e
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for audit entry")
+
 		return AuditEntry{}
 	}
 }
@@ -45,6 +46,7 @@ func (m *mockFeatureGate) Enabled(feature Feature) bool {
 	if m.enabledFn != nil {
 		return m.enabledFn(feature)
 	}
+
 	return true
 }
 
@@ -52,6 +54,7 @@ func (m *mockFeatureGate) MaxWorkers() int {
 	if m.maxWorkersFn != nil {
 		return m.maxWorkersFn()
 	}
+
 	return -1
 }
 
@@ -59,6 +62,7 @@ func (m *mockFeatureGate) MaxPlugins() int {
 	if m.maxPluginsFn != nil {
 		return m.maxPluginsFn()
 	}
+
 	return -1
 }
 
@@ -75,6 +79,7 @@ func TestGenerate_PreservationAfterCRUD(t *testing.T) {
 			if group != "grpc" || name != "go" || version != "v1.5.1" {
 				t.Fatalf("unexpected Get(%q, %q, %q)", group, name, version)
 			}
+
 			return &mockPlugin{
 				generateFn: func(_ context.Context, _ *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
 					return wantResp, nil
@@ -142,6 +147,7 @@ func TestCreatePlugin_Success(t *testing.T) {
 			if req.Group != "grpc" || req.Name != "go" || req.Version != "v1.5.1" {
 				t.Fatalf("unexpected Create(%+v)", req)
 			}
+
 			return want, nil
 		},
 	}
@@ -317,6 +323,7 @@ func TestUpdatePlugin_Success(t *testing.T) {
 			if req.Group != "grpc" || req.Name != "go" || req.Version != "v1.5.1" {
 				t.Fatalf("unexpected Update(%+v)", req)
 			}
+
 			return want, nil
 		},
 	}
@@ -366,6 +373,7 @@ func TestDeletePlugin_Success(t *testing.T) {
 			if group != "grpc" || name != "go" || version != "v1.5.1" {
 				t.Fatalf("unexpected Delete(%q, %q, %q)", group, name, version)
 			}
+
 			return nil
 		},
 	}
@@ -409,6 +417,7 @@ func TestCreatePlugin_FeatureDenied(t *testing.T) {
 		listFn: func(_ context.Context, _ PluginFilter) ([]PluginInfo, error) { return nil, nil },
 		createFn: func(_ context.Context, _ CreatePluginRequest) (*PluginInfo, error) {
 			t.Fatal("registry.Create must not be called when feature is denied")
+
 			return nil, nil
 		},
 	}
@@ -433,6 +442,7 @@ func TestUpdatePlugin_FeatureDenied(t *testing.T) {
 		listFn: func(_ context.Context, _ PluginFilter) ([]PluginInfo, error) { return nil, nil },
 		updateFn: func(_ context.Context, _ UpdatePluginRequest) (*PluginInfo, error) {
 			t.Fatal("registry.Update must not be called when feature is denied")
+
 			return nil, nil
 		},
 	}
@@ -457,6 +467,7 @@ func TestDeletePlugin_FeatureDenied(t *testing.T) {
 		listFn: func(_ context.Context, _ PluginFilter) ([]PluginInfo, error) { return nil, nil },
 		deleteFn: func(_ context.Context, _, _, _ string) error {
 			t.Fatal("registry.Delete must not be called when feature is denied")
+
 			return nil
 		},
 	}
@@ -474,7 +485,7 @@ func TestGenerate_AuditSuccess(t *testing.T) {
 	t.Parallel()
 
 	wantResp := &pluginpb.CodeGeneratorResponse{
-		File: []*pluginpb.CodeGeneratorResponse_File{{Name: strPtr("test.go")}},
+		File: []*pluginpb.CodeGeneratorResponse_File{{Name: new("test.go")}},
 	}
 	wantInfo := &PluginInfo{Group: "grpc", Name: "go", Version: "v1.5.1"}
 

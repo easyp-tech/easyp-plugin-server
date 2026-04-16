@@ -10,8 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/easyp-tech/service/internal/database"
 	"gopkg.in/yaml.v3"
+
+	"github.com/easyp-tech/service/internal/database"
 )
 
 var (

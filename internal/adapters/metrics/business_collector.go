@@ -109,8 +109,10 @@ func (c *BusinessMetricsCollector) collectScalar(ch chan<- prometheus.Metric, de
 	defer cancel()
 
 	var count int64
-	if err := c.db.QueryRowContext(ctx, query).Scan(&count); err != nil {
+	err := c.db.QueryRowContext(ctx, query).Scan(&count)
+	if err != nil {
 		c.log.Error("failed to collect metric", "metric", name, "error", err)
+
 		return
 	}
 
@@ -124,21 +126,25 @@ func (c *BusinessMetricsCollector) collectGrouped(ch chan<- prometheus.Metric, d
 	rows, err := c.db.QueryContext(ctx, query)
 	if err != nil {
 		c.log.Error("failed to collect metric", "metric", name, "error", err)
+
 		return
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck // rows.Close() error is secondary to rows.Err()
 
 	for rows.Next() {
 		var labelValue string
 		var count int64
-		if err := rows.Scan(&labelValue, &count); err != nil {
+		err := rows.Scan(&labelValue, &count)
+		if err != nil {
 			c.log.Error("failed to collect metric", "metric", name, "error", err)
+
 			return
 		}
 		ch <- prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, float64(count), labelValue)
 	}
 
-	if err := rows.Err(); err != nil {
+	err = rows.Err()
+	if err != nil {
 		c.log.Error("failed to collect metric", "metric", name, "error", err)
 	}
 }
@@ -150,21 +156,25 @@ func (c *BusinessMetricsCollector) collectGrouped2(ch chan<- prometheus.Metric, 
 	rows, err := c.db.QueryContext(ctx, query)
 	if err != nil {
 		c.log.Error("failed to collect metric", "metric", name, "error", err)
+
 		return
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck // rows.Close() error is secondary to rows.Err()
 
 	for rows.Next() {
 		var label1, label2 string
 		var count int64
-		if err := rows.Scan(&label1, &label2, &count); err != nil {
+		err := rows.Scan(&label1, &label2, &count)
+		if err != nil {
 			c.log.Error("failed to collect metric", "metric", name, "error", err)
+
 			return
 		}
 		ch <- prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, float64(count), label1, label2)
 	}
 
-	if err := rows.Err(); err != nil {
+	err = rows.Err()
+	if err != nil {
 		c.log.Error("failed to collect metric", "metric", name, "error", err)
 	}
 }

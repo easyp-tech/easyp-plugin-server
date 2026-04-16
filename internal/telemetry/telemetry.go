@@ -22,7 +22,11 @@ import (
 //
 // If OTLP exporter creation fails the error is logged as a warning and the
 // service continues to operate without telemetry export.
-func Init(ctx context.Context, cfg Config, baseHandler slog.Handler) (shutdownFn func(context.Context) error, logger *slog.Logger, err error) {
+func Init(ctx context.Context, cfg Config, baseHandler slog.Handler) (
+	func(context.Context) error, *slog.Logger, error,
+) {
+	var shutdownFn func(context.Context) error
+	var logger *slog.Logger
 	res := resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceName(cfg.ServiceName),
@@ -63,7 +67,7 @@ func Init(ctx context.Context, cfg Config, baseHandler slog.Handler) (shutdownFn
 	}
 	if metricExp != nil {
 		mpOpts = append(mpOpts, metric.WithReader(
-			metric.NewPeriodicReader(metricExp, metric.WithInterval(15*time.Second)),
+			metric.NewPeriodicReader(metricExp, metric.WithInterval(15*time.Second)), //nolint:mnd // 15s metric export interval
 		))
 	}
 	mp := metric.NewMeterProvider(mpOpts...)
@@ -98,6 +102,7 @@ func Init(ctx context.Context, cfg Config, baseHandler slog.Handler) (shutdownFn
 		if profiler != nil {
 			pyroStopErr = profiler.Stop()
 		}
+
 		return errors.Join(
 			tp.Shutdown(ctx),
 			mp.Shutdown(ctx),

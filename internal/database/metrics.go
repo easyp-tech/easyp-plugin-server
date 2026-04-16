@@ -28,7 +28,8 @@ type Metrics struct {
 
 // NewMetrics registers and returns common DAL metrics used by all
 // services (namespace).
-func NewMetrics(reg *prometheus.Registry, namespace, subsystem string, methodsFrom any) (metric Metrics) {
+func NewMetrics(reg *prometheus.Registry, namespace, subsystem string, methodsFrom any) Metrics {
+	var metric Metrics
 	metric.callErrTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -62,21 +63,24 @@ func NewMetrics(reg *prometheus.Registry, namespace, subsystem string, methodsFr
 }
 
 // Collecting implements MetricCollector.
-func (m Metrics) Collecting(method string, f func() error) func() error {
-	return func() (err error) {
+func (m Metrics) Collecting(method string, fn func() error) func() error {
+	return func() error {
 		start := time.Now()
-		l := prometheus.Labels{labelFunc: method}
+		labels := prometheus.Labels{labelFunc: method}
+		var result error
 		defer func() {
-			m.callDuration.With(l).Observe(time.Since(start).Seconds())
-			if err != nil {
-				m.callErrTotal.With(l).Inc()
-			} else if err := recover(); err != nil {
-				m.callErrTotal.With(l).Inc()
-				panic(err)
+			m.callDuration.With(labels).Observe(time.Since(start).Seconds())
+			if result != nil {
+				m.callErrTotal.With(labels).Inc()
+			} else if r := recover(); r != nil {
+				m.callErrTotal.With(labels).Inc()
+				panic(r)
 			}
 		}()
 
-		return f()
+		result = fn()
+
+		return result
 	}
 }
 

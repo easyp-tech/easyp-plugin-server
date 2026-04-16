@@ -12,9 +12,10 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/easyp-tech/service/internal/core"
 	"github.com/gofrs/uuid/v5"
 	"github.com/lib/pq"
+
+	"github.com/easyp-tech/service/internal/core"
 )
 
 // **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6**
@@ -31,6 +32,7 @@ func preservationSourceText(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("failed to read registry.go: %v", err)
 	}
+
 	return string(data)
 }
 
@@ -43,6 +45,7 @@ func preservationNodeSource(t *testing.T, node ast.Node) string {
 	if start < 0 || end > len(src) {
 		t.Fatal("AST node position out of range")
 	}
+
 	return src[start:end]
 }
 
@@ -59,6 +62,7 @@ func preservationFindMethod(t *testing.T, f *ast.File, name string) *ast.FuncDec
 		}
 	}
 	t.Fatalf("method %q not found in registry.go", name)
+
 	return nil
 }
 
@@ -144,7 +148,8 @@ func TestPreservation_PluginInfoMapping(t *testing.T) {
 			len(info.Tags) == count
 	}
 
-	if err := quick.Check(prop, &quick.Config{MaxCount: 200}); err != nil {
+	err := quick.Check(prop, &quick.Config{MaxCount: 200})
+	if err != nil {
 		t.Fatalf("PluginInfo mapping property violated: %v", err)
 	}
 }
@@ -280,7 +285,7 @@ func TestPreservation_HealthUsesPing(t *testing.T) {
 // TestPreservation_HealthAcceptsContext verifies that Health method accepts
 // a context.Context parameter for cancellation/timeout support.
 func TestPreservation_HealthAcceptsContext(t *testing.T) {
-	rt := reflect.TypeOf(&Registry{})
+	rt := reflect.TypeFor[*Registry]()
 	method, ok := rt.MethodByName("Health")
 	if !ok {
 		t.Fatal("Registry must have a Health method")
@@ -322,7 +327,7 @@ func TestPreservation_CloseCallsDBClose(t *testing.T) {
 // TestPreservation_CloseReturnsError verifies that Close returns an error
 // to allow callers to handle connection cleanup failures.
 func TestPreservation_CloseReturnsError(t *testing.T) {
-	rt := reflect.TypeOf(&Registry{})
+	rt := reflect.TypeFor[*Registry]()
 	method, ok := rt.MethodByName("Close")
 	if !ok {
 		t.Fatal("Registry must have a Close method")
@@ -377,7 +382,8 @@ func TestPreservation_PluginConfigParsing(t *testing.T) {
 			parsed.Docker.ReadOnly == readOnly
 	}
 
-	if err := quick.Check(prop, &quick.Config{MaxCount: 200}); err != nil {
+	err := quick.Check(prop, &quick.Config{MaxCount: 200})
+	if err != nil {
 		t.Fatalf("PluginConfig parsing property violated: %v", err)
 	}
 }
@@ -387,7 +393,7 @@ func TestPreservation_PluginConfigParsing(t *testing.T) {
 // TestPreservation_RegistryImplementsCoreRegistry verifies that Registry
 // implements the core.Registry interface (Get + List methods).
 func TestPreservation_RegistryImplementsCoreRegistry(t *testing.T) {
-	registryType := reflect.TypeOf(&Registry{})
+	registryType := reflect.TypeFor[*Registry]()
 	ifaceType := reflect.TypeFor[core.Registry]()
 
 	if !registryType.Implements(ifaceType) {
@@ -398,7 +404,7 @@ func TestPreservation_RegistryImplementsCoreRegistry(t *testing.T) {
 // TestPreservation_PluginImplementsCorePlugin verifies that plugin
 // implements the core.Plugin interface (Generate + Info methods).
 func TestPreservation_PluginImplementsCorePlugin(t *testing.T) {
-	pluginType := reflect.TypeOf(&plugin{})
+	pluginType := reflect.TypeFor[*plugin]()
 	ifaceType := reflect.TypeFor[core.Plugin]()
 
 	if !pluginType.Implements(ifaceType) {
@@ -409,7 +415,7 @@ func TestPreservation_PluginImplementsCorePlugin(t *testing.T) {
 // TestPreservation_GetMethodSignature verifies the Get method signature
 // matches the core.Registry interface exactly.
 func TestPreservation_GetMethodSignature(t *testing.T) {
-	rt := reflect.TypeOf(&Registry{})
+	rt := reflect.TypeFor[*Registry]()
 	method, ok := rt.MethodByName("Get")
 	if !ok {
 		t.Fatal("Registry must have a Get method")
@@ -436,7 +442,7 @@ func TestPreservation_GetMethodSignature(t *testing.T) {
 // TestPreservation_ListMethodSignature verifies the List method signature
 // matches the core.Registry interface exactly.
 func TestPreservation_ListMethodSignature(t *testing.T) {
-	rt := reflect.TypeOf(&Registry{})
+	rt := reflect.TypeFor[*Registry]()
 	method, ok := rt.MethodByName("List")
 	if !ok {
 		t.Fatal("Registry must have a List method")

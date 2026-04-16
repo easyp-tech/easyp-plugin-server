@@ -18,6 +18,14 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
+const (
+	defaultGenerationTimeout = 120 * time.Second
+	defaultShutdownTimeout   = 30 * time.Second
+	dockerExitCodeError      = 125 // Docker daemon error exit code
+	dockerExitCodeNotFound   = 126 // Docker command not found exit code
+	dockerExitCodePermission = 127 // Docker permission denied exit code
+)
+
 // WorkerPoolConfig содержит параметры конфигурации worker pool.
 type WorkerPoolConfig struct {
 	Workers           int
@@ -67,7 +75,10 @@ type poolPlugin struct {
 }
 
 // NewWorkerPool создаёт WorkerPool с нормализованной конфигурацией.
-func NewWorkerPool(inner Registry, cfg WorkerPoolConfig, logger *slog.Logger, metrics Metrics, reg *prometheus.Registry, namespace string) *WorkerPool {
+func NewWorkerPool(
+	inner Registry, cfg WorkerPoolConfig, logger *slog.Logger,
+	metrics Metrics, reg *prometheus.Registry, namespace string,
+) *WorkerPool {
 	if cfg.Workers < 1 {
 		cfg.Workers = 1
 	}
@@ -75,13 +86,13 @@ func NewWorkerPool(inner Registry, cfg WorkerPoolConfig, logger *slog.Logger, me
 		cfg.QueueSize = 0
 	}
 	if cfg.GenerationTimeout == 0 {
-		cfg.GenerationTimeout = 120 * time.Second
+		cfg.GenerationTimeout = defaultGenerationTimeout
 	}
 	if cfg.MaxRetries == 0 {
 		cfg.MaxRetries = 2
 	}
 	if cfg.ShutdownTimeout == 0 {
-		cfg.ShutdownTimeout = 30 * time.Second
+		cfg.ShutdownTimeout = defaultShutdownTimeout
 	}
 
 	jobs := make(chan job, cfg.QueueSize)
@@ -137,21 +148,22 @@ func (p *WorkerPool) Start(ctx context.Context) {
 	}
 }
 
-func (p *WorkerPool) worker(ctx context.Context) {
+func (p *WorkerPool) worker(ctx context.Context) { //nolint:funcorder // worker and processJob are implementation details of the pool
 	defer p.wg.Done()
 	for j := range p.jobs {
 		p.processJob(ctx, j)
 	}
 }
 
-func (p *WorkerPool) processJob(_ context.Context, j job) {
+func (p *WorkerPool) processJob(_ context.Context, work job) { //nolint:funcorder,lll // worker and processJob are implementation details of the pool
 	p.activeWorkers.Inc()
 	defer p.activeWorkers.Dec()
 
-	pyroscope.TagWrapper(j.ctx, pyroscope.Labels("operation", "worker.process_job"), func(ctx context.Context) {
-		plugin, err := p.inner.Get(ctx, j.pluginGroup, j.pluginName, j.pluginVersion)
+	pyroscope.TagWrapper(work.ctx, pyroscope.Labels("operation", "worker.process_job"), func(ctx context.Context) {
+		plugin, err := p.inner.Get(ctx, work.pluginGroup, work.pluginName, work.pluginVersion)
 		if err != nil {
-			j.result <- jobResult{err: err}
+			work.result <- jobResult{err: err}
+
 			return
 		}
 
@@ -162,7 +174,7 @@ func (p *WorkerPool) processJob(_ context.Context, j job) {
 			metrics: p.metrics,
 		}
 
-		j.result <- jobResult{plugin: wrapped}
+		work.result <- jobResult{plugin: wrapped}
 	})
 }
 
@@ -181,7 +193,7 @@ func (p *WorkerPool) Get(ctx context.Context, pluginGroup, pluginName, pluginVer
 	}
 
 	resultCh := make(chan jobResult, 1)
-	j := job{
+	jobItem := job{
 		ctx:           ctx,
 		pluginGroup:   pluginGroup,
 		pluginName:    pluginName,
@@ -190,13 +202,14 @@ func (p *WorkerPool) Get(ctx context.Context, pluginGroup, pluginName, pluginVer
 	}
 
 	select {
-	case p.jobs <- j:
+	case p.jobs <- jobItem:
 		// Job принят в очередь
 		p.jobsTotal.Inc()
 	default:
 		p.logger.Warn("job queue full, rejecting request")
 		p.rejectedTotal.Inc()
 		span.AddEvent("pool.rejected")
+
 		return nil, ErrServerOverloaded
 	}
 
@@ -205,6 +218,7 @@ func (p *WorkerPool) Get(ctx context.Context, pluginGroup, pluginName, pluginVer
 	select {
 	case res := <-resultCh:
 		span.SetAttributes(attribute.Int64("pool.queue_wait_ms", time.Since(queueStart).Milliseconds()))
+
 		return res.plugin, res.err
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -246,14 +260,17 @@ func (pp *poolPlugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorR
 
 	maxAttempts := pp.cfg.MaxRetries + 1
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		if ctxErr := ctx.Err(); ctxErr != nil {
+		ctxErr := ctx.Err()
+		if ctxErr != nil {
 			pp.metrics.ObserveGenerationDuration(ctx, pluginName, time.Since(start))
+
 			return nil, ctxErr
 		}
 
 		resp, err = pp.inner.Generate(genCtx, req)
 		if err == nil {
 			pp.metrics.ObserveGenerationDuration(ctx, pluginName, time.Since(start))
+
 			return resp, nil
 		}
 
@@ -303,7 +320,7 @@ func isTransient(err error) bool {
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
 		switch exitErr.ExitCode() {
-		case 125, 126, 127:
+		case dockerExitCodeError, dockerExitCodeNotFound, dockerExitCodePermission:
 			return true
 		}
 	}
@@ -340,6 +357,7 @@ func (p *WorkerPool) Shutdown(timeout time.Duration) int {
 	case <-time.After(timeout):
 		lost := len(p.jobs)
 		p.logger.Warn("shutdown timeout, jobs lost", "count", lost)
+
 		return lost
 	}
 }

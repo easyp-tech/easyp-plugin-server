@@ -130,6 +130,7 @@ func decodeStructured(res *mcp.CallToolResult, dst any) error {
 	if err != nil {
 		return err
 	}
+
 	return json.Unmarshal(data, dst)
 }
 
@@ -140,6 +141,7 @@ func toolText(res *mcp.CallToolResult) string {
 			parts = append(parts, text.Text)
 		}
 	}
+
 	return strings.Join(parts, "\n")
 }
 

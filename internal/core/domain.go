@@ -52,8 +52,9 @@ var featureNames = [...]string{
 // String возвращает строковое представление Feature для метрик и логирования.
 func (f Feature) String() string {
 	if int(f) < 0 || int(f) >= len(featureNames) {
-		return "unknown"
+		return unknownValue
 	}
+
 	return featureNames[f]
 }
 
@@ -195,8 +196,8 @@ type (
 		MaxPlugins() int
 	}
 
-	// CoreService defines the business logic interface used by the API layer.
-	CoreService interface {
+	// Service defines the business logic interface used by the API layer.
+	Service interface {
 		Generate(ctx context.Context, req GenerateCodeRequest) (*GenerateCodeResponse, error)
 		ListPlugins(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
 		CreatePlugin(ctx context.Context, req CreatePluginRequest) (*PluginInfo, error)

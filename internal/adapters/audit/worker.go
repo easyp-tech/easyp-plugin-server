@@ -27,7 +27,10 @@ type Worker struct {
 
 // NewWorker создаёт воркер с буферизированным каналом.
 // Возвращает воркер и write-end канала для отправки аудит-событий.
-func NewWorker(store core.AuditLog, bufferSize int, logger *slog.Logger, reg *prometheus.Registry, namespace string) (*Worker, chan<- core.AuditEntry) {
+func NewWorker(
+	store core.AuditLog, bufferSize int, logger *slog.Logger,
+	reg *prometheus.Registry, namespace string,
+) (*Worker, chan<- core.AuditEntry) {
 	ch := make(chan core.AuditEntry, bufferSize)
 
 	eventsLost := prometheus.NewCounter(prometheus.CounterOpts{
@@ -48,7 +51,7 @@ func NewWorker(store core.AuditLog, bufferSize int, logger *slog.Logger, reg *pr
 		reg.MustRegister(queueDepth, eventsLost)
 	}
 
-	w := &Worker{
+	worker := &Worker{
 		store:      store,
 		entries:    ch,
 		entriesCh:  ch,
@@ -57,7 +60,8 @@ func NewWorker(store core.AuditLog, bufferSize int, logger *slog.Logger, reg *pr
 		eventsLost: eventsLost,
 		tracer:     otel.Tracer("audit"),
 	}
-	return w, ch
+
+	return worker, ch
 }
 
 // Run запускает воркер. Блокирует до закрытия канала entries.
@@ -70,7 +74,7 @@ func (w *Worker) Run(ctx context.Context) {
 }
 
 // saveEntry сохраняет аудит-запись с трейсингом.
-func (w *Worker) saveEntry(ctx context.Context, entry core.AuditEntry) {
+func (w *Worker) saveEntry(ctx context.Context, entry core.AuditEntry) { //nolint:funcorder,lll // saveEntry is a helper called by Run; logical cohesion outweighs order
 	ctx, span := w.tracer.Start(ctx, "audit.save",
 		trace.WithAttributes(
 			attribute.String("db.system", "postgresql"),
@@ -79,7 +83,8 @@ func (w *Worker) saveEntry(ctx context.Context, entry core.AuditEntry) {
 		))
 	defer span.End()
 
-	if err := w.store.Save(ctx, entry); err != nil {
+	err := w.store.Save(ctx, entry)
+	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		w.logger.Error("audit save failed", "error", err, "entry_id", entry.ID)
@@ -98,6 +103,7 @@ func (w *Worker) Shutdown(timeout time.Duration) int {
 		lost := len(w.entries)
 		w.eventsLost.Add(float64(lost))
 		w.logger.Warn("audit shutdown timeout, events lost", "count", lost)
+
 		return lost
 	}
 }

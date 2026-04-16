@@ -54,6 +54,6 @@ func (f *File) Set(s string) error {
 }
 
 // Read implements io.ReadCloser.
-func (f *File) Read(b []byte) (n int, err error) {
-	return f.file.Read(b)
+func (f *File) Read(b []byte) (int, error) {
+	return f.file.Read(b) //nolint:wrapcheck // delegating io.Reader; callers expect unwrapped errors
 }

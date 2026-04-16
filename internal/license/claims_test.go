@@ -32,7 +32,7 @@ func TestCommunityDefaults(t *testing.T) {
 		featureSet[f] = true
 	}
 
-	for f := feature(0); f < featureCount; f++ {
+	for f := range featureCount {
 		if !f.IsEnterprise() && !featureSet[f] {
 			t.Errorf("community defaults missing feature %s", f)
 		}
@@ -47,7 +47,7 @@ func TestCommunityDefaults_FeatureCount(t *testing.T) {
 
 	// Count expected community features.
 	var expected int
-	for f := feature(0); f < featureCount; f++ {
+	for f := range featureCount {
 		if !f.IsEnterprise() {
 			expected++
 		}

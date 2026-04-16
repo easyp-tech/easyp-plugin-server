@@ -1,4 +1,3 @@
-//nolint:testpackage // Testing unexported function.
 package internal
 
 import (
@@ -39,14 +38,13 @@ func TestTypeMethodName(t *testing.T) {
 		{"github.com/powerman/whoami/subpkg.(*T).M.func2.1", "T.M", false},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.given, func(tt *testing.T) {
 			r := require.New(t)
 
 			if tc.wantPanic {
 				r.Panics(func() { typeMethodName(tc.given) })
 			} else {
-				r.Equal(stripTypeRef(typeMethodName(tc.given)), tc.want)
+				r.Equal(tc.want, stripTypeRef(typeMethodName(tc.given)))
 			}
 		})
 	}
@@ -83,14 +81,13 @@ func TestMethodName(t *testing.T) {
 		{"github.com/powerman/whoami/subpkg.(*T).M.func2.1", "M", false},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.given, func(tt *testing.T) {
 			r := require.New(t)
 
 			if tc.wantPanic {
 				r.Panics(func() { methodName(tc.given) })
 			} else {
-				r.Equal(methodName(tc.given), tc.want)
+				r.Equal(tc.want, methodName(tc.given))
 			}
 		})
 	}
@@ -101,5 +98,6 @@ func stripTypeRef(name string) string {
 		pos := strings.IndexByte(name, ')')
 		name = name[2:pos] + name[pos+1:]
 	}
+
 	return name
 }

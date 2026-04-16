@@ -38,13 +38,13 @@ func Parse(path string) (Migrations, error) {
 // FromFS build migrations from file system.
 func FromFS(directory fs.FS, root string) (Migrations, error) {
 	var migrations Migrations
-	err := fs.WalkDir(directory, root, func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(directory, root, func(path string, dirEntry fs.DirEntry, err error) error {
 		switch {
 		case err != nil:
 			return err
-		case d.IsDir():
+		case dirEntry.IsDir():
 			return nil
-		case filepath.Ext(d.Name()) != migrationExt:
+		case filepath.Ext(dirEntry.Name()) != migrationExt:
 			return nil
 		}
 

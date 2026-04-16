@@ -11,13 +11,11 @@ import (
 	"github.com/easyp-tech/service/internal/core"
 )
 
-const pluginsListToolName = "plugins_list"
-
 type pluginToolHandler struct {
-	ps core.CoreService
+	ps core.Service
 }
 
-func newPluginToolHandler(ps core.CoreService) *pluginToolHandler {
+func newPluginToolHandler(ps core.Service) *pluginToolHandler {
 	return &pluginToolHandler{ps: ps}
 }
 
@@ -44,16 +42,16 @@ func (h *pluginToolHandler) Plugins(ctx context.Context, req *generator.PluginsR
 		return nil, fmt.Errorf("list plugins: %w", err)
 	}
 
-	response.Total = int32(len(plugins))
+	response.Total = int32(len(plugins)) //nolint:gosec // len() result fits int32 in practice
 	response.Plugins = make([]*generator.PluginInfo, 0, len(plugins))
-	for _, p := range plugins {
+	for _, plugInfo := range plugins {
 		response.Plugins = append(response.Plugins, &generator.PluginInfo{
-			Id:        p.ID.String(),
-			Group:     p.Group,
-			Name:      p.Name,
-			Version:   p.Version,
-			CreatedAt: timestamppb.New(p.CreatedAt),
-			Tags:      append([]string(nil), p.Tags...),
+			Id:        plugInfo.ID.String(),
+			Group:     plugInfo.Group,
+			Name:      plugInfo.Name,
+			Version:   plugInfo.Version,
+			CreatedAt: timestamppb.New(plugInfo.CreatedAt),
+			Tags:      append([]string(nil), plugInfo.Tags...),
 		})
 	}
 

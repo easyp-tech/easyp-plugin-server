@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
 
 	generator "github.com/easyp-tech/service/api/generator/v1"
@@ -46,22 +45,22 @@ func NewClient(addr string, opts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("grpc.NewClient %s: %w", addr, err)
 	}
 
-	c := &Client{
+	client := &Client{
 		conn:      conn,
 		genClient: generator.NewServiceAPIClient(conn),
 		cfg:       cfg,
 	}
 
 	if cfg.enableHealthCheck {
-		c.health = &healthMonitor{
+		client.health = &healthMonitor{
 			conn:     conn,
 			interval: cfg.healthCheckInterval,
 			stopCh:   make(chan struct{}),
 		}
-		go c.health.start()
+		go client.health.start()
 	}
 
-	return c, nil
+	return client, nil
 }
 
 // Close closes the underlying gRPC connection.
@@ -70,24 +69,34 @@ func (c *Client) Close() error {
 	if c.health != nil {
 		c.health.stop()
 	}
-	return c.conn.Close()
+
+	err := c.conn.Close()
+	if err != nil {
+		return fmt.Errorf("conn.Close: %w", err)
+	}
+
+	return nil
 }
 
 // withTimeout returns a context with the earlier of the user's existing deadline
 // or now+defaultTimeout. If the user has no deadline, defaultTimeout is used.
-func (c *Client) withTimeout(ctx context.Context, defaultTimeout time.Duration) (context.Context, context.CancelFunc) {
+func (c *Client) withTimeout(ctx context.Context, defaultTimeout time.Duration) (context.Context, context.CancelFunc) { //nolint:funcorder,lll // withTimeout is a helper used by public methods above it
 	if userDeadline, ok := ctx.Deadline(); ok {
 		deadline := time.Now().Add(defaultTimeout)
 		if userDeadline.Before(deadline) {
 			return ctx, func() {} // user deadline is earlier
 		}
+
 		return context.WithDeadline(ctx, deadline)
 	}
+
 	return context.WithTimeout(ctx, defaultTimeout)
 }
 
 // GenerateCode executes a plugin to generate code.
-func (c *Client) GenerateCode(ctx context.Context, pluginName string, req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
+func (c *Client) GenerateCode(
+	ctx context.Context, pluginName string, req *pluginpb.CodeGeneratorRequest,
+) (*pluginpb.CodeGeneratorResponse, error) {
 	ctx, cancel := c.withTimeout(ctx, c.cfg.generateCodeTimeout)
 	defer cancel()
 
@@ -99,7 +108,7 @@ func (c *Client) GenerateCode(ctx context.Context, pluginName string, req *plugi
 		return nil, fmt.Errorf("c.genClient.GenerateCode: %w", err)
 	}
 
-	return resp.CodeGeneratorResponse, nil
+	return resp.GetCodeGeneratorResponse(), nil
 }
 
 // ListPlugins retrieves a list of available plugins, optionally filtered.
@@ -110,13 +119,13 @@ func (c *Client) ListPlugins(ctx context.Context, filter ...PluginFilter) ([]*ge
 	req := &generator.PluginsRequest{}
 	if len(filter) > 0 {
 		if filter[0].Group != "" {
-			req.Group = proto.String(filter[0].Group)
+			req.Group = new(filter[0].Group)
 		}
 		if filter[0].Name != "" {
-			req.Name = proto.String(filter[0].Name)
+			req.Name = new(filter[0].Name)
 		}
 		if filter[0].Version != "" {
-			req.Version = proto.String(filter[0].Version)
+			req.Version = new(filter[0].Version)
 		}
 		req.Tags = append([]string(nil), filter[0].Tags...)
 	}
@@ -127,8 +136,8 @@ func (c *Client) ListPlugins(ctx context.Context, filter ...PluginFilter) ([]*ge
 	}
 
 	if len(filter) == 0 || filter[0].isEmpty() {
-		return resp.Plugins, nil
+		return resp.GetPlugins(), nil
 	}
 
-	return applyFilter(resp.Plugins, filter[0]), nil
+	return applyFilter(resp.GetPlugins(), filter[0]), nil
 }

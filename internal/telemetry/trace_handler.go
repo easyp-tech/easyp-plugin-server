@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"go.opentelemetry.io/otel/trace"
@@ -26,15 +27,21 @@ func (h *TraceHandler) Enabled(ctx context.Context, level slog.Level) bool {
 // Handle extracts SpanContext from ctx. When the SpanContext is valid it
 // appends trace_id and span_id attributes to the record before forwarding
 // to the inner handler. All existing record attributes are preserved.
-func (h *TraceHandler) Handle(ctx context.Context, r slog.Record) error {
+func (h *TraceHandler) Handle(ctx context.Context, rec slog.Record) error {
 	sc := trace.SpanContextFromContext(ctx)
 	if sc.IsValid() {
-		r.AddAttrs(
+		rec.AddAttrs(
 			slog.String("trace_id", sc.TraceID().String()),
 			slog.String("span_id", sc.SpanID().String()),
 		)
 	}
-	return h.inner.Handle(ctx, r)
+
+	err := h.inner.Handle(ctx, rec)
+	if err != nil {
+		return fmt.Errorf("inner.Handle: %w", err)
+	}
+
+	return nil
 }
 
 // WithAttrs returns a new TraceHandler wrapping the result of calling

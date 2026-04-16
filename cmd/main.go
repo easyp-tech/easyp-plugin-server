@@ -18,6 +18,7 @@ import (
 	"github.com/hellofresh/health-go/v5"
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sethvargo/go-envconfig"
 	"golang.org/x/sync/errgroup"
@@ -41,57 +42,59 @@ import (
 )
 
 const (
-	exitCode       = 2
-	configFileSize = 1024 * 1024
+	exitCode                 = 2
+	configFileSize           = 1024 * 1024
+	auditChannelCapacity     = 1000
+	componentShutdownTimeout = 5 * time.Second
 )
 
 type (
 	config struct {
-		Server     server           `yaml:"server" env:", prefix=SERVER_"`
-		DB         dbConfig         `yaml:"db" env:", prefix=DB_"`
-		Registry   registryConfig   `yaml:"registry" env:", prefix=REGISTRY_"`
-		Telemetry  telemetryConfig  `yaml:"telemetry" env:", prefix=TELEMETRY_"`
-		WorkerPool workerPoolConfig `yaml:"worker_pool" env:", prefix=WORKER_POOL_"`
-		License    licenseConfig    `yaml:"license" env:", prefix=LICENSE_"`
-		RateLimit  rateLimitConfig  `yaml:"rate_limit" env:", prefix=RATE_LIMIT_"`
+		Server     server           `env:", prefix=SERVER_"      yaml:"server"`
+		DB         dbConfig         `env:", prefix=DB_"          yaml:"db"`
+		Registry   registryConfig   `env:", prefix=REGISTRY_"    yaml:"registry"`
+		Telemetry  telemetryConfig  `env:", prefix=TELEMETRY_"   yaml:"telemetry"`
+		WorkerPool workerPoolConfig `env:", prefix=WORKER_POOL_" yaml:"worker_pool"`
+		License    licenseConfig    `env:", prefix=LICENSE_"     yaml:"license"`
+		RateLimit  rateLimitConfig  `env:", prefix=RATE_LIMIT_"  yaml:"rate_limit"`
 	}
 	server struct {
-		Host string `yaml:"host" env:"HOST, default=0.0.0.0"`
-		Port ports  `yaml:"port" env:", prefix=PORT_"`
+		Host string `env:"HOST, default=0.0.0.0" yaml:"host"`
+		Port ports  `env:", prefix=PORT_"        yaml:"port"`
 	}
 	ports struct {
-		GRPC   string `yaml:"grpc" env:"GRPC, default=23410"`
-		Metric string `yaml:"metric" env:"METRIC, default=23411"`
-		Health string `yaml:"health" env:"HEALTH, default=23412"`
-		MCP    string `yaml:"mcp" env:"MCP, default=23413"`
+		GRPC   string `env:"GRPC, default=23410"   yaml:"grpc"`
+		Metric string `env:"METRIC, default=23411" yaml:"metric"`
+		Health string `env:"HEALTH, default=23412" yaml:"health"`
+		MCP    string `env:"MCP, default=23413"    yaml:"mcp"`
 	}
 	dbConfig struct {
-		MigrateDir string `yaml:"migrate_dir" env:"MIGRATE_DIR, default=migrate"`
-		Driver     string `yaml:"driver" env:"DRIVER, default=postgres"`
-		Postgres   string `yaml:"postgres" env:"POSTGRES_DSN"`
+		MigrateDir string `env:"MIGRATE_DIR, default=migrate" yaml:"migrate_dir"`
+		Driver     string `env:"DRIVER, default=postgres"     yaml:"driver"`
+		Postgres   string `env:"POSTGRES_DSN"                 yaml:"postgres"`
 	}
 	registryConfig struct {
-		Domain string `yaml:"domain" env:"DOMAIN, default=localhost:5005"`
+		Domain string `env:"DOMAIN, default=localhost:5005" yaml:"domain"`
 	}
 	telemetryConfig struct {
-		OTLPEndpoint      string `yaml:"otlp_endpoint" env:"OTEL_EXPORTER_OTLP_ENDPOINT, default=localhost:4317"`
-		PyroscopeEndpoint string `yaml:"pyroscope_endpoint" env:"PYROSCOPE_ENDPOINT, default=http://localhost:4040"`
+		OTLPEndpoint      string `env:"OTEL_EXPORTER_OTLP_ENDPOINT, default=localhost:4317" yaml:"otlp_endpoint"`
+		PyroscopeEndpoint string `env:"PYROSCOPE_ENDPOINT, default=http://localhost:4040"   yaml:"pyroscope_endpoint"`
 	}
 	workerPoolConfig struct {
-		Workers           int           `yaml:"workers" env:"WORKERS,default=4"`
-		QueueSize         int           `yaml:"queue_size" env:"QUEUE_SIZE,default=16"`
-		GenerationTimeout time.Duration `yaml:"generation_timeout" env:"GENERATION_TIMEOUT,default=120s"`
-		MaxRetries        int           `yaml:"max_retries" env:"MAX_RETRIES,default=2"`
-		ShutdownTimeout   time.Duration `yaml:"shutdown_timeout" env:"SHUTDOWN_TIMEOUT,default=30s"`
+		Workers           int           `env:"WORKERS,default=4"               yaml:"workers"`
+		QueueSize         int           `env:"QUEUE_SIZE,default=16"           yaml:"queue_size"`
+		GenerationTimeout time.Duration `env:"GENERATION_TIMEOUT,default=120s" yaml:"generation_timeout"`
+		MaxRetries        int           `env:"MAX_RETRIES,default=2"           yaml:"max_retries"`
+		ShutdownTimeout   time.Duration `env:"SHUTDOWN_TIMEOUT,default=30s"    yaml:"shutdown_timeout"`
 	}
 	licenseConfig struct {
-		Key  string `yaml:"key" env:"KEY"`
-		File string `yaml:"file" env:"FILE"`
+		Key  string `env:"KEY"  yaml:"key"`
+		File string `env:"FILE" yaml:"file"`
 	}
 	rateLimitConfig struct {
-		RequestsPerSecond float64       `yaml:"requests_per_second" env:"REQUESTS_PER_SECOND,default=10.0"`
-		Burst             int           `yaml:"burst" env:"BURST,default=20"`
-		CleanupInterval   time.Duration `yaml:"cleanup_interval" env:"CLEANUP_INTERVAL,default=10m"`
+		RequestsPerSecond float64       `env:"REQUESTS_PER_SECOND,default=10.0" yaml:"requests_per_second"`
+		Burst             int           `env:"BURST,default=20"                 yaml:"burst"`
+		CleanupInterval   time.Duration `env:"CLEANUP_INTERVAL,default=10m"     yaml:"cleanup_interval"`
 	}
 )
 
@@ -107,7 +110,7 @@ type grpcMetrics struct {
 	panics prometheus.Counter
 }
 
-func (m *grpcMetrics) PanicsTotal() prometheus.Counter {
+func (m *grpcMetrics) PanicsTotal() prometheus.Counter { //nolint:ireturn // interface requires prometheus.Counter
 	return m.panics
 }
 
@@ -129,9 +132,10 @@ func main() {
 
 	go forceShutdown(ctx)
 
-	if err := start(ctx, cfgFile, appName); err != nil {
+	err := start(ctx, cfgFile, appName)
+	if err != nil {
 		log.Error("shutdown", "error", err)
-		os.Exit(exitCode)
+		os.Exit(exitCode) //nolint:gocritic // forceShutdown is running and defer cancel() is intentionally bypassed
 	}
 }
 
@@ -152,8 +156,8 @@ func start(ctx context.Context, cfgFile *flags.File, appName string) error {
 
 	reg := prometheus.NewRegistry() // Use standard registry
 	// Add Go metrics
-	reg.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	reg.MustRegister(prometheus.NewGoCollector())
+	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	reg.MustRegister(collectors.NewGoCollector())
 
 	return run(ctx, cfg, reg, appName)
 }
@@ -198,39 +202,40 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 		return fmt.Errorf("database.NewSQL: %w", err)
 	}
 
-	r, err := registry.New(ctx, db, cfg.Registry.Domain)
+	repo, err := registry.New(ctx, db, cfg.Registry.Domain)
 	if err != nil {
 		return fmt.Errorf("registry.New: %w", err)
 	}
 
 	defer func() {
-		if err := r.Close(); err != nil {
+		err := repo.Close()
+		if err != nil {
 			log.Error("close database connection", "error", err)
 		}
 	}()
 
 	// Register DB connection pool metrics collector
-	dbCollector := adapter_metrics.NewDBCollector(r.DB().UnderlyingDB(), namespace)
+	dbCollector := adapter_metrics.NewDBCollector(repo.DB().UnderlyingDB(), namespace)
 	reg.MustRegister(dbCollector)
 
 	// Register business metrics collector
-	businessCollector := adapter_metrics.NewBusinessMetricsCollector(r.DB().UnderlyingDB(), namespace, log)
+	businessCollector := adapter_metrics.NewBusinessMetricsCollector(repo.DB().UnderlyingDB(), namespace, log)
 	reg.MustRegister(businessCollector)
 
-	auditStore := adapter_audit.New(r.DB(), log)
-	auditWorker, auditCh := adapter_audit.NewWorker(auditStore, 1000, log, reg, namespace)
+	auditStore := adapter_audit.New(repo.DB(), log)
+	auditWorker, auditCh := adapter_audit.NewWorker(auditStore, auditChannelCapacity, log, reg, namespace)
 
 	go auditWorker.Run(ctx)
 
 	defer func() {
-		lost := auditWorker.Shutdown(5 * time.Second)
+		lost := auditWorker.Shutdown(componentShutdownTimeout)
 		if lost > 0 {
 			log.Warn("audit events lost on shutdown", "count", lost)
 		}
 	}()
 
 	// Create LicenseManager
-	lm, err := license.NewLicenseManager(licensePublicKey, license.LicenseConfig{
+	lm, err := license.NewManager(licensePublicKey, license.Config{
 		Key:  cfg.License.Key,
 		File: cfg.License.File,
 	}, log, reg, namespace)
@@ -252,7 +257,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	rl.StartCleanup(ctx)
 
 	// Wrap Registry in tracing decorator
-	tracedRegistry := telemetry.NewTracingRegistry(r)
+	tracedRegistry := telemetry.NewTracingRegistry(repo)
 
 	// Override WorkerPool workers from license limits
 	wpWorkers := cfg.WorkerPool.Workers
@@ -318,11 +323,11 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	// Register API handlers
 	apiSrv := api.New(grpcSrv, healthSrv, tracedCore, log)
 
-	g, ctx := errgroup.WithContext(ctx)
+	eg, ctx := errgroup.WithContext(ctx)
 
 	// Run gRPC Server
-	g.Go(func() error {
-		lis, err := net.Listen("tcp", fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.GRPC))
+	eg.Go(func() error {
+		lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.GRPC))
 		if err != nil {
 			return fmt.Errorf("net.Listen gRPC: %w", err)
 		}
@@ -333,102 +338,119 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 			// Shutdown order: 1. Stop accepting new gRPC requests
 			grpcSrv.GracefulStop()
 			// 2. Shutdown telemetry (flush spans/metrics)
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), componentShutdownTimeout)
 			defer cancel()
-			if err := shutdownTelemetry(shutdownCtx); err != nil {
+			err := shutdownTelemetry(shutdownCtx)
+			if err != nil {
 				log.Error("telemetry shutdown error", "error", err)
 			}
 		}()
 
-		if err := grpcSrv.Serve(lis); err != nil {
+		err = grpcSrv.Serve(lis)
+		if err != nil {
 			return fmt.Errorf("grpcSrv.Serve: %w", err)
 		}
+
 		return nil
 	})
 
 	// Run Metrics Server
-	g.Go(func() error {
+	eg.Go(func() error {
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 
 		srv := &http.Server{
-			Addr:    fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.Metric),
-			Handler: mux,
+			Addr:              fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.Metric),
+			Handler:           mux,
+			ReadHeaderTimeout: componentShutdownTimeout,
 		}
 
 		log.Info("starting metrics server", "addr", srv.Addr)
 
 		go func() {
 			<-ctx.Done()
-			ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctxShutdown, cancel := context.WithTimeout(context.Background(), componentShutdownTimeout)
 			defer cancel()
 			_ = srv.Shutdown(ctxShutdown)
 		}()
 
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("metrics server error: %w", err)
 		}
+
 		return nil
 	})
 
 	// Run Health Server
-	g.Go(func() error {
+	eg.Go(func() error {
 		// Simple health check handler
-		h, err := health.New(health.WithChecks(health.Config{
+		healthSrv, err := health.New(health.WithChecks(health.Config{
 			Name:    "postgres",
 			Timeout: time.Second,
-			Check:   r.Health,
+			Check:   repo.Health,
 		}))
 		if err != nil {
 			return fmt.Errorf("health.New: %w", err)
 		}
 
 		srv := &http.Server{
-			Addr:    fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.Health),
-			Handler: h.Handler(),
+			Addr:              fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.Health),
+			Handler:           healthSrv.Handler(),
+			ReadHeaderTimeout: componentShutdownTimeout,
 		}
 
 		log.Info("starting health server", "addr", srv.Addr)
 
 		go func() {
 			<-ctx.Done()
-			ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctxShutdown, cancel := context.WithTimeout(context.Background(), componentShutdownTimeout)
 			defer cancel()
 			_ = srv.Shutdown(ctxShutdown)
 		}()
 
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		err = srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("health server error: %w", err)
 		}
+
 		return nil
 	})
 
 	// Run MCP Server over streamable HTTP transport.
-	g.Go(func() error {
+	eg.Go(func() error {
 		mux := http.NewServeMux()
 		mux.Handle("/mcp", apiSrv.MCPHandler())
 
 		srv := &http.Server{
-			Addr:    fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.MCP),
-			Handler: mux,
+			Addr:              fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.MCP),
+			Handler:           mux,
+			ReadHeaderTimeout: componentShutdownTimeout,
 		}
 
 		log.Info("starting mcp server", "addr", srv.Addr, "path", "/mcp")
 
 		go func() {
 			<-ctx.Done()
-			ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctxShutdown, cancel := context.WithTimeout(context.Background(), componentShutdownTimeout)
 			defer cancel()
 			_ = srv.Shutdown(ctxShutdown)
 		}()
 
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("mcp server error: %w", err)
 		}
+
 		return nil
 	})
 
-	return g.Wait()
+	err = eg.Wait()
+	if err != nil {
+		return fmt.Errorf("errgroup: %w", err)
+	}
+
+	return nil
 }
 
 func buildLogger(level slog.Level) *slog.Logger {
@@ -452,9 +474,7 @@ func forceShutdown(ctx context.Context) {
 	// Create a new context for the shutdown delay/logging since the parent ctx is done
 	// But actually we just want to sleep.
 
-	select {
-	case <-time.After(shutdownDelay):
-		log.Error("failed to graceful shutdown")
-		os.Exit(exitCode)
-	}
+	<-time.After(shutdownDelay)
+	log.Error("failed to graceful shutdown")
+	os.Exit(exitCode)
 }

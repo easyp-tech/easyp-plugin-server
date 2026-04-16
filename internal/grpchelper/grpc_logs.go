@@ -28,18 +28,18 @@ func recoveryFunc(m Metrics, err error) grpc_recovery.RecoveryHandlerFuncContext
 	}
 }
 
-func interceptorLogger(defaultLog *slog.Logger) logging.Logger { //nolint:ireturn // Required by interceptor interface.
+func interceptorLogger(_ *slog.Logger) logging.Logger { //nolint:ireturn // Required by interceptor interface.
 	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
-		l := monitor.FromContext(ctx)
+		logger := monitor.FromContext(ctx)
 		switch lvl {
 		case logging.LevelDebug:
-			l.Debug(msg, fields...)
+			logger.Debug(msg, fields...)
 		case logging.LevelInfo:
-			l.Info(msg, fields...)
+			logger.Info(msg, fields...)
 		case logging.LevelWarn:
-			l.Warn(msg, fields...)
+			logger.Warn(msg, fields...)
 		case logging.LevelError:
-			l.Error(msg, fields...)
+			logger.Error(msg, fields...)
 		default:
 			panic(fmt.Sprintf("unknown level %v", lvl))
 		}

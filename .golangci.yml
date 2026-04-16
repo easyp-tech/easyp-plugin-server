@@ -1,0 +1,210 @@
+version: "2"
+run:
+  tests: true
+linters:
+  default: all
+  disable:
+    - exhaustruct
+    - wsl
+    - wsl_v5
+  settings:
+    lll:
+      line-length: 140
+    varnamelen:
+      min-name-length: 2
+      ignore-names:
+        - ok
+        - id
+        - fn
+        - ch
+        - wg
+        - rl
+        - ip
+        - st
+        - eg
+        - mu
+        - db
+    tagliatelle:
+      case:
+        use-field-name: false
+        rules:
+          json: snake
+          yaml: snake
+          xml: snake
+          bson: snake
+          avro: snake
+          mapstructure: snake
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: math/rand$
+              desc: Use math/rand/v2 or crypto/rand instead
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+    rules:
+      - linters:
+          - ireturn
+        text: returns generic interface
+      - linters:
+          - lll
+        source: "^//go:generate "
+      - linters:
+          - revive
+        text: "unexported-return: exported func .+ returns unexported type .+, which can be annoying to use"
+      - linters:
+          - gocritic
+        path: cmd/[^/]+/.+\.go
+        text: exitAfterDefer
+      - linters:
+          - revive
+        text: "package name"
+      - linters:
+          - dupl
+          - errcheck
+          - exhaustruct
+          - funlen
+          - gochecknoglobals
+          - gocyclo
+          - goconst
+          - gosec
+          - ireturn
+          - lll
+          - noinlineerr
+          - unparam
+          - varnamelen
+          - testpackage
+          - nilnil
+          - paralleltest
+          - tparallel
+          - dogsled
+          - err113
+        path: _test\.go
+      - linters:
+          - gochecknoglobals
+        path: internal/core/domain\.go
+      # cmd/main.go globals are cobra/flag package-level vars and ldflags injection points
+      - linters:
+          - gochecknoglobals
+        path: cmd/main\.go
+      # Sentinel key/logger globals are package-level design (not global state)
+      - linters:
+          - gochecknoglobals
+        path: internal/(license/features|monitor/log)\.go
+      - linters:
+          - ireturn
+        text: "Get returns interface"
+      - linters:
+          - revive
+        text: "unused-parameter"
+        path: _test\.go
+      # context.Context in struct is intentional (pool, license interceptor carry cancellation)
+      - linters:
+          - containedctx
+        path: internal/(core/pool|api/license_interceptor)\.go
+      # pool.go creates a fresh context for worker lifetime (by design)
+      - linters:
+          - contextcheck
+        path: internal/core/pool\.go
+      # Transparent decorator pattern: tracing files pass through errors without adding context
+      - linters:
+          - wrapcheck
+        path: internal/telemetry/tracing_
+      # Worker pool calls interface methods; errors already carry context from lower layers
+      - linters:
+          - wrapcheck
+        path: internal/core/pool\.go
+      # NewWorkerPool wires metrics/logging/config; length is inherent
+      - linters:
+          - funlen
+        path: internal/core/pool\.go
+      # Graceful shutdown needs fresh context (not the canceled request context)
+      - linters:
+          - contextcheck
+        text: "Non-inherited new context"
+        path: cmd/main\.go
+      # CreatePlugin/UpdatePlugin are symmetric by spec; duplication is intentional
+      - linters:
+          - dupl
+        path: internal/api/api\.go
+      # cyclop/gocognit/funlen/maintidx: run() wires all components; complexity is inherent
+      - linters:
+          - cyclop
+          - gocognit
+          - funlen
+          - maintidx
+        path: cmd/main\.go
+      # ErrorToStatus maps all gRPC codes; complexity is inherent
+      - linters:
+          - cyclop
+        path: internal/api/api\.go
+      # applyFilter has one case per field; complexity is inherent
+      - linters:
+          - cyclop
+        path: sdk/filter\.go
+      # Generate builds SQL dynamically; complexity is inherent
+      - linters:
+          - cyclop
+          - funlen
+        path: internal/adapters/registry/registry\.go
+      # claims_test uses table-driven approach; complexity is from test coverage
+      - linters:
+          - cyclop
+        path: internal/license/claims_test\.go
+      # telemetry.Init wires OTLP + Pyroscope; length is inherent
+      - linters:
+          - funlen
+        path: internal/telemetry/telemetry\.go
+      # Smoke test binary and test files: dynamic errors are acceptable
+      - linters:
+          - err113
+        path: _test\.go
+      - linters:
+          - err113
+          - wrapcheck
+          - errcheck
+          - forbidigo
+          - noinlineerr
+          - cyclop
+          - gocognit
+          - funlen
+          - mnd
+        path: cmd/mcp-smoke/
+    paths:
+      - bin
+      - config
+      - debian
+      - docs
+      - scripts
+      - tests
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/easyp-tech/service)
+      custom-order: true
+  exclusions:
+    generated: lax
+    paths:
+      - bin
+      - config
+      - debian
+      - docs
+      - scripts
+      - tests
+      - third_party$
+      - builtin$
+      - examples$

@@ -17,6 +17,7 @@ type captureHandler struct {
 func (h *captureHandler) Enabled(_ context.Context, _ slog.Level) bool { return h.enabled }
 func (h *captureHandler) Handle(_ context.Context, r slog.Record) error {
 	h.record = r
+
 	return nil
 }
 func (h *captureHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
@@ -38,7 +39,8 @@ func TestTraceHandler_Handle_ValidSpanContext(t *testing.T) {
 	r := slog.Record{}
 	r.AddAttrs(slog.String("existing", "value"))
 
-	if err := handler.Handle(ctx, r); err != nil {
+	err := handler.Handle(ctx, r)
+	if err != nil {
 		t.Fatalf("Handle returned error: %v", err)
 	}
 
@@ -62,7 +64,8 @@ func TestTraceHandler_Handle_NoSpanContext(t *testing.T) {
 	r := slog.Record{}
 	r.AddAttrs(slog.String("key", "val"))
 
-	if err := handler.Handle(context.Background(), r); err != nil {
+	err := handler.Handle(context.Background(), r)
+	if err != nil {
 		t.Fatalf("Handle returned error: %v", err)
 	}
 
@@ -118,7 +121,9 @@ func collectAttrs(r slog.Record) map[string]string {
 	m := make(map[string]string)
 	r.Attrs(func(a slog.Attr) bool {
 		m[a.Key] = a.Value.String()
+
 		return true
 	})
+
 	return m
 }

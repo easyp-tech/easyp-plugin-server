@@ -100,7 +100,10 @@ func (rl *RateLimiter) Limit(ctx context.Context) error {
 		lastSeen: time.Now(),
 	}
 	val, loaded := rl.buckets.LoadOrStore(key, newBucket)
-	bucket := val.(*clientBucket)
+	bucket, ok := val.(*clientBucket)
+	if !ok {
+		bucket = newBucket
+	}
 
 	if !loaded {
 		// New bucket created — update active clients gauge.
@@ -116,10 +119,7 @@ func (rl *RateLimiter) Limit(ctx context.Context) error {
 	allowed := bucket.limiter.Allow()
 
 	// Step 6: Prepare rate limit headers.
-	remaining := int(bucket.limiter.Tokens())
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(int(bucket.limiter.Tokens()), 0)
 
 	tokensNeeded := float64(rl.cfg.Burst) - bucket.limiter.Tokens()
 	if tokensNeeded < 0 {
@@ -138,6 +138,7 @@ func (rl *RateLimiter) Limit(ctx context.Context) error {
 	if allowed {
 		_ = grpc.SetHeader(ctx, md)
 		rl.requestsTotal.WithLabelValues("allowed", key).Inc()
+
 		return nil
 	}
 
@@ -174,7 +175,10 @@ func (rl *RateLimiter) StartCleanup(ctx context.Context) {
 func (rl *RateLimiter) cleanup() {
 	var active int
 	rl.buckets.Range(func(key, value any) bool {
-		bucket := value.(*clientBucket)
+		bucket, ok := value.(*clientBucket)
+		if !ok {
+			return true
+		}
 		bucket.mu.Lock()
 		lastSeen := bucket.lastSeen
 		bucket.mu.Unlock()
@@ -184,6 +188,7 @@ func (rl *RateLimiter) cleanup() {
 		} else {
 			active++
 		}
+
 		return true
 	})
 	rl.activeClients.Set(float64(active))

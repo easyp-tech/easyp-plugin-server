@@ -12,17 +12,17 @@ import (
 )
 
 // Compile-time interface check.
-var _ core.CoreService = (*TracingCore)(nil)
+var _ core.Service = (*TracingCore)(nil)
 
-// TracingCore — декоратор core.CoreService, добавляющий span-ы трассировки.
+// TracingCore — декоратор core.Service, добавляющий span-ы трассировки.
 // Проксирует все вызовы в реальный Core.
 type TracingCore struct {
-	inner  core.CoreService
+	inner  core.Service
 	tracer trace.Tracer
 }
 
 // NewTracingCore creates a new TracingCore decorator wrapping the given CoreService.
-func NewTracingCore(inner core.CoreService) *TracingCore {
+func NewTracingCore(inner core.Service) *TracingCore {
 	return &TracingCore{
 		inner:  inner,
 		tracer: otel.Tracer("core"),
@@ -40,6 +40,7 @@ func (c *TracingCore) Generate(ctx context.Context, req core.GenerateCodeRequest
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+
 		return nil, err
 	}
 
@@ -56,6 +57,7 @@ func (c *TracingCore) ListPlugins(ctx context.Context, filter core.PluginFilter)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+
 		return nil, err
 	}
 
@@ -76,6 +78,7 @@ func (c *TracingCore) CreatePlugin(ctx context.Context, req core.CreatePluginReq
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+
 		return nil, err
 	}
 
@@ -96,6 +99,7 @@ func (c *TracingCore) UpdatePlugin(ctx context.Context, req core.UpdatePluginReq
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+
 		return nil, err
 	}
 
@@ -116,6 +120,7 @@ func (c *TracingCore) DeletePlugin(ctx context.Context, group, name, version str
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+
 		return err
 	}
 

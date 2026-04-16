@@ -26,7 +26,7 @@ var _ generator.ServiceAPIServer = (*API)(nil)
 
 // API provides the API server implementation.
 type API struct {
-	app        core.CoreService
+	app        core.Service
 	mcpHandler http.Handler
 }
 
@@ -34,7 +34,7 @@ type API struct {
 // serving status, and wires up the MCP HTTP handler.
 // The gRPC server and health server are expected to be created
 // externally (e.g. via grpchelper.NewServer).
-func New(grpcSrv *grpc.Server, healthSrv *health.Server, applications core.CoreService, logger *slog.Logger) *API {
+func New(grpcSrv *grpc.Server, healthSrv *health.Server, applications core.Service, logger *slog.Logger) *API {
 	healthSrv.SetServingStatus(generator.ServiceAPI_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
 
 	api := &API{
@@ -42,14 +42,15 @@ func New(grpcSrv *grpc.Server, healthSrv *health.Server, applications core.CoreS
 		mcpHandler: newMCPHandler(applications, logger),
 	}
 	generator.RegisterServiceAPIServer(grpcSrv, api)
+
 	return api
 }
 
 // GenerateCode implements generator.PluginGeneratorServiceServer.
 func (api *API) GenerateCode(ctx context.Context, request *generator.GenerateCodeRequest) (*generator.GenerateCodeResponse, error) {
 	resp, err := api.app.Generate(ctx, core.GenerateCodeRequest{
-		PluginName: request.PluginName,
-		Payload:    request.CodeGeneratorRequest,
+		PluginName: request.GetPluginName(),
+		Payload:    request.GetCodeGeneratorRequest(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("api.app.Generate: %w", err)
@@ -79,17 +80,17 @@ func (api *API) Plugins(ctx context.Context, request *generator.PluginsRequest) 
 
 	response := &generator.PluginsResponse{
 		Plugins: make([]*generator.PluginInfo, 0, len(plugins)),
-		Total:   int32(len(plugins)),
+		Total:   int32(len(plugins)), //nolint:gosec // len() result fits int32 in practice
 	}
 
-	for _, p := range plugins {
+	for _, plugInfo := range plugins {
 		response.Plugins = append(response.Plugins, &generator.PluginInfo{
-			Id:        p.ID.String(),
-			Group:     p.Group,
-			Name:      p.Name,
-			Version:   p.Version,
-			Tags:      p.Tags,
-			CreatedAt: timestamppb.New(p.CreatedAt),
+			Id:        plugInfo.ID.String(),
+			Group:     plugInfo.Group,
+			Name:      plugInfo.Name,
+			Version:   plugInfo.Version,
+			Tags:      plugInfo.Tags,
+			CreatedAt: timestamppb.New(plugInfo.CreatedAt),
 		})
 	}
 
@@ -105,6 +106,7 @@ func compactStrings(values []string) []string {
 		}
 		out = append(out, v)
 	}
+
 	return out
 }
 

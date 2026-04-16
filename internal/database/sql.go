@@ -135,11 +135,11 @@ func (db *SQL) Close() error {
 // - converting sqlx errors which are actually bugs into panics,
 // - general metrics for DAL methods,
 // - wrapping errors with DAL method name.
-func (db *SQL) NoTx(f func(*sqlx.DB) error) (err error) {
+func (db *SQL) NoTx(fn func(*sqlx.DB) error) error {
 	methodName := internal.CallerMethodName(1)
 
 	return db.metrics.Collecting(methodName, func() error {
-		err := f(db.conn)
+		err := fn(db.conn)
 		if err != nil {
 			err = fmt.Errorf("%s: %w", methodName, err)
 		}
@@ -153,7 +153,7 @@ func (db *SQL) NoTx(f func(*sqlx.DB) error) (err error) {
 // - general metrics for DAL methods,
 // - wrapping errors with DAL method name,
 // - transaction.
-func (db *SQL) Tx(ctx context.Context, opts *sql.TxOptions, f func(*sqlx.Tx) error) (err error) {
+func (db *SQL) Tx(ctx context.Context, opts *sql.TxOptions, fn func(*sqlx.Tx) error) error {
 	methodName := internal.CallerMethodName(1)
 
 	ctx, span := db.tracer.Start(ctx, methodName)
@@ -173,7 +173,7 @@ func (db *SQL) Tx(ctx context.Context, opts *sql.TxOptions, f func(*sqlx.Tx) err
 					panic(err)
 				}
 			}()
-			err = f(tx)
+			err = fn(tx)
 			if err == nil {
 				err = tx.Commit()
 			} else {
@@ -198,14 +198,14 @@ func (db *SQL) Tx(ctx context.Context, opts *sql.TxOptions, f func(*sqlx.Tx) err
 // - general metrics for DAL methods,
 // - wrapping errors with DAL method name,
 // - tracing.
-func (db *SQL) NoTxContext(ctx context.Context, f func(*sqlx.DB) error) (err error) {
+func (db *SQL) NoTxContext(ctx context.Context, fn func(*sqlx.DB) error) error {
 	methodName := internal.CallerMethodName(1)
 
 	_, span := db.tracer.Start(ctx, methodName)
 	defer span.End()
 
 	return db.metrics.Collecting(methodName, func() error {
-		err := f(db.conn)
+		err := fn(db.conn)
 		if err != nil {
 			err = fmt.Errorf("%s: %w", methodName, err)
 			span.RecordError(err)

@@ -60,7 +60,7 @@ func isTransient(err error) bool {
 		return false
 	}
 
-	switch st.Code() {
+	switch st.Code() { //nolint:exhaustive // only retryable codes matter; all others are non-retryable
 	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
 		return true
 	default:
@@ -76,7 +76,7 @@ func backoffDelay(baseDelay, maxDelay time.Duration, attempt int) time.Duration 
 	delay := baseDelay << attempt // baseDelay * 2^attempt
 
 	// Add jitter: random value up to 25% of current delay.
-	jitter := time.Duration(rand.Int64N(int64(delay/4) + 1))
+	jitter := time.Duration(rand.Int64N(int64(delay/4) + 1)) //nolint:gosec,mnd // jitter is not security-sensitive; /4 = 25%
 	delay += jitter
 
 	if delay > maxDelay {

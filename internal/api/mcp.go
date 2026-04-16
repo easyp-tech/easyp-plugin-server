@@ -12,7 +12,7 @@ import (
 	"github.com/easyp-tech/service/internal/core"
 )
 
-func newMCPHandler(ps core.CoreService, logger *slog.Logger) http.Handler {
+func newMCPHandler(ps core.Service, logger *slog.Logger) http.Handler {
 	opts := &mcp.ServerOptions{
 		Instructions: "EasyP MCP server with plugin discovery and easyp.yaml schema helpers.",
 	}
@@ -25,7 +25,8 @@ func newMCPHandler(ps core.CoreService, logger *slog.Logger) http.Handler {
 		Version: "v1.0.0",
 	}, opts)
 
-	if err := generator.RegisterServiceAPITools(srv, newPluginToolHandler(ps)); err != nil {
+	err := generator.RegisterServiceAPITools(srv, newPluginToolHandler(ps))
+	if err != nil {
 		panic(fmt.Errorf("register generator MCP tools: %w", err))
 	}
 	easypmcp.RegisterTool(srv)

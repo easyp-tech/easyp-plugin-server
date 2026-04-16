@@ -15,14 +15,14 @@ type KeyExtractor func(ctx context.Context) string
 // PeerIPExtractor извлекает client IP из peer.FromContext().
 // Это реализация по умолчанию, использующая IP, установленный realip interceptor.
 func PeerIPExtractor(ctx context.Context) string {
-	p, ok := peer.FromContext(ctx)
-	if !ok || p.Addr == nil {
+	peerInfo, ok := peer.FromContext(ctx)
+	if !ok || peerInfo.Addr == nil {
 		return ""
 	}
 
-	host, _, err := net.SplitHostPort(p.Addr.String())
+	host, _, err := net.SplitHostPort(peerInfo.Addr.String())
 	if err != nil {
-		return p.Addr.String()
+		return peerInfo.Addr.String()
 	}
 
 	return host

@@ -46,20 +46,20 @@ func applyFilter(plugins []*generator.PluginInfo, filter PluginFilter) []*genera
 	}
 
 	result := make([]*generator.PluginInfo, 0, len(plugins))
-	for _, p := range plugins {
-		if filter.Group != "" && p.GetGroup() != filter.Group {
+	for _, plug := range plugins {
+		if filter.Group != "" && plug.GetGroup() != filter.Group {
 			continue
 		}
-		if filter.Name != "" && p.GetName() != filter.Name {
+		if filter.Name != "" && plug.GetName() != filter.Name {
 			continue
 		}
-		if filter.Version != "" && p.GetVersion() != filter.Version {
+		if filter.Version != "" && plug.GetVersion() != filter.Version {
 			continue
 		}
-		if len(filter.Tags) > 0 && !containsAll(p.GetTags(), filter.Tags) {
+		if len(filter.Tags) > 0 && !containsAll(plug.GetTags(), filter.Tags) {
 			continue
 		}
-		result = append(result, p)
+		result = append(result, plug)
 	}
 
 	return result

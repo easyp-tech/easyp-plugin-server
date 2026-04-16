@@ -2,6 +2,7 @@ package flags
 
 import (
 	"flag"
+	"fmt"
 	"log/slog"
 )
 
@@ -19,5 +20,10 @@ func (l *Level) String() string {
 
 // Set implements flag.Value.
 func (l *Level) Set(s string) error {
-	return l.Level.UnmarshalText([]byte(s))
+	err := l.Level.UnmarshalText([]byte(s))
+	if err != nil {
+		return fmt.Errorf("parse log level: %w", err)
+	}
+
+	return nil
 }

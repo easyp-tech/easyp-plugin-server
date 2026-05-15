@@ -1,134 +1,83 @@
-<!-- generated: 2026-04-14, template: auth.md -->
+<!-- generated: 2026-05-15, template: auth.md -->
 # Auth & Licensing
 
-This project uses **PASETO v4.public** tokens for license-based feature gating, not traditional user authentication. There is no user login, session management, or OAuth.
+Authentication and licensing system for EasyP Service.
 
-## 1. Overview
+## Overview
 
-| Aspect | Detail |
-|--------|--------|
-| Mechanism | PASETO v4.public token (asymmetric, Ed25519) |
-| Tiers | Community (default) / Enterprise |
-| Token source | Build-time (`-ldflags`), config file, or environment variable |
-| Feature gating | `FeatureGate` interface checks per-request feature availability |
+EasyP uses **PASETO v4.public** tokens for license management. There is no user authentication — the service is designed to run within a trusted network. Access control is based on **license tiers** (community vs enterprise).
 
-## 2. Architecture
+## License Tiers
+
+| Tier | MaxWorkers | MaxPlugins | Features |
+|------|-----------|------------|----------|
+| Community | 4 | 10 | CodeGeneration, PluginListing, MCPServerTools, RateLimiting, PluginCRUD |
+| Enterprise | Configurable | Unlimited (-1) | All community + MultiTenancy, ResponseCaching, Audit |
+
+## Architecture
 
 ```
-License Token (PASETO v4.public)
-  → LicenseManager.ParseToken()  [verify Ed25519 signature]
-    → Claims { Tier, Features, MaxWorkers, MaxPlugins, ExpiresAt }
-      → FeatureGate.Enabled(feature)  [called by interceptors and core]
+LicenseClient (gRPC)
+  → Manager (cache + refresh watcher)
+    → FeatureGate (feature checks)
+      → Core (business logic)
+      → RateLimiter (tier-based rates)
+      → LicenseInterceptor (gRPC middleware)
 ```
 
-## 3. License Tiers
+## Components
 
-### Community (default — no license required)
-- 4 workers, 10 plugins max
-- Features: CodeGeneration, PluginListing, MCPServerTools, RateLimiting, PluginCRUD
+### LicenseClient (`internal/license`)
 
-### Enterprise (valid license required)
-- Configurable workers and plugins (-1 = unlimited)
-- All Community features + MultiTenancy, ResponseCaching, Audit
-
-## 4. Token Lifecycle
-
-1. **Issuance**: External license server generates PASETO v4.public token
-2. **Distribution**: Token set via `LICENSE_KEY` env var, `license.key` config, or `license.file` path
-3. **Verification**: `LicenseManager.ParseToken()` verifies Ed25519 signature using public key
-4. **Expiration**: 60-second watcher reverts to Community mode on expiry
-5. **Reload**: `LicenseManager.Reload()` supports dynamic token replacement
-
-### Public Key Injection
-```bash
-go build -ldflags "-X main.licensePublicKey=<base64-encoded-public-key>" -o easyp ./cmd/main.go
-```
-
-## 5. Claims Structure
+Interface for communicating with the license server:
 
 ```go
-// internal/license/claims.go
-type Claims struct {
-    Tier       string    // "community" or "enterprise"
-    Features   []string  // Enabled feature names
-    MaxWorkers int       // Worker pool limit
-    MaxPlugins int       // Plugin registry limit (-1 = unlimited)
-    ExpiresAt  time.Time
-    IssuedAt   time.Time
-    Issuer     string
-    Subject    string
-    RefreshURL string    // Optional refresh endpoint
+type LicenseClient interface {
+    ValidateLicense(ctx context.Context) (LicenseClaims, error)
 }
 ```
 
-Community defaults:
+**Current implementation:** `MockLicenseClient` — always returns Enterprise claims. This is a development placeholder; will be replaced with a real gRPC client when the license server is ready.
+
+### Manager (`internal/license`)
+
+- Caches license claims with configurable TTL
+- Runs a background refresh watcher (`StartRefreshWatcher`)
+- Reports metrics: cache hits/misses, validation duration, active tier
+
+### FeatureGate (`internal/license`)
+
 ```go
-Claims{
-    Tier:       "community",
-    MaxWorkers: 4,
-    MaxPlugins: 10,
-    Features:   communityFeatures,
+type FeatureGate interface {
+    Enabled(feature Feature) bool
+    MaxWorkers() int
+    MaxPlugins() int
 }
 ```
 
-## 6. FeatureGate
+Used by:
+- `Core.checkFeature()` — before CRUD operations
+- `RateLimiter` — for tier-based rate limits
+- `WorkerPool` — for worker count limits
+- `LicenseInterceptor` — gRPC middleware
 
-```go
-// internal/license/gate.go
-type FeatureGate struct {
-    manager *LicenseManager
-}
+### LicenseInterceptor (`internal/api`)
 
-func (g *FeatureGate) Enabled(feature Feature) bool
-func (g *FeatureGate) MaxWorkers() int
-func (g *FeatureGate) MaxPlugins() int
-```
+gRPC interceptor that checks feature availability before request processing. Applies to both unary and streaming RPCs.
 
-Logic:
-- Enterprise tier → all features enabled
-- Community tier → only community features and those explicitly in claims.Features
-- Invalid feature → always false
-
-## 7. License Interceptor
-
-`internal/api/license_interceptor.go`:
-- gRPC `UnaryServerInterceptor` + `StreamServerInterceptor`
-- Maps gRPC methods to required features
-- Returns `codes.PermissionDenied` (`core.ErrFeatureDenied`) if feature disabled
-- Supports `RegisterMethodFeature()` for dynamic mapping
-
-## 8. Configuration
+## Configuration
 
 ```yaml
-# config.yml
 license:
-  key: ""    # Inline PASETO v4.public token
-  file: ""   # Path to license file containing the token
+  cache_ttl: 5m    # How long to cache license claims
 ```
 
-Environment variables:
-```bash
-LICENSE_KEY=<paseto-token>     # Inline token
-LICENSE_FILE=/path/to/license  # File path
-```
+Environment: `LICENSE_CACHE_TTL`
 
-Priority: `license.key` > `license.file`
+## PASETO Token Format
 
-## 9. Metrics
-
-| Metric | Type | Description |
-|--------|------|-------------|
-| `license_valid` | Gauge | 1 if license is valid, 0 otherwise |
-| `license_expiry_timestamp_seconds` | Gauge | Unix timestamp of license expiration |
-
-## 10. License Errors
-
-| Error | Description |
-|-------|-------------|
-| `ErrInvalidToken` | Token format is not valid PASETO |
-| `ErrSignatureInvalid` | Ed25519 signature verification failed |
-| `ErrTokenExpired` | Token past expiration date |
-| `ErrInvalidClaims` | Claims payload is malformed |
-| `ErrFileNotFound` | License file path does not exist |
-
-On any error, service continues in **Community mode** (logged as warning).
+Tokens are `v4.public` PASETO tokens containing `LicenseClaims`:
+- `tier` — "community" or "enterprise"
+- `features` — list of Feature enum values
+- `max_workers` — concurrent worker limit
+- `max_plugins` — registered plugin limit

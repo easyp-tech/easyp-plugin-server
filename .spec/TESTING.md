@@ -1,13 +1,15 @@
-<!-- generated: 2026-04-14, template: development.md -->
+<!-- generated: 2026-05-15, template: development.md -->
 # Testing
+
+Project testing conventions for EasyP Service.
 
 ## 1. Test Package Naming
 
-Tests use the same package as the code under test (internal test package):
+Tests use the **same package** (internal tests) — not `_test` suffix packages. This allows access to unexported symbols.
 
 ```go
-package core  // in core/crud_test.go
-package api   // in api/api_test.go
+// internal/core/crud_test.go
+package core  // same package as the code being tested
 ```
 
 ## 2. Test File Structure
@@ -20,32 +22,71 @@ package core
 import (
     "context"
     "testing"
+
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
 )
 
-func TestCore_CreatePlugin(t *testing.T) {
-    // Setup mock dependencies
-    // Create Core instance
-    // Call method
-    // Assert result
+func TestCreatePlugin(t *testing.T) {
+    tests := []struct {
+        name    string
+        req     CreatePluginRequest
+        setup   func(*mockRegistry, *mockFeatureGate)
+        wantErr error
+    }{
+        {
+            name: "success",
+            req: CreatePluginRequest{
+                Group:   "grpc",
+                Name:    "go",
+                Version: "v1.5.1",
+            },
+            setup: func(r *mockRegistry, fg *mockFeatureGate) {
+                fg.enabled = true
+                fg.maxPlugins = -1
+                r.createResult = &PluginInfo{...}
+            },
+        },
+        {
+            name:    "feature denied",
+            req:     CreatePluginRequest{Group: "grpc", Name: "go", Version: "v1.0.0"},
+            setup:   func(r *mockRegistry, fg *mockFeatureGate) { fg.enabled = false },
+            wantErr: ErrFeatureDenied,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            // setup mocks
+            reg := &mockRegistry{}
+            fg := &mockFeatureGate{}
+            tt.setup(reg, fg)
+
+            c := New(nil, reg, fg, make(chan<- AuditEntry, 100), slog.Default())
+            _, err := c.CreatePlugin(context.Background(), tt.req)
+
+            if tt.wantErr != nil {
+                require.ErrorIs(t, err, tt.wantErr)
+            } else {
+                require.NoError(t, err)
+            }
+        })
+    }
 }
 ```
 
 ## 3. Key Patterns
 
-### Table-Driven Tests
+### Table-Driven Tests (slice of structs)
 
-Used throughout for parameterized testing:
+All tests use slice-of-structs pattern with `t.Run`:
 
 ```go
 tests := []struct {
     name    string
-    input   SomeInput
-    want    SomeOutput
+    // inputs
     wantErr error
-}{
-    {name: "success case", ...},
-    {name: "not found", ...},
-}
+}{...}
 
 for _, tt := range tests {
     t.Run(tt.name, func(t *testing.T) {
@@ -54,39 +95,57 @@ for _, tt := range tests {
 }
 ```
 
-### Mocks Defined in Test Files
+### Inline Mocks
 
-Mocks are hand-written in test files, not generated:
+Mocks are defined as simple structs in test files — no code generation:
 
 ```go
-// Mock implements core.Registry for testing
 type mockRegistry struct {
-    getFunc    func(...) (Plugin, error)
-    listFunc   func(...) ([]PluginInfo, error)
-    // ... other methods
+    getResult    Plugin
+    getErr       error
+    listResult   []PluginInfo
+    createResult *PluginInfo
+    // ...
+}
+
+func (m *mockRegistry) Get(ctx context.Context, group, name, version string) (Plugin, error) {
+    return m.getResult, m.getErr
 }
 ```
 
-### Test Helpers
+### Assertion Library
 
-Common setup patterns extracted into helper functions within test files.
+Uses `testify` (`assert` and `require`):
+
+```go
+require.NoError(t, err)
+require.ErrorIs(t, err, ErrNotFound)
+assert.Equal(t, expected, actual)
+assert.Len(t, plugins, 3)
+```
 
 ## 4. Mock Generation
 
-- **No mock generation tool** — all mocks are hand-written
-- Mocks live alongside tests in the same `_test.go` file
-- Mocks implement core interfaces (`Registry`, `Plugin`, `Metrics`, `FeatureGate`)
+**No generated mocks.** All mocks are hand-written structs in test files.
+
+Pattern: mock struct with fields for return values, methods return those fields.
+
+Location: same `_test.go` file that uses them.
 
 ## 5. Integration Tests
 
-The registry adapter has integration tests that test SQL migrations and data preservation:
+No separate integration test infrastructure. The project uses:
+- `docker-compose` for full stack testing
+- `task smoke-mcp` for MCP end-to-end smoke tests
+- Standard `go test` for unit tests
 
-- `internal/adapters/registry/registry_migration_test.go` — migration correctness
-- `internal/adapters/registry/registry_preservation_test.go` — data preserved across migrations
+## 6. Relaxed Linter Rules in Tests
 
-These require a running PostgreSQL instance.
+Tests have relaxed linter rules (`.golangci.yml`):
+- Disabled: `dupl`, `errcheck`, `funlen`, `gocyclo`, `goconst`, `gosec`, `lll`, `varnamelen`, `testpackage`, `paralleltest`, `err113`
+- This allows more verbose test code without linter noise
 
-## 6. Commands
+## 7. Commands
 
 ```bash
 # Unit tests
@@ -95,21 +154,19 @@ go test ./...
 # With race detector
 go test -race ./...
 
-# Single package
+# Specific package
 go test ./internal/core/...
 
-# Verbose
-go test -v ./internal/api/...
+# With verbose output
+go test -v ./...
 
-# Specific test
-go test -run TestCore_CreatePlugin ./internal/core/...
+# With coverage
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
 
-# Coverage
-go test -cover ./...
-
-# Coverage with report
-go test -coverprofile=coverage.out ./... && go tool cover -html=coverage.out
-
-# MCP integration test
+# MCP server tests
 task test-mcp
+
+# MCP smoke test (requires running service)
+task smoke-mcp
 ```

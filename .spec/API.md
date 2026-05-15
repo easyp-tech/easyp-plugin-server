@@ -1,159 +1,63 @@
-<!-- generated: 2026-04-14, template: api.md -->
+<!-- generated: 2026-05-15, template: api.md -->
 # API
 
-## 1. Overview
+gRPC API contract for EasyP Service.
 
-gRPC API defined in `api/generator/v1/generator.proto`. Framework: `google.golang.org/grpc`.
+## Service Definition
 
-Secondary API: MCP over HTTP at `/mcp` for LLM tool integration.
+Proto: `api/generator/v1/generator.proto`
 
-## 2. Middleware Stack (Interceptor Chain)
+Package: `generator.v1`
 
-Request processing order (unary):
-
-| Order | Interceptor | Purpose | Package |
-|-------|------------|---------|---------|
-| 1 | TraceLogging | Inject trace_id into slog context | `grpchelper` |
-| 2 | RealIP | Extract client IP from headers | `go-grpc-middleware/realip` |
-| 3 | Prometheus | Record gRPC metrics (latency, codes) | `go-grpc-middleware/prometheus` |
-| 4 | Structured Logging | Log request start/finish with payload | `go-grpc-middleware/logging` |
-| 5 | Recovery | Catch panics → `codes.Internal` + counter | `go-grpc-middleware/recovery` |
-| 6 | Validator | Protobuf field validation | `go-grpc-middleware/validator` |
-| 7 | Code Conversion | Domain errors → gRPC status codes | `grpchelper` |
-| 8 | Rate Limit | Per-IP token bucket | `go-grpc-middleware/ratelimit` |
-| 9 | License | Feature gate check per method | `api` |
-| 10 | Audit | Record operation to async channel | `api` |
-
-## 3. Endpoint Reference
-
-**Service: `api.generator.v1.ServiceAPI`**
+### RPCs
 
 | RPC | Request | Response | Description |
 |-----|---------|----------|-------------|
-| `GenerateCode` | `GenerateCodeRequest` | `GenerateCodeResponse` | Execute protobuf plugin in Docker, return generated files |
-| `Plugins` | `PluginsRequest` | `PluginsResponse` | List available plugins with optional filters |
-| `CreatePlugin` | `CreatePluginRequest` | `CreatePluginResponse` | Register a new plugin |
-| `UpdatePlugin` | `UpdatePluginRequest` | `UpdatePluginResponse` | Update plugin config and tags |
-| `DeletePlugin` | `DeletePluginRequest` | `DeletePluginResponse` | Remove a plugin |
+| `GenerateCode` | `GenerateCodeRequest` | `GenerateCodeResponse` | Run plugin in Docker, return generated code |
+| `Plugins` | `PluginsRequest` | `PluginsResponse` | List available plugins with optional filtering |
+| `CreatePlugin` | `CreatePluginRequest` | `CreatePluginResponse` | Register a new plugin in the registry |
+| `UpdatePlugin` | `UpdatePluginRequest` | `UpdatePluginResponse` | Modify plugin config and tags |
+| `DeletePlugin` | `DeletePluginRequest` | `DeletePluginResponse` | Remove a plugin from the registry |
 
-**Handler source:** `internal/api/api.go`
+### MCP Tools
 
-## 4. Request / Response Types
+Endpoint: `POST /mcp` (streamable HTTP transport)
 
-### GenerateCodeRequest
-```protobuf
-message GenerateCodeRequest {
-  google.protobuf.compiler.CodeGeneratorRequest code_generator_request = 1;
-  string plugin_name = 2;  // Format: "group/name:version"
-}
+| Tool | Description |
+|------|-------------|
+| `plugins_list` | List available plugins (wraps `Plugins` RPC) |
+| `easyp_config_describe` | Describe easyp.yaml configuration schema |
+
+## Error Mapping
+
+See `ERRORS.md` for the full error catalog and gRPC status code mapping.
+
+## Interceptor Chain
+
+Order matters — applied in this sequence:
+
+1. **trace_logging** — OpenTelemetry trace context extraction
+2. **realip** — Extract real client IP from headers
+3. **prometheus** — gRPC method latency/status metrics
+4. **structured_logging** — slog request/response logging
+5. **panic_recovery** — Recover panics, increment `panics_total` counter
+6. **validation** — Protobuf field validation
+7. **error_code_conversion** — `ErrorToStatus()` domain→gRPC mapping
+8. **rate_limit** — Per-IP token bucket (via FeatureGate)
+9. **license** — Feature availability check
+10. **audit** — Async audit event via channel
+
+## Plugin Name Format
+
+```
+{group}/{name}:{version}
 ```
 
-### PluginsRequest (filtering)
-```protobuf
-message PluginsRequest {
-  optional string group = 1;
-  optional string name = 2;
-  optional string version = 3;
-  repeated string tags = 4;
-}
-```
+Regex: `^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*:(v\d+\.\d+\.\d+|latest)$`
 
-### PluginsResponse
-```protobuf
-message PluginsResponse {
-  repeated PluginInfo plugins = 1;
-  int32 total = 2;
-}
-```
+Examples: `protocolbuffers/go:v1.36.10`, `grpc/go:v1.5.1`
 
-### PluginInfo
-```protobuf
-message PluginInfo {
-  string id = 1;
-  string group = 2;
-  string name = 3;
-  string version = 4;
-  google.protobuf.Timestamp created_at = 5;
-  repeated string tags = 6;
-}
-```
+## Health Check
 
-## 5. Error Mapping
-
-Domain errors are mapped to gRPC status codes by `ErrorToStatus()` in `internal/api/api.go`:
-
-| Domain Error | gRPC Code | When |
-|-------------|-----------|------|
-| `ErrNotFound` | `NotFound` | Plugin not in registry |
-| `ErrInvalidPluginName` | `InvalidArgument` | Name fails regex validation |
-| `ErrGenerationFailed` | `Internal` | Docker execution failed |
-| `ErrServerOverloaded` | `ResourceExhausted` | Worker pool queue full |
-| `ErrAlreadyExists` | `AlreadyExists` | Plugin already registered |
-| `ErrMaxPluginsExceeded` | `ResourceExhausted` | License plugin limit reached |
-| `ErrShuttingDown` | `Unavailable` | Server shutting down |
-| `ErrFeatureDenied` | `PermissionDenied` | Feature not in license |
-| `context.DeadlineExceeded` | `DeadlineExceeded` | Timeout |
-| `context.Canceled` | `Canceled` | Client canceled |
-| (default) | `Internal` | Unknown error |
-
-## 6. Rate Limiting
-
-- **Strategy**: Per-IP token bucket (`golang.org/x/time/rate`)
-- **Defaults**: 10 req/sec, burst 20
-- **Feature-gated**: Only active when `FeatureRateLimiting` is enabled
-- **Headers returned**:
-  - `x-ratelimit-limit` — Configured burst
-  - `x-ratelimit-remaining` — Tokens left
-  - `x-ratelimit-reset` — Seconds until token replenishment
-- **Configuration**:
-  ```yaml
-  rate_limit:
-    requests_per_second: 10.0
-    burst: 20
-    cleanup_interval: 10m
-  ```
-
-## 7. Proto Schema
-
-**File**: `api/generator/v1/generator.proto`
-
-**Generation command**:
-```bash
-easyp --cfg easyp.yaml generate
-```
-
-**Generated files**:
-- `generator.pb.go` — Protobuf types
-- `generator_grpc.pb.go` — gRPC client/server stubs
-- `generator.mcp.go` — MCP tool bindings
-
-## 8. MCP API
-
-**Endpoint**: `GET/POST http://host:8083/mcp`
-**Transport**: StreamableHTTP
-**Server name**: `easyp-service-mcp`
-
-**Tools exposed**:
-- `plugins_list` — List available plugins
-- `generate_code` — Execute code generation
-- `easyp_config_describe` — Describe easyp configuration
-
-**Source**: `internal/api/mcp.go`, `internal/api/mcp_tools.go`
-
-## 9. Validation
-
-- **Protobuf validation**: `grpc_validator.UnaryServerInterceptor()` validates protobuf field constraints
-- **Business validation**: `core.Core` validates plugin names with regex:
-  - Group/Name: `^[a-z][a-z0-9-]*$`
-  - Version: `^v\d+\.\d+\.\d+$` or `latest`
-- **Input sanitization**: `strings.TrimSpace()` on all string inputs in API handlers
-- **Empty tag filtering**: `compactStrings()` removes empty/whitespace-only tags
-
-## 10. Server Configuration
-
-gRPC server features:
-- Insecure credentials (TLS terminated by reverse proxy)
-- OpenTelemetry instrumentation (`otelgrpc.NewServerHandler()`)
-- Keepalive: 50s idle, 10s timeout, 30s min between pings
-- gRPC reflection enabled
-- Health service registered
+- **gRPC Health:** standard `grpc.health.v1.Health` service
+- **HTTP Health:** `GET /health` — includes PostgreSQL connectivity check

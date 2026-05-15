@@ -1,141 +1,93 @@
-<!-- generated: 2026-04-14, template: errors.md -->
+<!-- generated: 2026-05-15, template: errors.md -->
 # Errors
 
-## 1. Error Architecture
+Business error catalog for EasyP Service.
 
-```
-┌──────────────────────────────────────────────────────┐
-│  Transport Layer (api/)                               │
-│  ErrorToStatus() maps domain errors → gRPC codes     │
-│  Interceptors log errors, never swallow               │
-├──────────────────────────────────────────────────────┤
-│  Application Layer (core/)                            │
-│  Returns domain sentinel errors                       │
-│  Wraps adapter errors with fmt.Errorf context         │
-├──────────────────────────────────────────────────────┤
-│  Adapter Layer (adapters/)                            │
-│  Converts infra errors → domain sentinels            │
-│  Wraps unknown errors with fmt.Errorf                │
-├──────────────────────────────────────────────────────┤
-│  Infrastructure                                       │
-│  Raw errors: sql.ErrNoRows, Docker daemon errors     │
-└──────────────────────────────────────────────────────┘
-```
+## Domain Errors
 
-- **Adapters** create/convert errors: `sql.ErrNoRows` → `core.ErrNotFound`
-- **Core** returns sentinels or wraps with context
-- **API** maps errors to gRPC status codes via `ErrorToStatus()`
-- **Errors are logged** by interceptors (structured logging), returned to client as gRPC status
+All domain errors are sentinel variables defined in `internal/core/domain.go`.
 
-## 2. Business Error Catalog
+| Error | gRPC Status | Error Code | Description |
+|-------|-------------|------------|-------------|
+| `ErrNotFound` | `NotFound` | `NOT_FOUND` | Plugin not found in registry |
+| `ErrInvalidPluginName` | `InvalidArgument` | `INVALID_PLUGIN_NAME` | Plugin name doesn't match format `{group}/{name}:{version}` |
+| `ErrGenerationFailed` | `Internal` | `GENERATION_FAILED` | Code generation failed (Docker container error) |
+| `ErrServerOverloaded` | `ResourceExhausted` | `SERVER_OVERLOADED` | WorkerPool queue is full |
+| `ErrShuttingDown` | `Unavailable` | `SHUTTING_DOWN` | Server is shutting down, not accepting new requests |
+| `ErrAlreadyExists` | `AlreadyExists` | `ALREADY_EXISTS` | Plugin already registered |
+| `ErrMaxPluginsExceeded` | `ResourceExhausted` | `MAX_PLUGINS_EXCEEDED` | License limit on plugin count reached |
+| `ErrFeatureDenied` | `PermissionDenied` | `FEATURE_DENIED` | Feature not available in current license tier |
 
-All domain errors defined in `internal/core/domain.go`:
+## Context Errors
 
-| Name | gRPC Code | Description |
-|------|-----------|-------------|
-| `ErrNotFound` | `NotFound` | Plugin or resource not found |
-| `ErrInvalidPluginName` | `InvalidArgument` | Plugin name fails regex validation |
-| `ErrGenerationFailed` | `Internal` | Docker container code generation failed |
-| `ErrServerOverloaded` | `ResourceExhausted` | WorkerPool queue full, cannot accept request |
-| `ErrShuttingDown` | `Unavailable` | Server is shutting down, rejecting new work |
-| `ErrAlreadyExists` | `AlreadyExists` | Plugin with same group/name/version already registered |
-| `ErrMaxPluginsExceeded` | `ResourceExhausted` | License plugin limit reached |
-| `ErrFeatureDenied` | `PermissionDenied` | Feature not available in current license tier |
+| Error | gRPC Status | Description |
+|-------|-------------|-------------|
+| `context.DeadlineExceeded` | `DeadlineExceeded` | Request timeout |
+| `context.Canceled` | `Canceled` | Request cancelled by client |
 
-Context errors also mapped in `ErrorToStatus()`:
+## Error Mapping
 
-| Error | gRPC Code |
-|-------|-----------|
-| `context.DeadlineExceeded` | `DeadlineExceeded` |
-| `context.Canceled` | `Canceled` |
+The `api.ErrorToStatus()` function in `internal/api/api.go` converts domain errors to gRPC status codes:
 
-License errors defined in `internal/license/errors.go`:
-
-| Name | Description |
-|------|-------------|
-| `ErrInvalidToken` | License token format is invalid |
-| `ErrSignatureInvalid` | PASETO signature verification failed |
-| `ErrTokenExpired` | License token has expired |
-| `ErrInvalidClaims` | Claims payload is malformed |
-| `ErrFileNotFound` | License file path does not exist |
-
-## 3. Error Wrapping Convention
-
-**Adapter → Core:**
 ```go
-// internal/adapters/registry/registry.go
-if errors.Is(err, sql.ErrNoRows) {
-    return nil, core.ErrNotFound
-}
-return nil, fmt.Errorf("get plugin %s/%s:%s: %w", group, name, version, err)
-```
-
-**Core → API:**
-```go
-// internal/api/api.go
-resp, err := api.app.Generate(ctx, core.GenerateCodeRequest{...})
-if err != nil {
-    return nil, fmt.Errorf("api.app.Generate: %w", err)
-}
-```
-
-**API → Client (ErrorToStatus):**
-```go
-// internal/api/api.go
 func ErrorToStatus(err error) *status.Status {
-    code := codes.Internal
+    code := codes.Internal  // default
     switch {
-    case errors.Is(err, core.ErrNotFound):
-        code = codes.NotFound
-    case errors.Is(err, core.ErrInvalidPluginName):
-        code = codes.InvalidArgument
-    case errors.Is(err, core.ErrServerOverloaded):
-        code = codes.ResourceExhausted
-    // ...
+    case errors.Is(err, core.ErrNotFound):           code = codes.NotFound
+    case errors.Is(err, core.ErrInvalidPluginName):  code = codes.InvalidArgument
+    case errors.Is(err, core.ErrServerOverloaded):   code = codes.ResourceExhausted
+    case errors.Is(err, core.ErrAlreadyExists):      code = codes.AlreadyExists
+    case errors.Is(err, core.ErrMaxPluginsExceeded): code = codes.ResourceExhausted
+    case errors.Is(err, core.ErrShuttingDown):       code = codes.Unavailable
+    case errors.Is(err, core.ErrFeatureDenied):      code = codes.PermissionDenied
+    case errors.Is(err, context.DeadlineExceeded):   code = codes.DeadlineExceeded
+    case errors.Is(err, context.Canceled):           code = codes.Canceled
     }
     return status.New(code, err.Error())
 }
 ```
 
-## 4. Error Response Format
+## Error Classification for Audit
 
-gRPC status with code and message:
+The `errorCode()` function in `internal/core/core.go` produces string codes for audit entries:
+
+```go
+func errorCode(err error) string {
+    switch {
+    case errors.Is(err, ErrNotFound):           return "NOT_FOUND"
+    case errors.Is(err, ErrInvalidPluginName):  return "INVALID_PLUGIN_NAME"
+    case errors.Is(err, ErrGenerationFailed):   return "GENERATION_FAILED"
+    case errors.Is(err, ErrServerOverloaded):   return "SERVER_OVERLOADED"
+    case errors.Is(err, ErrShuttingDown):       return "SHUTTING_DOWN"
+    case errors.Is(err, ErrAlreadyExists):      return "ALREADY_EXISTS"
+    case errors.Is(err, ErrMaxPluginsExceeded): return "MAX_PLUGINS_EXCEEDED"
+    case errors.Is(err, ErrFeatureDenied):      return "FEATURE_DENIED"
+    default:                                     return "INTERNAL"
+    }
+}
 ```
-status.New(codes.NotFound, "api.app.Generate: get plugin grpc/go:v1.5.1: not found")
+
+## Transient Error Detection
+
+The WorkerPool retries transient errors during code generation. An error is considered transient if:
+
+| Condition | Transient? |
+|-----------|-----------|
+| `context.DeadlineExceeded` | No |
+| Docker exit code 125 (daemon error) | Yes |
+| Docker exit code 126 (command not found) | Yes |
+| Docker exit code 127 (permission denied) | Yes |
+| Error message contains "connection refused" | Yes |
+| Error message contains "daemon" | Yes |
+| Error message contains "temporary failure" | Yes |
+| All other errors | No |
+
+## Error Wrapping Convention
+
+Every call site wraps errors with the calling function name:
+
+```go
+return nil, fmt.Errorf("c.registry.Get: %w", err)
 ```
 
-Client receives `status.Status` with:
-- `Code()` — gRPC status code
-- `Message()` — Error message chain (wrapping preserved)
-
-## 5. Sentinel Errors vs Error Types
-
-This project uses **sentinel errors exclusively** — no typed error structs.
-
-**Sentinel errors** (`var ErrX = errors.New("...")`):
-- All domain errors in `core/domain.go`
-- All license errors in `license/errors.go`
-- Compared with `errors.Is()` after `fmt.Errorf("...: %w", err)` wrapping
-- Simple and sufficient for the project's error taxonomy
-
-## 6. Retry Policy
-
-| Error | Retryable | Strategy |
-|-------|-----------|----------|
-| `ErrServerOverloaded` | Yes | Client-side exponential backoff (SDK) |
-| `ErrShuttingDown` | Yes | Reconnect to different server |
-| `ErrGenerationFailed` | Yes | WorkerPool auto-retries (configurable max_retries) |
-| Docker transient errors | Yes | WorkerPool classifies and retries |
-| `ErrNotFound` | No | — |
-| `ErrInvalidPluginName` | No | — |
-| `ErrFeatureDenied` | No | — |
-| `ErrAlreadyExists` | No | — |
-| `context.DeadlineExceeded` | No | Permanent in WorkerPool |
-
-## 7. Error Logging
-
-- **Interceptor layer** logs all errors via structured logging middleware
-- **gRPC recovery interceptor** logs panics as Error level, increments `panics_total` counter
-- **Audit interceptor** records error_code and error_message in audit entries
-- **Never double-logged**: errors are logged by the interceptor chain, handlers just return them
-- **Audit worker** logs overflow warnings when channel is full
+This creates a traceable chain: `api.GenerateCode → core.Generate → c.registry.Get → <root cause>`.

@@ -1,197 +1,179 @@
-<!-- generated: 2026-04-14, template: core.md -->
+<!-- generated: 2026-05-15, template: core.md -->
 # Architecture
 
 ## 1. Overview
 
-Centralized protobuf/gRPC plugin execution service using a layered architecture (Transport → Application → Adapters → Infrastructure) with the Decorator pattern for cross-cutting concerns.
+EasyP Service is a centralized protobuf/gRPC plugin execution service using a **layered architecture** with decorator pattern for cross-cutting concerns.
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  Transport Layer                                          │
-│  gRPC server + interceptor chain, MCP HTTP, Metrics HTTP │
-├──────────────────────────────────────────────────────────┤
-│  Application Layer (core)                                 │
-│  Business logic, domain types, worker pool               │
-├──────────────────────────────────────────────────────────┤
-│  Adapters Layer                                           │
-│  audit/, metrics/, registry/ — implement core interfaces │
-├──────────────────────────────────────────────────────────┤
-│  Infrastructure                                           │
-│  PostgreSQL (sqlx), Docker (plugin containers), OTLP     │
-└──────────────────────────────────────────────────────────┘
+gRPC Request
+  → Interceptor Chain (trace_logging → realip → prometheus → structured_logging
+                       → panic_recovery → validation → error_code_conversion
+                       → rate_limit → license → audit)
+    → API Layer (internal/api)
+      → Core Layer (internal/core) — business logic + WorkerPool
+        → Tracing Decorator (internal/telemetry)
+          → Adapters Layer (internal/adapters/registry)
+            → PostgreSQL (plugin metadata) + Docker (plugin execution)
+          ← CodeGeneratorResponse
+        ← traced response
+      ← domain response
+    ← gRPC response
 ```
 
 ## 2. Component Deep Dive
 
-### Transport Layer — `internal/api/`
+### Transport Layer: `internal/api`
+
+Translates gRPC requests to domain types and maps domain errors to gRPC status codes.
 
 | File | Description |
 |------|-------------|
-| `api.go` | gRPC handler implementations (`ServiceAPIServer`) |
-| `audit_interceptor.go` | Audit logging interceptor (non-blocking channel send) |
-| `license_interceptor.go` | License-based feature gating interceptor |
-| `mcp.go` | MCP protocol server setup |
-| `mcp_tools.go` | MCP tool handlers for plugin listing |
+| `api.go` | gRPC handler implementing `generator.ServiceAPIServer`; `ErrorToStatus()` error mapping |
+| `license_interceptor.go` | gRPC interceptor that checks license-based feature access |
+| `mcp.go` | MCP HTTP handler factory (`newMCPHandler`) |
+| `mcp_tools.go` | MCP tool definitions (plugins_list, easyp_config_describe) |
 
-### Transport Layer — `internal/grpchelper/`
+### Business Logic Layer: `internal/core`
 
-| File | Description |
-|------|-------------|
-| `server.go` | gRPC server factory with full interceptor chain |
-| `client.go` | gRPC client factory |
-| `errors.go` | Internal error sentinel |
-| `grpc_codes.go` | Domain error → gRPC status code converter |
-| `grpc_logs.go` | Structured logging adapter for gRPC middleware |
-| `logger.go` | Logging interceptor |
-| `metrics.go` | Prometheus server metrics factory |
-| `trace_logging.go` | Trace ID injection into logs |
-
-### Application Layer — `internal/core/`
+Domain types, interfaces, and thin business logic. Delegates heavy work to Registry.
 
 | File | Description |
 |------|-------------|
-| `domain.go` | All domain types, interfaces, sentinel errors |
-| `core.go` | Business logic (`Core` struct implements `CoreService`) |
-| `pool.go` | `WorkerPool` — bounded concurrency for Docker execution |
+| `domain.go` | All domain types, interfaces, sentinel errors — single source of truth |
+| `core.go` | `Core` struct: Generate, ListPlugins, CRUD + audit + feature gate |
+| `pool.go` | `WorkerPool`: bounded concurrency for Docker execution (implements `Registry`) |
+| `context.go` | Context helpers (CallerIP extraction) |
 
-### Adapters Layer — `internal/adapters/`
-
-| Package | Implements | Description |
-|---------|-----------|-------------|
-| `audit/` | `core.AuditLog` | PostgreSQL audit log storage + async worker |
-| `metrics/` | `core.Metrics` | Prometheus business metrics + DB pool metrics |
-| `registry/` | `core.Registry` | PostgreSQL plugin storage + Docker container execution |
-
-### Infrastructure
+### Adapters Layer: `internal/adapters`
 
 | Package | Description |
 |---------|-------------|
-| `internal/database/` | `sqlx` wrapper with metrics, tracing, transactions |
-| `internal/license/` | PASETO v4 license management, FeatureGate, claims |
-| `internal/telemetry/` | OTLP init, Pyroscope, tracing decorators |
-| `internal/ratelimiter/` | Per-IP token bucket rate limiter |
-| `internal/monitor/` | Context-attached `slog` logger |
+| `adapters/registry` | PostgreSQL plugin metadata + Docker container execution |
+| `adapters/audit` | Async audit log writer (channel → background worker → DB) |
+| `adapters/metrics` | Prometheus collectors: DB pool stats, business metrics |
+
+### Infrastructure Layer
+
+| Package | Description |
+|---------|-------------|
+| `internal/database` | `database.SQL` wrapper with metrics/tracing; connectors; migration engine |
+| `internal/grpchelper` | gRPC server factory with full middleware stack |
+| `internal/license` | PASETO v4 license manager, FeatureGate, mock client |
+| `internal/ratelimiter` | Per-IP token bucket with FeatureGate integration |
+| `internal/telemetry` | OTLP + Pyroscope init; tracing decorators (`TracingCore`, `TracingRegistry`, `TracingPlugin`) |
+| `internal/monitor` | Context-aware `slog.Logger` (get/set via context) |
+| `internal/flags` | CLI flag types: `File` (with max size), `Level` (slog level) |
+| `sdk/` | Go client SDK with retry, health check, filtering, interceptors |
 
 ## 3. Directory Structure
 
 ```
 service/
-├── api/generator/v1/           # Proto contract + generated Go stubs + MCP bindings
-├── cmd/
-│   ├── main.go                 # Entry point: config → wiring → 4 HTTP servers
-│   └── mcp-smoke/main.go      # MCP smoke test
+├── cmd/main.go                        # Entry point: config → telemetry → DB → registry → core → gRPC
+├── api/generator/v1/                  # Proto contract + generated Go stubs + MCP bindings
+│   ├── generator.proto
+│   ├── generator.pb.go
+│   ├── generator_grpc.pb.go
+│   └── generator.mcp.go
 ├── internal/
-│   ├── core/
-│   │   ├── domain.go           # Types, interfaces, errors (single source of truth)
-│   │   ├── core.go             # Business logic
-│   │   └── pool.go             # WorkerPool (bounded Docker concurrency)
-│   ├── api/
-│   │   ├── api.go              # gRPC handlers
-│   │   ├── audit_interceptor.go
-│   │   ├── license_interceptor.go
-│   │   ├── mcp.go              # MCP setup
-│   │   └── mcp_tools.go        # MCP tool handlers
-│   ├── adapters/
-│   │   ├── audit/              # AuditLog impl (Store + Worker)
-│   │   ├── metrics/            # Prometheus collectors
-│   │   └── registry/           # Registry impl (DB + Docker)
-│   ├── database/               # sqlx wrapper, connectors, migrations
-│   ├── grpchelper/             # gRPC server/client, interceptor chain
-│   ├── license/                # PASETO manager, FeatureGate, claims
-│   ├── ratelimiter/            # Per-IP token bucket
-│   ├── telemetry/              # OTLP, Pyroscope, tracing decorators
-│   ├── monitor/                # Context slog logger
-│   └── flags/                  # CLI flag types
-├── sdk/                        # Go client SDK
-├── migrate/                    # SQL migrations (1-4)
-├── registry/                   # Plugin Dockerfiles
-└── configs/                    # Observability configs
+│   ├── core/                          # Domain types + business logic
+│   │   ├── domain.go                  # Types, interfaces, errors
+│   │   ├── core.go                    # Core struct (thin orchestration)
+│   │   ├── pool.go                    # WorkerPool (bounded Docker concurrency)
+│   │   └── context.go                # CallerIP context helpers
+│   ├── api/                           # gRPC handlers
+│   ├── adapters/                      # Interface implementations
+│   │   ├── registry/                  # Plugin DB + Docker execution
+│   │   ├── audit/                     # Async audit writer
+│   │   └── metrics/                   # Prometheus collectors
+│   ├── database/                      # DB abstraction
+│   │   ├── sql.go                     # database.SQL wrapper
+│   │   ├── connectors/                # Connection string providers
+│   │   └── migrations/                # Migration engine
+│   ├── grpchelper/                    # gRPC server/client factory
+│   ├── license/                       # PASETO v4 licensing
+│   ├── ratelimiter/                   # Per-IP rate limiting
+│   ├── telemetry/                     # Tracing decorators + OTLP init
+│   ├── monitor/                       # Context-aware slog
+│   └── flags/                         # CLI flag types
+├── sdk/                               # Go client SDK
+├── migrate/                           # SQL migrations (numbered)
+├── registry/                          # Plugin Dockerfiles
+└── configs/                           # Observability configs
 ```
 
 ## 4. Key Design Decisions
 
-1. **Layered architecture with clean interfaces**
-   - Domain types and interfaces defined once in `core/domain.go`
-   - Business logic in `core/core.go` delegates to `Registry` interface
-   - Adapters are swappable without touching business logic
+### 4.1 Decorator Pattern for Tracing
 
-2. **Decorator pattern for tracing**
-   - `TracingCore`, `TracingRegistry`, `TracingPlugin` in `telemetry/`
-   - Wraps existing interfaces with OpenTelemetry spans
-   - Zero tracing code in business logic or adapters
+Tracing is never mixed into business logic. Instead, `telemetry.TracingCore`, `TracingRegistry`, and `TracingPlugin` wrap the core interfaces and add OpenTelemetry spans transparently.
 
-3. **Worker pool for Docker parallelism**
-   - `WorkerPool` wraps `Registry` and limits concurrent Docker containers
-   - Non-blocking `Get()` returns `ErrServerOverloaded` when queue full
-   - Configurable workers, queue size, generation timeout, retries
+```go
+// In cmd/main.go:
+tracedRegistry := telemetry.NewTracingRegistry(repo)
+pool := core.NewWorkerPool(tracedRegistry, ...)
+module := core.New(metricsAdapter, pool, gate, auditCh, log)
+tracedCore := telemetry.NewTracingCore(module)
+```
 
-4. **Interceptor chain for cross-cutting concerns**
-   - Order: trace_logging → realip → prometheus → logging → recovery → validation → code_conversion → rate_limit → license → audit
-   - Extra interceptors appended after built-in chain
-   - Each interceptor is independently testable
+### 4.2 WorkerPool for Bounded Docker Execution
 
-5. **PASETO v4 licensing with FeatureGate**
-   - Community mode (defaults) when no license key provided
-   - Enterprise mode with configurable features, worker limits, plugin limits
-   - `FeatureGate` interface decouples business logic from licensing details
+Docker container execution is resource-intensive. `WorkerPool` implements `Registry` interface, wrapping the real registry with:
+- **Bounded concurrency** — configurable number of worker goroutines
+- **Non-blocking backpressure** — returns `ErrServerOverloaded` immediately if queue is full
+- **Automatic retries** — transient Docker errors (exit codes 125–127, connection refused) are retried
+- **Generation timeout** — per-request deadline for Docker execution
 
-6. **gRPC as primary API with MCP secondary**
-   - Protobuf defines the contract (`generator.proto`)
-   - MCP handler exposes same functionality over HTTP for LLM integration
-   - Both use the same `CoreService` interface
+### 4.3 Feature Gate for Two-Tier Licensing
+
+`FeatureGate` enables/disables features based on the current license (community vs enterprise). It's checked in Core business logic and in the rate limiter, without coupling these components to the license implementation.
+
+### 4.4 Interceptor Chain
+
+The gRPC middleware stack is composed via `grpchelper.NewServer`:
+```
+trace_logging → realip → prometheus → structured_logging → panic_recovery
+→ validation → error_code_conversion → rate_limit → license → audit
+```
+Each interceptor is independent and testable. Order matters: rate limiting before license checking, etc.
+
+### 4.5 Config Priority
+
+CLI flags > environment variables > YAML config file. The `start()` function in `cmd/main.go` tries YAML first (if `-cfg` provided), falls back to `envconfig`.
 
 ## 5. Data Flow
 
-### GenerateCode Request
+### Code Generation Request
 
 ```
-gRPC Client (SDK or easyp CLI)
-  → net.Listener :8080
-    → gRPC Server
-      → TraceLogging (inject trace_id into slog)
-        → RealIP (extract client IP from headers)
-          → Prometheus (record metrics)
-            → Logging (structured request/response logs)
-              → Recovery (panic → codes.Internal)
-                → Validator (protobuf field validation)
-                  → CodeConversion (domain error → gRPC status)
-                    → RateLimit (per-IP token bucket)
-                      → License (check FeatureGate)
-                        → Audit (record operation to channel)
-                          → API.GenerateCode() handler
-                            → Core.Generate()
-                              ├─ Parse group/name/version from plugin_name
-                              ├─ WorkerPool.Get() [enqueue job]
-                              │   └─ Worker goroutine:
-                              │       → Registry.Get() [SQL query]
-                              │       ← Return Plugin
-                              ├─ poolPlugin.Generate() [retry with timeout]
-                              │   └─ plugin.Generate()
-                              │       └─ docker run --rm -i \
-                              │            --network=none --memory=128m --cpus=1.0 \
-                              │            <registry>/<group>/<name>:<version>
-                              │            (stdin: CodeGeneratorRequest, stdout: CodeGeneratorResponse)
-                              └─ Metrics.GenerateCode() [record counter]
-                            ← GenerateCodeResponse
-                          ← AuditInterceptor [async write to channel → Worker → DB]
-                        ← gRPC Response to client
+gRPC Request (CodeGeneratorRequest)
+  → api.GenerateCode()
+    → core.Generate()
+      → getGroup() + getNameAndVersion() — parse plugin name
+      → pool.Get() — non-blocking queue submission
+        → worker goroutine picks up job
+          → tracedRegistry.Get() — DB lookup + Docker image pull
+            → registry.Get() — PostgreSQL query + docker create/start
+          ← Plugin instance
+        ← poolPlugin (wrapped with timeout + retry)
+      → poolPlugin.Generate() — with timeout + retry
+        → plugin.Generate() — Docker exec: stdin(CodeGeneratorRequest) → stdout(CodeGeneratorResponse)
+      ← CodeGeneratorResponse
+      → metrics.GenerateCode() — record metrics
+      → auditSuccess() — async audit entry via channel
+    ← GenerateCodeResponse
+  ← gRPC Response
 ```
 
-### Dependency Wiring (cmd/main.go)
+### MCP Request
 
 ```
-Config (YAML or ENV)
-  → Telemetry (TracerProvider + MeterProvider + Pyroscope)
-  → Database (sqlx + migrations)
-  → Registry (DB + Docker)
-  → Metrics Adapters (Prometheus collectors)
-  → AuditWorker + AuditStore + AuditChannel
-  → LicenseManager + FeatureGate
-  → RateLimiter
-  → TracingRegistry (decorator)
-  → WorkerPool (limits Docker parallelism)
-  → Core (business logic)
-  → TracingCore (decorator)
-  → API (gRPC handlers)
-  → 4 servers: gRPC(:8080), Metrics(:8081), Health(:8082), MCP(:8083)
+HTTP POST /mcp
+  → api.MCPHandler()
+    → MCP SDK router (streamable HTTP transport)
+      → tools: plugins_list → core.ListPlugins()
+      → tools: easyp_config_describe → static config schema
+    ← MCP tool result (ProtoJSON)
+  ← HTTP Response
 ```

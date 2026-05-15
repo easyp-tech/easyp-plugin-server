@@ -140,7 +140,7 @@ This project includes agent skills in `.agents/skills/`. Each skill provides dom
 
 | Skill | Path | When to Use |
 |-------|------|-------------|
-| **spec-driven-dev** | `.agents/skills/spec-driven-dev/SKILL.md` | New features, "implement X", "build X", spec-first approach. 6-phase pipeline with human approval gates. |
+| **sdd** | `.agents/skills/sdd/SKILL.md` | New features, "implement X", "build X", spec-first approach. 6-phase pipeline with human approval gates. |
 | **protobuf-expert-skill** | `.agents/skills/protobuf-expert-skill/SKILL.md` | Writing/reviewing `.proto` files, configuring `easyp.yaml`, lint rules, code generation plugins, proto dependencies, breaking changes, debugging easyp errors. |
 | **protoc-gen-mcp-skill** | `.agents/skills/protoc-gen-mcp-skill/SKILL.md` | Building MCP servers from protobuf definitions, generating MCP tools from proto files, adding MCP annotations, `protoc-gen-mcp` code generation. |
 

@@ -11,6 +11,12 @@
       "sourceType": "github",
       "computedHash": "df172c5e97b8c048e6af80d96681fa955d01a95b8ed4e167696ef8e0183b1280"
     },
+    "sdd": {
+      "source": "sipki-tech/sdd",
+      "sourceType": "github",
+      "skillPath": "skills/sdd/SKILL.md",
+      "computedHash": "e8f0585db0cc3b529e869f83d57e004122bb9a97970a527e15a24aac91168c44"
+    },
     "spec-driven-dev": {
       "source": "sipki-tech/spec-driven-developer-skill",
       "sourceType": "github",

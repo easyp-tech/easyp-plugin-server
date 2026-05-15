@@ -1,124 +1,101 @@
-<!-- generated: 2026-04-14, template: deployment.md -->
+<!-- generated: 2026-05-15, template: deployment.md -->
 # Deployment
 
-## 1. Overview
+Deployment and infrastructure configuration for EasyP Service.
 
-Docker-based deployment with docker-compose for local/dev. Production target: Docker containers with external orchestration.
+## Docker
 
-```
-Source → go build (multi-stage Dockerfile) → Docker image → docker-compose up
-```
+### Service Dockerfile
 
-## 2. Environments
+`Dockerfile` — multi-stage build:
+1. Build stage: `golang:alpine` → static binary
+2. Runtime stage: minimal image
 
-| Environment | Access | Purpose | Config |
-|-------------|--------|---------|--------|
-| Local (source) | `localhost:23410-23413` | Development from source | `config.local.yml` |
-| Local (Docker) | `localhost:8080-8083` | Full stack development | `config.yml` |
+### Plugin Dockerfiles
 
-## 3. Docker
+Located in `registry/{group}/{name}/{version}/Dockerfile`:
+- Multi-stage build (`golang:alpine` → `scratch`)
+- Static binary with `upx` compression
+- Runs as `nobody` (non-root)
+- Runtime constraints: `--network=none --memory=128m --cpus=1.0`
 
-### Dockerfile (multi-stage)
+## Docker Compose
 
-```dockerfile
-# Stage 1: Build
-FROM golang:alpine3.22 AS builder
-ARG LICENSE_PUBLIC_KEY=""
-COPY go.mod go.mod
-RUN go mod download
-COPY . /app
-WORKDIR /app
-RUN go build -ldflags "-X main.licensePublicKey=${LICENSE_PUBLIC_KEY}" -o easyp ./cmd/main.go
+`docker-compose.yml` provides a 14-service dev stack:
 
-# Stage 2: Runtime
-FROM alpine:3.22
-RUN apk add --no-cache docker-cli ca-certificates
-COPY --from=builder /app/easyp /easyp
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-ENTRYPOINT ["/easyp"]
-```
+| Service | Port | Description |
+|---------|------|-------------|
+| service | 8080-8083 | EasyP gRPC/HTTP service |
+| postgres | 5432 | PostgreSQL database |
+| registry | 5005 | Docker registry (v2 API) |
+| grafana | 3000 | Dashboards |
+| loki | 3100 | Log aggregation |
+| alloy | 4317-4318 | OpenTelemetry collector |
+| tempo | 3200 | Distributed tracing |
+| mimir | 9009 | Metrics storage |
+| pyroscope | 4040 | Continuous profiling |
+| ... | ... | Additional observability services |
 
-Key points:
-- `docker-cli` required in runtime for plugin container execution
-- `LICENSE_PUBLIC_KEY` build arg for Enterprise features
-- Minimal Alpine runtime image
+### Minimal Stack
 
-### Docker Compose (14 services)
-
-| Service | Image | Port | Purpose |
-|---------|-------|------|---------|
-| service | (built) | 8080-8083 | EasyP API service |
-| postgres | postgres:17 | 5432/5433 | Database |
-| registry | registry:2 | 5005 | Docker plugin registry |
-| grafana | grafana/grafana | 3000 | Dashboards |
-| tempo | grafana/tempo | — | Distributed tracing |
-| loki | grafana/loki | — | Log aggregation |
-| mimir | grafana/mimir | — | Metrics storage |
-| alloy | grafana/alloy | 4317 | OTEL collector |
-| pyroscope | grafana/pyroscope | 4040 | Profiling |
-| traefik | traefik | 80 | Reverse proxy |
-| rustfs | — | 9000-9001 | S3-compatible storage |
-| init-buckets | — | — | Create S3 buckets |
-
+For local development:
 ```bash
-# Start everything
-task up
-
-# Start minimal (Postgres + Registry only)
-task up-minimal
-
-# Stop and clean volumes
-task down
-
-# Follow service logs
-docker compose logs -f service
+task up-minimal  # postgres (port 5433) + docker registry (port 5005)
 ```
 
-## 4. Health Checks
+## GoReleaser
 
-| Endpoint | Type | Port | Checks |
-|----------|------|------|--------|
-| `/health` | HTTP | 8082/23412 | PostgreSQL connectivity |
+`.goreleaser.yaml` configures release builds:
+- Cross-compilation targets
+- Binary naming
+- Archive formats
+- Checksum generation
 
-Implemented via `hellofresh/health-go` with Postgres health check.
+## Configuration
 
-## 5. Secrets Management
+### Priority
 
-| Secret | Purpose | Where Set |
-|--------|---------|-----------|
-| `DB_POSTGRES_DSN` | Database connection string | Config file / env var |
-| `LICENSE_KEY` | PASETO license token | Config file / env var |
-| `LICENSE_FILE` | Path to license file | Config file / env var |
-| `LICENSE_PUBLIC_KEY` | Ed25519 public key | Build-time `-ldflags` |
+CLI flags > environment variables > YAML config file.
 
-Config priority: CLI flags > env vars > YAML file.
+### YAML Config
 
-## 6. Plugin Docker Images
-
-Plugin containers are executed by the service via Docker socket:
-
-```bash
-# Build and push required plugins
-task local-push-required
-
-# Build and push all plugins
-task local-push-registry
+```yaml
+server:
+  host: 0.0.0.0
+  port:
+    grpc: "23410"
+    metric: "23411"
+    health: "23412"
+    mcp: "23413"
+db:
+  driver: postgres
+  postgres: "postgres://..."
+  migrate_dir: migrate
+registry:
+  domain: "localhost:5005"
+telemetry:
+  otlp_endpoint: "localhost:4317"
+  pyroscope_endpoint: "http://localhost:4040"
+worker_pool:
+  workers: 4
+  queue_size: 16
+  generation_timeout: 120s
+  max_retries: 2
+  shutdown_timeout: 30s
+license:
+  cache_ttl: 5m
+rate_limit:
+  requests_per_second: 10.0
+  burst: 20
+  cleanup_interval: 10m
 ```
 
-**Plugin image layout** (multi-stage):
-1. Build: `golang:alpine` → compile protoc plugin
-2. Compress with `upx`
-3. Runtime: `scratch` image, run as `nobody`
-4. Execution flags: `--network=none --memory=128m --cpus=1.0`
+### Environment Variables
 
-**Requirement**: Docker socket mounted at `/var/run/docker.sock`
+All config fields have `env` tags. Prefix: section name (e.g., `SERVER_HOST`, `DB_POSTGRES_DSN`, `WORKER_POOL_WORKERS`).
 
-## 7. Enterprise Deployment
+## Requirements
 
-```bash
-# Build with license public key
-docker build --build-arg LICENSE_PUBLIC_KEY="<base64-key>" -t easyp-service .
-
-# Run with license token
-LICENSE_KEY="<paseto-token>" task up
-```
+- **Docker socket** — service mounts `/var/run/docker.sock` to execute plugin containers
+- **PostgreSQL** — required for plugin metadata and audit logs
+- **Docker Registry** — required for pulling plugin images

@@ -1,35 +1,42 @@
-<!-- generated: 2026-04-14, template: core.md -->
+<!-- generated: 2026-05-15, template: core.md -->
 # Code Style
+
+Project-specific code conventions for EasyP Service.
 
 ## 1. Layer Structure
 
 ```
-┌────────────────────────────────────────┐
-│  Transport (api/, grpchelper/)          │  Public proto types, gRPC handlers
-│  Converts proto ↔ domain types         │
-├────────────────────────────────────────┤
-│  Application (core/)                    │  Domain types only, no proto imports
-│  Business logic + interfaces            │
-├────────────────────────────────────────┤
-│  Adapters (adapters/)                   │  Implement core interfaces
-│  Internal structs for DB/Docker         │  Convert to/from domain types
-├────────────────────────────────────────┤
-│  Infrastructure (database/, telemetry/) │  Shared utilities
-│  Never imported by core/                │
-└────────────────────────────────────────┘
+Transport (gRPC / HTTP)
+  ↕ proto types ↔ domain types
+Application (core.Core)
+  ↕ domain interfaces
+Adapters (registry, audit, metrics)
+  ↕ raw DB / Docker / external APIs
+Infrastructure (database, telemetry, grpchelper)
 ```
 
-Rules:
-- `core/` never imports `api/`, `adapters/`, or `grpchelper/`
-- `api/` imports `core/` for interfaces and types
-- `adapters/` imports `core/` for interfaces and types
-- `telemetry/` imports `core/` interfaces to create decorator wrappers
+**Rules per layer:**
+- **Transport** — uses generated proto types; converts to/from domain types
+- **Application** — uses only domain types from `core/domain.go`; never imports adapter packages
+- **Adapters** — implement core interfaces; may use external libraries
+- **Infrastructure** — provides cross-cutting utilities; imported by all layers
 
-## 2. Conversion Pattern
+## 2. Struct Tags by Layer
 
-**API → Core (request):**
+| Layer | Tags | Example |
+|-------|------|---------|
+| Domain (`core/`) | None | `type PluginInfo struct { ... }` |
+| Config (`cmd/`) | `env:""` + `yaml:""` | `Host string \`env:"HOST" yaml:"host"\`` |
+| Proto (generated) | `protobuf:""` + `json:""` | Auto-generated, do not modify |
+
+Tag case rule: `snake_case` for all tag types (json, yaml, xml, bson, avro, mapstructure) — enforced by `tagliatelle` linter.
+
+## 3. Conversion Pattern
+
+### Proto → Domain (API layer)
+
 ```go
-// internal/api/api.go
+// In internal/api/api.go:
 filter := core.PluginFilter{
     Group:   strings.TrimSpace(request.GetGroup()),
     Name:    strings.TrimSpace(request.GetName()),
@@ -38,9 +45,9 @@ filter := core.PluginFilter{
 }
 ```
 
-**Core → API (response):**
+### Domain → Proto (API layer)
+
 ```go
-// internal/api/api.go
 func pluginInfoToProto(info *core.PluginInfo) *generator.PluginInfo {
     return &generator.PluginInfo{
         Id:        info.ID.String(),
@@ -53,40 +60,53 @@ func pluginInfoToProto(info *core.PluginInfo) *generator.PluginInfo {
 }
 ```
 
-## 3. Naming Conventions
+## 4. Naming Conventions
 
-| Category | Pattern | Example |
-|----------|---------|---------|
-| Files | `snake_case.go` | `audit_interceptor.go` |
-| Test files | `*_test.go` | `api_test.go` |
-| Packages | lowercase, single word | `core`, `api`, `registry` |
-| Exported types | PascalCase | `WorkerPool`, `PluginInfo` |
-| Unexported types | camelCase | `grpcMetrics`, `poolPlugin` |
-| Sentinel errors | `Err` prefix | `ErrNotFound`, `ErrInvalidPluginName` |
-| Feature enums | `Feature` prefix | `FeatureCodeGeneration` |
-| Constants | PascalCase exported | `OperationGenerateCode`, `AuditStatusSuccess` |
-| Constructors | `New` prefix | `New()`, `NewServer()`, `NewWorkerPool()` |
-| Interfaces | Noun/verb-based | `Registry`, `Plugin`, `Metrics` |
+### Files
 
-## 4. Interface Conventions
+| Layer | Pattern | Example |
+|-------|---------|---------|
+| Domain | `domain.go`, `core.go` | `internal/core/domain.go` |
+| Adapters | `<adapter_name>.go` | `internal/adapters/registry/registry.go` |
+| API | `api.go`, `mcp.go` | `internal/api/api.go` |
+| Tracing | `tracing_<target>.go` | `internal/telemetry/tracing_core.go` |
+| Tests | `<file>_test.go` (same package) | `internal/core/crud_test.go` |
+| Infrastructure | descriptive name | `internal/database/sql.go` |
 
-- `context.Context` is always the first argument
-- Return `error` as the last return value
-- Interfaces defined by the consumer (`core/domain.go`), not the implementor
-- No pointer receivers on interfaces
-- Document each method with godoc comment
+### Types
+
+| Category | Visibility | Example |
+|----------|-----------|---------|
+| Domain entities | Exported | `PluginInfo`, `AuditEntry` |
+| Domain interfaces | Exported | `Registry`, `Plugin`, `FeatureGate` |
+| Config structs | Unexported | `config`, `server`, `ports` |
+| Adapter implementations | Exported | `Store`, `Registry`, `Worker` |
+
+### Enums
 
 ```go
-type Registry interface {
-    Get(ctx context.Context, pluginGroup, pluginName, pluginVersion string) (Plugin, error)
-    List(ctx context.Context, filter PluginFilter) ([]PluginInfo, error)
-    Create(ctx context.Context, req CreatePluginRequest) (*PluginInfo, error)
-    Update(ctx context.Context, req UpdatePluginRequest) (*PluginInfo, error)
-    Delete(ctx context.Context, group, name, version string) error
-}
+type Feature int
+
+const (
+    FeatureCodeGeneration Feature = iota
+    FeaturePluginListing
+    // ...
+)
 ```
 
-## 5. Import Ordering
+Pattern: typed constant with `iota`, string names in a parallel array.
+
+## 5. Interface Conventions
+
+1. **Context first:** `func (r *Registry) Get(ctx context.Context, ...) (Plugin, error)`
+2. **Error always last:** all methods that can fail return `error` as the last value
+3. **No `I` prefix:** `Registry`, not `IRegistry`
+4. **Single-method interfaces preferred** for composability
+5. **Interface in consumer package:** `core.Registry` is defined in `internal/core`, implemented in `internal/adapters/registry`
+
+## 6. Import Ordering
+
+Enforced by `gci` formatter:
 
 ```go
 import (
@@ -101,112 +121,71 @@ import (
 
     // 3. Project packages
     "github.com/easyp-tech/service/internal/core"
+    "github.com/easyp-tech/service/internal/database"
 )
 ```
 
-## 6. Error Propagation
+## 7. Test File Organization
 
-- **Adapter → Core**: Convert infrastructure errors to domain sentinels where appropriate, otherwise wrap with `fmt.Errorf("context: %w", err)`
-- **Core → API**: Return domain errors as-is (sentinels)
-- **API → Client**: `ErrorToStatus()` maps domain errors → gRPC status codes
-- **Interceptors**: Log errors, never swallow them
-- **Rule**: Use `errors.Is()` for comparison, never `==`
+| Pattern | Location | Example |
+|---------|----------|---------|
+| Unit tests | Same directory, same package | `core/crud_test.go` |
+| Integration tests | Same directory | `license/claims_test.go` |
+| Test helpers | Same file or shared test file | Inline mocks in test files |
 
-```go
-// Adapter wraps DB error
-if errors.Is(err, sql.ErrNoRows) {
-    return nil, core.ErrNotFound
-}
-return nil, fmt.Errorf("get plugin %s/%s:%s: %w", group, name, version, err)
+No `_test` package suffix — tests are internal (can access unexported symbols).
 
-// API maps domain error
-case errors.Is(err, core.ErrNotFound):
-    code = codes.NotFound
+## 8. Quick Reference
+
+| Aspect | Application Layer | Adapters Layer | API Layer |
+|--------|-------------------|----------------|-----------|
+| Types | Domain structs | Implementation structs | Proto types |
+| Errors | Sentinel `Err*` vars | Wrap with `fmt.Errorf` | `ErrorToStatus()` mapping |
+| Logging | `monitor.FromContext(ctx)` | Same | Same |
+| Tracing | Via decorator (`TracingCore`) | Via decorator (`TracingRegistry`) | Via gRPC interceptor |
+| Tags | None | DB-specific (sqlx) | Proto-generated |
+
+## 9. Error Propagation
+
+```
+Adapter error → fmt.Errorf("c.registry.Get: %w", err)
+  → Core wraps with domain context
+    → API maps via ErrorToStatus() → gRPC status code
 ```
 
-## 7. Logging Conventions
+Rules:
+- **Wrap at every call site** with `fmt.Errorf("function: %w", err)`
+- **Domain errors** are sentinel: `core.ErrNotFound`, `core.ErrInvalidPluginName`, etc.
+- **Error classification** via `errorCode()` produces string codes for audit
+- **Never create new domain errors** outside `core/domain.go`
 
-- Logger: `log/slog` with JSON handler
-- Context propagation: `monitor.WithContext(ctx, log)` / `monitor.FromContext(ctx)`
-- Trace correlation: `TraceLoggingInterceptor` injects `trace_id` into slog attributes
-- Log levels:
-  - `Error`: operation failures, panics, shutdown errors
-  - `Warn`: license issues, audit overflow, degraded functionality
-  - `Info`: server start/stop, connection events
-  - `Debug`: request details, config values
-- Never log sensitive data (license keys, tokens, full request payloads)
+## 10. Logging Conventions
 
-## 8. Concurrency Patterns
+- **Logger:** `*slog.Logger` (stdlib, structured, JSON output)
+- **Initialization:** `slog.NewJSONHandler` with `AddSource: true`
+- **Context propagation:** `monitor.WithContext(ctx, log)` / `monitor.FromContext(ctx)`
+- **Trace correlation:** `telemetry.TraceHandler` injects `trace_id` and `span_id` into every log record
 
-- **Worker pool**: `core.WorkerPool` — N goroutines reading from a buffered channel
-- **Audit worker**: Single goroutine consuming from buffered channel (cap 1000)
-- **Context cancellation**: Propagated via `signal.NotifyContext` → `errgroup.WithContext`
-- **Graceful shutdown**: gRPC `GracefulStop()` → telemetry flush → audit drain → pool drain
-- **Rate limiter cleanup**: Background goroutine with configurable interval
-- **License watcher**: 60s ticker checking token expiration
-- **No mutexes in hot path**: WorkerPool uses channels, RateLimiter uses `sync.Map`
+| Layer | Log Level | What to Log |
+|-------|-----------|-------------|
+| API | Info | Request received, response sent |
+| Core | Warn | Audit send cancelled, retry attempts |
+| Adapters | Error | DB connection failures, Docker errors |
+| Infrastructure | Info/Error | Server start/stop, telemetry init |
 
-## 9. Test File Organization
+**Never log:** raw credentials, license keys, full request payloads.
 
-| Pattern | Description |
-|---------|-------------|
-| `api_test.go` | API handler tests (mock CoreService) |
-| `crud_test.go` | Core CRUD business logic tests |
-| `pool_test.go` | WorkerPool concurrency tests |
-| `client_test.go` | SDK client tests |
-| `claims_test.go` | License claims parsing tests |
-| `features_test.go` | Feature enum tests |
-| `registry_migration_test.go` | Registry migration tests |
-| `registry_preservation_test.go` | Registry data preservation tests |
+## 11. Concurrency Patterns
 
-## 10. Quick Reference
-
-| Aspect | Core | Adapters | API |
-|--------|------|----------|-----|
-| Types | Domain structs | Internal DB structs | Proto types |
-| Errors | Sentinel vars | Wrap with fmt.Errorf | ErrorToStatus mapping |
-| Logging | Via context | Via context | Via interceptors |
-| Tracing | Via decorator | Direct (OTLP) | Via interceptors |
-| Testing | Mock interfaces | Integration tests | Mock CoreService |
-
-## 11. Comments
-
-**Language:** all comments MUST be written in English. Russian or any other language is not allowed.
-
-**Style — godoc only:**
-
-- Every exported symbol (type, function, method, const, var) MUST have a doc comment starting with the symbol name.
-- Comments describe *what* a thing is or does, not *how* it works internally.
-- Do NOT add inline comments on individual `if`, `for`, `return`, or field-assignment lines unless the logic is genuinely non-obvious.
-- Do NOT number algorithm steps in exported doc comments (`// 1. Convert ...`).
-- Field comments use the `// Text.` form (single line above the field, or end-of-line `// text`).
-
-```go
-// Good — exported type
-// FeatureGate checks feature availability against the current license.
-type FeatureGate struct { ... }
-
-// Good — exported method
-// Enabled reports whether the given feature is permitted by the current license.
-// Returns false for unrecognised Feature values.
-func (fg *FeatureGate) Enabled(feat core.Feature) bool { ... }
-
-// Good — field comment
-type Config struct {
-    // CacheTTL is the interval between license refresh calls.
-    // Defaults to 5 minutes when zero or negative.
-    CacheTTL time.Duration
-}
-
-// Bad — Russian
-// Enabled возвращает true, если функция разрешена.
-
-// Bad — numbered algorithm steps in exported doc comment
-// Enabled checks the feature.
-// 1. Convert core.Feature → private feature.
-// 2. Get claims from Manager.
-
-// Bad — inline comment on an if
-if err != nil { // handle error
-```
-
+- **errgroup** for parallel server startup (gRPC, metrics, health, MCP)
+- **WorkerPool** for bounded Docker execution (channel-based job queue)
+- **Audit Worker** — single goroutine consuming from buffered channel
+- **Signal handling** — `signal.NotifyContext` + `forceShutdown` goroutine (15s hard deadline)
+- **Graceful shutdown sequence:**
+  1. Context cancelled (signal received)
+  2. gRPC `GracefulStop()` — stop accepting new requests
+  3. HTTP servers `Shutdown()` — drain active connections
+  4. Telemetry flush
+  5. WorkerPool `Shutdown()` — drain job queue
+  6. Audit worker `Shutdown()` — flush remaining events
+  7. DB connection close

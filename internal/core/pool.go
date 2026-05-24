@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os/exec"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,9 +20,6 @@ import (
 const (
 	defaultGenerationTimeout = 120 * time.Second
 	defaultShutdownTimeout   = 30 * time.Second
-	dockerExitCodeError      = 125 // Docker daemon error exit code
-	dockerExitCodeNotFound   = 126 // Docker command not found exit code
-	dockerExitCodePermission = 127 // Docker permission denied exit code
 )
 
 // WorkerPoolConfig содержит параметры конфигурации worker pool.
@@ -50,7 +46,7 @@ type jobResult struct {
 	err    error
 }
 
-// WorkerPool управляет пулом горутин для ограничения параллелизма Docker-выполнения.
+// WorkerPool управляет пулом горутин для ограничения параллелизма выполнения плагинов.
 // Реализует интерфейс Registry, оборачивая реальный Registry.
 type WorkerPool struct {
 	inner         Registry
@@ -316,21 +312,10 @@ func isTransient(err error) bool {
 		return false
 	}
 
-	// exec.ExitError с определёнными кодами выхода Docker
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		switch exitErr.ExitCode() {
-		case dockerExitCodeError, dockerExitCodeNotFound, dockerExitCodePermission:
-			return true
-		}
-	}
-
 	// Подстроки, указывающие на транзиентные ошибки
 	msg := strings.ToLower(err.Error())
 	switch {
 	case strings.Contains(msg, "connection refused"):
-		return true
-	case strings.Contains(msg, "daemon"):
 		return true
 	case strings.Contains(msg, "temporary failure"):
 		return true

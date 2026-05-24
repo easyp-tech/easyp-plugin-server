@@ -11,7 +11,7 @@ import (
 // returns all it methods.
 func MethodsOf(v any) []string {
 	typ := reflect.TypeOf(v)
-	if typ.Kind() != reflect.Ptr || typ.Elem().Kind() != reflect.Interface {
+	if typ.Kind() != reflect.Pointer || typ.Elem().Kind() != reflect.Interface {
 		panic("require pointer to interface")
 	}
 	typ = typ.Elem()

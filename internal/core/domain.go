@@ -242,6 +242,7 @@ func CommunityLicenseClaims() LicenseClaims {
 		FeatureRateLimiting,
 		FeaturePluginCRUD,
 	}
+
 	return LicenseClaims{
 		Tier:       LicenseTierCommunity,
 		Features:   communityFeatures,

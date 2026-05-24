@@ -74,7 +74,8 @@ type (
 		Postgres   string `env:"POSTGRES_DSN"                 yaml:"postgres"`
 	}
 	registryConfig struct {
-		Domain string `env:"DOMAIN, default=localhost:5005" yaml:"domain"`
+		PluginsDir    string `env:"PLUGINS_DIR, default=/plugins"     yaml:"plugins_dir"`
+		MaxOutputSize int64  `env:"MAX_OUTPUT_SIZE, default=67108864" yaml:"max_output_size"`
 	}
 	telemetryConfig struct {
 		OTLPEndpoint      string `env:"OTEL_EXPORTER_OTLP_ENDPOINT, default=localhost:4317" yaml:"otlp_endpoint"`
@@ -199,7 +200,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 		return fmt.Errorf("database.NewSQL: %w", err)
 	}
 
-	repo, err := registry.New(ctx, db, cfg.Registry.Domain)
+	repo, err := registry.New(ctx, db, cfg.Registry.PluginsDir, cfg.Registry.MaxOutputSize)
 	if err != nil {
 		return fmt.Errorf("registry.New: %w", err)
 	}
@@ -261,7 +262,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 		wpWorkers = licenseWorkers
 	}
 
-	// Wrap TracingRegistry in WorkerPool (limit Docker parallelism)
+	// Wrap TracingRegistry in WorkerPool (limit plugin execution parallelism)
 	metricsAdapter := adapter_metrics.New(reg, namespace)
 	pool := core.NewWorkerPool(tracedRegistry, core.WorkerPoolConfig{
 		Workers:           wpWorkers,

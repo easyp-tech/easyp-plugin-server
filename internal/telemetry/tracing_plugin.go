@@ -48,16 +48,15 @@ func (p *TracingPlugin) Generate(ctx context.Context, req *pluginpb.CodeGenerato
 		trace.WithAttributes(attribute.String("plugin.image", imageName)))
 	defer span.End()
 
-	// Create child span for Docker execution
-	ctx, dockerSpan := p.tracer.Start(ctx, "docker.exec",
+	// Create child span for process execution
+	ctx, processSpan := p.tracer.Start(ctx, "process.exec",
 		trace.WithAttributes(
-			attribute.String("docker.image", imageName),
-			attribute.String("docker.command", "docker run"),
+			attribute.String("process.command", imageName),
 		))
 
 	start := time.Now()
 
-	// Wrap Docker execution with Pyroscope labels
+	// Wrap process execution with Pyroscope labels
 	var resp *pluginpb.CodeGeneratorResponse
 	var err error
 	pyroscope.TagWrapper(ctx, pyroscope.Labels("plugin", imageName), func(ctx context.Context) {
@@ -66,17 +65,17 @@ func (p *TracingPlugin) Generate(ctx context.Context, req *pluginpb.CodeGenerato
 
 	elapsed := time.Since(start).Seconds()
 
-	// End docker span with error info if needed
+	// End process span with error info if needed
 	if err != nil {
-		dockerSpan.RecordError(err)
-		dockerSpan.SetStatus(codes.Error, err.Error())
+		processSpan.RecordError(err)
+		processSpan.SetStatus(codes.Error, err.Error())
 
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			dockerSpan.SetAttributes(attribute.Int("docker.exit_code", exitErr.ExitCode()))
+			processSpan.SetAttributes(attribute.Int("process.exit_code", exitErr.ExitCode()))
 		}
 	}
-	dockerSpan.End()
+	processSpan.End()
 
 	p.duration.Record(ctx, elapsed,
 		metric.WithAttributes(attribute.String("plugin.name", info.Name)))

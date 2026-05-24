@@ -1,6 +1,4 @@
-FROM golang:alpine3.22 AS builder
-
-RUN apk update && apk add --no-cache ca-certificates
+FROM golang:1.26-bookworm AS builder
 
 COPY go.mod go.mod
 
@@ -12,11 +10,12 @@ WORKDIR /app
 
 RUN go build -o easyp ./cmd/main.go
 
-FROM alpine:3.22
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache docker-cli ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/easyp /easyp
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+VOLUME ["/plugins"]
 
 ENTRYPOINT ["/easyp"]

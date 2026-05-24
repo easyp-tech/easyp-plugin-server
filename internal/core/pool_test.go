@@ -3,8 +3,11 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"os/exec"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -514,5 +517,47 @@ func TestSentinelErrors_Distinct(t *testing.T) {
 	}
 	if ErrShuttingDown.Error() != "server shutting down" {
 		t.Errorf("ErrShuttingDown message = %q", ErrShuttingDown.Error())
+	}
+}
+
+// --- Test 11: isTransient behavior ---
+
+func TestIsTransient(t *testing.T) {
+	// 1. context.DeadlineExceeded -> false
+	if isTransient(context.DeadlineExceeded) {
+		t.Error("context.DeadlineExceeded should not be transient")
+	}
+
+	// 2. Docker exit codes (125, 126, 127) -> false on new behavior
+	for _, code := range []int{125, 126, 127} {
+		cmd := exec.CommandContext(context.Background(), "sh", "-c", fmt.Sprintf("exit %d", code))
+		err := cmd.Run()
+		if err == nil {
+			t.Fatalf("expected command to fail with code %d", code)
+		}
+		if isTransient(err) {
+			t.Errorf("exit code %d should not be transient under new disk-plugin design", code)
+		}
+	}
+
+	// 3. Command killed by SIGKILL -> false
+	cmd := exec.CommandContext(context.Background(), "sleep", "10")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start sleep: %v", err)
+	}
+	if err := cmd.Process.Signal(syscall.SIGKILL); err != nil {
+		t.Fatalf("failed to send SIGKILL: %v", err)
+	}
+	err := cmd.Wait()
+	if err == nil {
+		t.Fatal("expected sleep command to fail after SIGKILL")
+	}
+	if isTransient(err) {
+		t.Error("process killed by SIGKILL should not be transient")
+	}
+
+	// 4. Random error -> false
+	if isTransient(errors.New("some random error")) {
+		t.Error("random error should not be transient")
 	}
 }

@@ -1,6 +1,7 @@
 package license
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,12 +34,8 @@ func (g *stubFeatureGate) Enabled(feat core.Feature) bool {
 	if lf.IsEnterprise() {
 		return false
 	}
-	for _, f := range g.claims.Features {
-		if f == feat {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(g.claims.Features, feat)
 }
 
 func (g *stubFeatureGate) MaxWorkers() int { return g.claims.MaxWorkers }

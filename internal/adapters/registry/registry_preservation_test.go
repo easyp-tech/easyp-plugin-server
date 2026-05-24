@@ -104,15 +104,15 @@ func TestPreservation_GetParsesPluginConfig(t *testing.T) {
 	}
 }
 
-// TestPreservation_GetSetsPluginDomain verifies that Get assigns the registry's
-// domain to the returned plugin, enabling correct Docker image name construction.
-func TestPreservation_GetSetsPluginDomain(t *testing.T) {
+// TestPreservation_GetSetsPluginMaxOutputSize verifies that Get assigns the registry's
+// maxOutputSize to the returned plugin.
+func TestPreservation_GetSetsPluginMaxOutputSize(t *testing.T) {
 	f := parseRegistryAST(t)
 	fn := preservationFindMethod(t, f, "Get")
 	src := preservationNodeSource(t, fn.Body)
 
-	if !strings.Contains(src, "dbFormat.domain") || !strings.Contains(src, "r.domain") {
-		t.Fatal("Get must assign r.domain to the returned plugin's domain field")
+	if !strings.Contains(src, "dbFormat.maxOutputSize") || !strings.Contains(src, "r.maxOutputSize") {
+		t.Fatal("Get must assign r.maxOutputSize to the returned plugin's maxOutputSize field")
 	}
 }
 
@@ -349,18 +349,17 @@ func TestPreservation_CloseReturnsError(t *testing.T) {
 // --- Property-based tests for pure business logic ---
 
 // TestPreservation_PluginConfigParsing verifies that JSON config parsing
-// preserves Docker configuration fields using property-based testing.
+// preserves Command, Env, and Timeout configuration fields using property-based testing.
 func TestPreservation_PluginConfigParsing(t *testing.T) {
-	prop := func(network, memory, cpus, user string, readOnly bool) bool {
-		dc := DockerConfig{
-			Network:  network,
-			Memory:   memory,
-			CPUs:     cpus,
-			User:     user,
-			ReadOnly: readOnly,
+	prop := func(cmd []string, timeout string) bool {
+		if cmd == nil {
+			cmd = []string{}
 		}
-
-		pc := PluginConfig{Docker: &dc}
+		pc := PluginConfig{
+			Command: cmd,
+			Env:     map[string]string{"TEST": "VALUE"},
+			Timeout: timeout,
+		}
 		data, err := json.Marshal(pc)
 		if err != nil {
 			return false
@@ -371,15 +370,16 @@ func TestPreservation_PluginConfigParsing(t *testing.T) {
 			return false
 		}
 
-		if parsed.Docker == nil {
+		if len(parsed.Command) != len(cmd) {
 			return false
 		}
+		for i := range cmd {
+			if parsed.Command[i] != cmd[i] {
+				return false
+			}
+		}
 
-		return parsed.Docker.Network == network &&
-			parsed.Docker.Memory == memory &&
-			parsed.Docker.CPUs == cpus &&
-			parsed.Docker.User == user &&
-			parsed.Docker.ReadOnly == readOnly
+		return parsed.Env["TEST"] == "VALUE" && parsed.Timeout == timeout
 	}
 
 	err := quick.Check(prop, &quick.Config{MaxCount: 200})

@@ -8,8 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
+	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
@@ -22,33 +27,38 @@ import (
 	"github.com/easyp-tech/service/internal/database"
 )
 
+const (
+	numPipesReader = 2
+	stderrLimit    = 1 * 1024 * 1024
+)
+
+// Registry package errors.
+var (
+	ErrEmptyConfig     = errors.New("empty config")
+	ErrOldFormat       = errors.New("old format config is no longer supported")
+	ErrEmptyCommand    = errors.New("empty command array")
+	ErrInvalidConfig   = errors.New("invalid plugin configuration")
+	ErrEmptyPluginsDir = errors.New("pluginsDir cannot be empty")
+)
+
 var (
 	_ core.Registry = &Registry{}
 	_ core.Plugin   = &plugin{}
 )
 
 type (
-	// DockerConfig represents Docker execution configuration.
-	DockerConfig struct {
-		Network    string            `json:"network,omitempty"`
-		Memory     string            `json:"memory,omitempty"`
-		CPUs       string            `json:"cpus,omitempty"`
-		User       string            `json:"user,omitempty"`
-		Env        map[string]string `json:"env,omitempty"`
-		WorkingDir string            `json:"working_dir,omitempty"`
-		ReadOnly   bool              `json:"read_only,omitempty"`
-		TmpFS      map[string]string `json:"tmpfs,omitempty"`
-	}
-
 	// PluginConfig represents the complete plugin configuration.
 	PluginConfig struct {
-		Docker *DockerConfig `json:"docker,omitempty"`
+		Command []string          `json:"command"`
+		Env     map[string]string `json:"env,omitempty"`
+		Timeout string            `json:"timeout,omitempty"`
 	}
 
 	// Registry is a registry for EasyP plugin server.
 	Registry struct {
-		db     *database.SQL
-		domain *url.URL
+		db            *database.SQL
+		pluginsDir    string
+		maxOutputSize int64
 	}
 
 	// plugin is a plugin in the registry.
@@ -61,21 +71,69 @@ type (
 		Tags      pq.StringArray  `db:"tags"`
 		CreatedAt time.Time       `db:"created_at"`
 
-		domain       *url.URL     `db:"-"`
-		pluginConfig PluginConfig `db:"-"`
+		maxOutputSize int64        `db:"-"`
+		pluginConfig  PluginConfig `db:"-"`
 	}
 )
 
+// ValidateConfig checks if the given config is valid.
+func ValidateConfig(config json.RawMessage, pluginsDir string) error {
+	if len(config) == 0 {
+		return ErrEmptyConfig
+	}
+
+	// Check if it's in the old docker format
+	var raw map[string]json.RawMessage
+	unmarshalErr := json.Unmarshal(config, &raw)
+	if unmarshalErr == nil {
+		if _, exists := raw["docker"]; exists {
+			return ErrOldFormat
+		}
+	}
+
+	var pConfig PluginConfig
+	unmarshalErr = json.Unmarshal(config, &pConfig)
+	if unmarshalErr != nil {
+		return fmt.Errorf("%w: json.Unmarshal config: %w", ErrInvalidConfig, unmarshalErr)
+	}
+
+	if len(pConfig.Command) == 0 {
+		return ErrEmptyCommand
+	}
+
+	cleanedPluginsDir := filepath.Clean(pluginsDir)
+
+	hasElementInPluginsDir := false
+	for _, arg := range pConfig.Command {
+		cleanedArg := filepath.Clean(arg)
+		if cleanedArg == cleanedPluginsDir || strings.HasPrefix(cleanedArg, cleanedPluginsDir+string(filepath.Separator)) {
+			hasElementInPluginsDir = true
+
+			break
+		}
+	}
+
+	if !hasElementInPluginsDir {
+		return fmt.Errorf(
+			"%w: must contain at least one path inside plugins directory (no traversal outside plugins directory allowed): %s",
+			ErrInvalidConfig,
+			pluginsDir,
+		)
+	}
+
+	return nil
+}
+
 // New build and returns a new Registry.
-func New(_ context.Context, db *database.SQL, domain string) (*Registry, error) {
-	parsedURL, err := url.Parse(domain)
-	if err != nil {
-		return nil, fmt.Errorf("url.Parse: %w", err)
+func New(_ context.Context, db *database.SQL, pluginsDir string, maxOutputSize int64) (*Registry, error) {
+	if pluginsDir == "" {
+		return nil, ErrEmptyPluginsDir
 	}
 
 	return &Registry{
-		db:     db,
-		domain: parsedURL,
+		db:            db,
+		pluginsDir:    pluginsDir,
+		maxOutputSize: maxOutputSize,
 	}, nil
 }
 
@@ -111,7 +169,7 @@ func (r *Registry) Get(ctx context.Context, pluginGroup, pluginName, pluginVersi
 		}
 	}
 
-	dbFormat.domain = r.domain
+	dbFormat.maxOutputSize = r.maxOutputSize
 
 	return &dbFormat, nil
 }
@@ -192,88 +250,161 @@ func (r *Registry) Health(ctx context.Context) error {
 // DB returns the underlying *database.SQL connection.
 func (r *Registry) DB() *database.SQL { return r.db }
 
+// readPipes reads stdout and stderr in parallel up to limits and returns data.
+func readPipes(stdout io.Reader, stderr io.Reader, maxStdout int64) ([]byte, []byte, error) {
+	var stdoutData, stderrData []byte
+	var stdoutErr, stderrErr error
+
+	var wg sync.WaitGroup
+	wg.Add(numPipesReader)
+
+	go func() {
+		defer wg.Done()
+
+		lr := io.LimitReader(stdout, maxStdout+1)
+		stdoutData, stdoutErr = io.ReadAll(lr)
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		lr := io.LimitReader(stderr, stderrLimit)
+		stderrData, stderrErr = io.ReadAll(lr)
+	}()
+
+	wg.Wait()
+
+	if stdoutErr != nil {
+		return nil, nil, fmt.Errorf("failed to read plugin stdout: %w", stdoutErr)
+	}
+
+	if stderrErr != nil {
+		return nil, nil, fmt.Errorf("failed to read plugin stderr: %w", stderrErr)
+	}
+
+	return stdoutData, stderrData, nil
+}
+
 // Generate implements core.Plugin.
 func (p *plugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorRequest) (*pluginpb.CodeGeneratorResponse, error) {
 	requestData, err := proto.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("proto.Marshal: %w", err)
+		return nil, fmt.Errorf("%w: proto.Marshal: %w", core.ErrGenerationFailed, err)
 	}
 
-	imageName := p.domain.String() + "/" + p.GroupName + "/" + p.Name + ":" + p.Version
-
-	// Build Docker command with configuration from database
-	args := []string{"run", "--rm", "-i"}
-
-	// Get Docker configuration
-	dockerConfig := p.pluginConfig.Docker
-
-	// Apply Docker configuration from database
-	if dockerConfig.Network != "" {
-		args = append(args, "--network="+dockerConfig.Network)
-	} else {
-		// Default security: no network access
-		args = append(args, "--network=none")
+	if len(p.pluginConfig.Command) == 0 {
+		return nil, fmt.Errorf("%w: plugin configuration has no command specified", core.ErrInvalidPluginName)
 	}
 
-	if dockerConfig.Memory != "" {
-		args = append(args, "--memory="+dockerConfig.Memory)
-	} else {
-		// Default memory limit
-		args = append(args, "--memory=128m")
-	}
-
-	if dockerConfig.CPUs != "" {
-		args = append(args, "--cpus="+dockerConfig.CPUs)
-	} else {
-		// Default CPU limit
-		args = append(args, "--cpus=1.0")
-	}
-
-	if dockerConfig.User != "" {
-		args = append(args, "--user="+dockerConfig.User)
-	}
-
-	if dockerConfig.WorkingDir != "" {
-		args = append(args, "--workdir="+dockerConfig.WorkingDir)
-	}
-
-	if dockerConfig.ReadOnly {
-		args = append(args, "--read-only")
-	}
-
-	// Add environment variables
-	for key, value := range dockerConfig.Env {
-		args = append(args, "--env", key+"="+value)
-	}
-
-	// Add tmpfs mounts
-	for path, opts := range dockerConfig.TmpFS {
-		if opts != "" {
-			args = append(args, "--tmpfs", path+":"+opts)
-		} else {
-			args = append(args, "--tmpfs", path)
+	// 1. Handle per-plugin custom timeout
+	if p.pluginConfig.Timeout != "" {
+		timeoutDuration, err := time.ParseDuration(p.pluginConfig.Timeout)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid plugin timeout %q: %w", core.ErrGenerationFailed, p.pluginConfig.Timeout, err)
 		}
+
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeoutDuration)
+
+		defer cancel()
 	}
 
-	args = append(args, imageName)
+	// 2. Prepare command execution
+	//nolint:gosec // The command is validated by ValidateConfig and retrieved from the registry database.
+	cmd := exec.CommandContext(ctx, p.pluginConfig.Command[0], p.pluginConfig.Command[1:]...)
 
-	cmd := exec.CommandContext(ctx, "docker", args...)
+	// Clean env, only propagate configured env variables
+	cmd.Env = make([]string, 0, len(p.pluginConfig.Env))
+	for k, v := range p.pluginConfig.Env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+
+	// Stdin setup
 	cmd.Stdin = bytes.NewReader(requestData)
 
-	output, err := cmd.Output()
+	// Process group isolation (Unix-specific pgid setup)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	// Stdout and stderr pipes
+	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("plugin execution failed: %w, stderr: %s", err, string(exitErr.Stderr))
+		return nil, fmt.Errorf("%w: cmd.StdoutPipe: %w", core.ErrGenerationFailed, err)
+	}
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("%w: cmd.StderrPipe: %w", core.ErrGenerationFailed, err)
+	}
+
+	// Start command
+	startErr := cmd.Start()
+	if startErr != nil {
+		if errors.Is(startErr, exec.ErrNotFound) {
+			return nil, fmt.Errorf("%w: plugin binary not found: %w", core.ErrNotFound, startErr)
 		}
 
-		return nil, fmt.Errorf("cmd.Output: %w", err)
+		if errors.Is(startErr, os.ErrPermission) {
+			return nil, fmt.Errorf("%w: permission denied to execute plugin: %w", core.ErrGenerationFailed, startErr)
+		}
+
+		return nil, fmt.Errorf("%w: cmd.Start: %w", core.ErrGenerationFailed, startErr)
+	}
+
+	// Ensure process group is killed when we exit (e.g. on context timeout / cancellation)
+	doneChan := make(chan struct{})
+	defer close(doneChan)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			if cmd.Process != nil {
+				// Kill the entire process group (pgid is negative PID)
+				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			}
+		case <-doneChan:
+		}
+	}()
+
+	// Read outputs concurrently with size limits.
+	stdoutData, stderrData, readErr := readPipes(stdoutPipe, stderrPipe, p.maxOutputSize)
+	if readErr != nil {
+		return nil, readErr
+	}
+
+	// Wait for process to exit
+	waitErr := cmd.Wait()
+
+	// Check if context was cancelled/timed out
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("%w: context error: %w", core.ErrGenerationFailed, ctx.Err())
+	}
+
+	// Process output limits
+	if int64(len(stdoutData)) > p.maxOutputSize {
+		return nil, fmt.Errorf("%w: plugin execution failed: output limit exceeded (max %d bytes)", core.ErrGenerationFailed, p.maxOutputSize)
+	}
+
+	if waitErr != nil {
+		var exitErr *exec.ExitError
+		if errors.As(waitErr, &exitErr) {
+			return nil, fmt.Errorf("%w: plugin execution failed: %w, stderr: %s", core.ErrGenerationFailed, waitErr, string(stderrData))
+		}
+
+		if strings.Contains(waitErr.Error(), "not found") || strings.Contains(waitErr.Error(), "no such file") {
+			return nil, fmt.Errorf("%w: plugin binary not found: %w", core.ErrNotFound, waitErr)
+		}
+
+		if strings.Contains(waitErr.Error(), "permission denied") {
+			return nil, fmt.Errorf("%w: permission denied to execute plugin: %w", core.ErrGenerationFailed, waitErr)
+		}
+
+		return nil, fmt.Errorf("%w: plugin execution failed: %w, stderr: %s", core.ErrGenerationFailed, waitErr, string(stderrData))
 	}
 
 	var response pluginpb.CodeGeneratorResponse
-	err = proto.Unmarshal(output, &response)
+	err = proto.Unmarshal(stdoutData, &response)
 	if err != nil {
-		return nil, fmt.Errorf("proto.Unmarshal: %w", err)
+		return nil, fmt.Errorf("%w: proto.Unmarshal: %w", core.ErrGenerationFailed, err)
 	}
 
 	return &response, nil
@@ -281,6 +412,11 @@ func (p *plugin) Generate(ctx context.Context, req *pluginpb.CodeGeneratorReques
 
 // Create implements core.Registry.
 func (r *Registry) Create(ctx context.Context, req core.CreatePluginRequest) (*core.PluginInfo, error) {
+	validateErr := ValidateConfig(req.Config, r.pluginsDir)
+	if validateErr != nil {
+		return nil, fmt.Errorf("ValidateConfig: %w", validateErr)
+	}
+
 	var plug plugin
 
 	err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {
@@ -312,6 +448,11 @@ func (r *Registry) Create(ctx context.Context, req core.CreatePluginRequest) (*c
 
 // Update implements core.Registry.
 func (r *Registry) Update(ctx context.Context, req core.UpdatePluginRequest) (*core.PluginInfo, error) {
+	validateErr := ValidateConfig(req.Config, r.pluginsDir)
+	if validateErr != nil {
+		return nil, fmt.Errorf("ValidateConfig: %w", validateErr)
+	}
+
 	var plug plugin
 
 	err := r.db.NoTxContext(ctx, func(conn *sqlx.DB) error {

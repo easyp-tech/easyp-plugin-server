@@ -528,7 +528,7 @@ func TestIsTransient(t *testing.T) {
 		t.Error("context.DeadlineExceeded should not be transient")
 	}
 
-	// 2. Docker exit codes (125, 126, 127) -> false on new behavior
+	// 2. Process exit codes (125, 126, 127) -> false on new behavior
 	for _, code := range []int{125, 126, 127} {
 		cmd := exec.CommandContext(context.Background(), "sh", "-c", fmt.Sprintf("exit %d", code))
 		err := cmd.Run()

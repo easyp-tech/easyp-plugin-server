@@ -46,7 +46,7 @@ type jobResult struct {
 	err    error
 }
 
-// WorkerPool управляет пулом горутин для ограничения параллелизма Docker-выполнения.
+// WorkerPool управляет пулом горутин для ограничения параллелизма выполнения плагинов.
 // Реализует интерфейс Registry, оборачивая реальный Registry.
 type WorkerPool struct {
 	inner         Registry

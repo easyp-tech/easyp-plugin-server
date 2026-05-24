@@ -35,7 +35,6 @@ const (
 // Registry package errors.
 var (
 	ErrEmptyConfig     = errors.New("empty config")
-	ErrOldFormat       = errors.New("old format config is no longer supported")
 	ErrEmptyCommand    = errors.New("empty command array")
 	ErrInvalidConfig   = errors.New("invalid plugin configuration")
 	ErrEmptyPluginsDir = errors.New("pluginsDir cannot be empty")
@@ -82,17 +81,8 @@ func ValidateConfig(config json.RawMessage, pluginsDir string) error {
 		return ErrEmptyConfig
 	}
 
-	// Check if it's in the old docker format
-	var raw map[string]json.RawMessage
-	unmarshalErr := json.Unmarshal(config, &raw)
-	if unmarshalErr == nil {
-		if _, exists := raw["docker"]; exists {
-			return ErrOldFormat
-		}
-	}
-
 	var pConfig PluginConfig
-	unmarshalErr = json.Unmarshal(config, &pConfig)
+	unmarshalErr := json.Unmarshal(config, &pConfig)
 	if unmarshalErr != nil {
 		return fmt.Errorf("%w: json.Unmarshal config: %w", ErrInvalidConfig, unmarshalErr)
 	}

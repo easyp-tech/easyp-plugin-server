@@ -262,7 +262,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 		wpWorkers = licenseWorkers
 	}
 
-	// Wrap TracingRegistry in WorkerPool (limit Docker parallelism)
+	// Wrap TracingRegistry in WorkerPool (limit plugin execution parallelism)
 	metricsAdapter := adapter_metrics.New(reg, namespace)
 	pool := core.NewWorkerPool(tracedRegistry, core.WorkerPoolConfig{
 		Workers:           wpWorkers,

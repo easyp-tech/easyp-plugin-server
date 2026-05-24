@@ -117,12 +117,6 @@ func TestValidateConfig(t *testing.T) {
 			errSub:  "outside plugins directory",
 		},
 		{
-			name:    "old docker format config",
-			config:  `{"docker": {"network": "none"}}`,
-			wantErr: true,
-			errSub:  "old format config",
-		},
-		{
 			name:    "invalid json",
 			config:  `{invalid}`,
 			wantErr: true,

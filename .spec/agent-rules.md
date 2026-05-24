@@ -1,4 +1,4 @@
-<!-- generated: 2026-05-15, template: bootstrap.md -->
+<!-- generated: 2026-05-24, template: bootstrap.md -->
 # Agent Rules
 
 Mandatory rules for AI agents working on this project.
@@ -65,3 +65,4 @@ Mandatory rules for AI agents working on this project.
 - **Database access** always through `database.SQL` wrapper, never raw `sqlx.DB`
 - **Context propagation** — always pass `context.Context` as first argument
 - **Logger** — use `monitor.FromContext(ctx)` to get context-aware slog logger
+- **Plugin execution** — local binary execution from `plugins/` directory, not Docker containers at runtime

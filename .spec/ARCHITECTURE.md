@@ -1,4 +1,4 @@
-<!-- generated: 2026-05-15, template: core.md -->
+<!-- generated: 2026-05-24, template: core.md -->
 # Architecture
 
 ## 1. Overview
@@ -14,7 +14,7 @@ gRPC Request
       → Core Layer (internal/core) — business logic + WorkerPool
         → Tracing Decorator (internal/telemetry)
           → Adapters Layer (internal/adapters/registry)
-            → PostgreSQL (plugin metadata) + Docker (plugin execution)
+            → PostgreSQL (plugin metadata) + Local Binary Execution (plugins/)
           ← CodeGeneratorResponse
         ← traced response
       ← domain response
@@ -42,14 +42,14 @@ Domain types, interfaces, and thin business logic. Delegates heavy work to Regis
 |------|-------------|
 | `domain.go` | All domain types, interfaces, sentinel errors — single source of truth |
 | `core.go` | `Core` struct: Generate, ListPlugins, CRUD + audit + feature gate |
-| `pool.go` | `WorkerPool`: bounded concurrency for Docker execution (implements `Registry`) |
+| `pool.go` | `WorkerPool`: bounded concurrency for plugin execution (implements `Registry`) |
 | `context.go` | Context helpers (CallerIP extraction) |
 
 ### Adapters Layer: `internal/adapters`
 
 | Package | Description |
 |---------|-------------|
-| `adapters/registry` | PostgreSQL plugin metadata + Docker container execution |
+| `adapters/registry` | PostgreSQL plugin metadata + local binary execution from `plugins/` directory |
 | `adapters/audit` | Async audit log writer (channel → background worker → DB) |
 | `adapters/metrics` | Prometheus collectors: DB pool stats, business metrics |
 
@@ -70,7 +70,9 @@ Domain types, interfaces, and thin business logic. Delegates heavy work to Regis
 
 ```
 service/
-├── cmd/main.go                        # Entry point: config → telemetry → DB → registry → core → gRPC
+├── cmd/
+│   ├── main.go                        # Entry point: config → telemetry → DB → registry → core → gRPC
+│   └── mcp-smoke/main.go             # MCP smoke test client
 ├── api/generator/v1/                  # Proto contract + generated Go stubs + MCP bindings
 │   ├── generator.proto
 │   ├── generator.pb.go
@@ -80,11 +82,15 @@ service/
 │   ├── core/                          # Domain types + business logic
 │   │   ├── domain.go                  # Types, interfaces, errors
 │   │   ├── core.go                    # Core struct (thin orchestration)
-│   │   ├── pool.go                    # WorkerPool (bounded Docker concurrency)
+│   │   ├── pool.go                    # WorkerPool (bounded concurrency)
 │   │   └── context.go                # CallerIP context helpers
-│   ├── api/                           # gRPC handlers
+│   ├── api/                           # gRPC handlers + MCP handler
+│   │   ├── api.go                     # gRPC handler + ErrorToStatus()
+│   │   ├── license_interceptor.go     # License feature check middleware
+│   │   ├── mcp.go                     # MCP HTTP handler factory
+│   │   └── mcp_tools.go              # MCP tool definitions
 │   ├── adapters/                      # Interface implementations
-│   │   ├── registry/                  # Plugin DB + Docker execution
+│   │   ├── registry/                  # Plugin DB + local binary execution
 │   │   ├── audit/                     # Async audit writer
 │   │   └── metrics/                   # Prometheus collectors
 │   ├── database/                      # DB abstraction
@@ -99,8 +105,18 @@ service/
 │   └── flags/                         # CLI flag types
 ├── sdk/                               # Go client SDK
 ├── migrate/                           # SQL migrations (numbered)
-├── registry/                          # Plugin Dockerfiles
-└── configs/                           # Observability configs
+├── registry/                          # Plugin Dockerfiles (used for building)
+├── plugins/                           # Built plugin binaries (gitignored)
+├── configs/                           # Observability configs (alloy, grafana, loki, tempo, mimir, pyroscope, traefik)
+├── build-plugins.sh                   # Build plugin binaries via Docker multi-stage
+├── register-plugins.sh                # Register plugins via gRPC API (requires grpcurl)
+├── Taskfile.yml                       # Task runner commands
+├── docker-compose.yml                 # Dev stack (postgres, grafana, observability, traefik)
+├── config.yml                         # Docker-compose service config
+├── config.local.yml                   # Local development config (minimal stack)
+├── easyp.yaml                         # Protobuf lint + code generation config
+├── easyp.local.yaml                   # Local easyp config for development
+└── .spec/                             # This documentation directory
 ```
 
 ## 4. Key Design Decisions
@@ -117,19 +133,27 @@ module := core.New(metricsAdapter, pool, gate, auditCh, log)
 tracedCore := telemetry.NewTracingCore(module)
 ```
 
-### 4.2 WorkerPool for Bounded Docker Execution
+### 4.2 WorkerPool for Bounded Plugin Execution
 
-Docker container execution is resource-intensive. `WorkerPool` implements `Registry` interface, wrapping the real registry with:
+Plugin execution is resource-intensive. `WorkerPool` implements `Registry` interface, wrapping the real registry with:
 - **Bounded concurrency** — configurable number of worker goroutines
 - **Non-blocking backpressure** — returns `ErrServerOverloaded` immediately if queue is full
-- **Automatic retries** — transient Docker errors (exit codes 125–127, connection refused) are retried
-- **Generation timeout** — per-request deadline for Docker execution
+- **Automatic retries** — transient errors (exit codes 125–127, connection refused) are retried
+- **Generation timeout** — per-request deadline for plugin execution
 
-### 4.3 Feature Gate for Two-Tier Licensing
+### 4.3 Local Binary Execution
+
+Plugins are built as static binaries from Dockerfiles in `registry/` using multi-stage builds. At runtime, the service executes plugins from the local `plugins/` directory (configured via `registry.plugins_dir`). This avoids the overhead of Docker container creation per request.
+
+**Build flow:** `registry/{group}/{name}/{version}/Dockerfile` → `docker build --output` → `plugins/{group}/{name}/{version}/plugin`
+
+**Registration flow:** `register-plugins.sh` → gRPC `CreatePlugin` API → PostgreSQL
+
+### 4.4 Feature Gate for Two-Tier Licensing
 
 `FeatureGate` enables/disables features based on the current license (community vs enterprise). It's checked in Core business logic and in the rate limiter, without coupling these components to the license implementation.
 
-### 4.4 Interceptor Chain
+### 4.5 Interceptor Chain
 
 The gRPC middleware stack is composed via `grpchelper.NewServer`:
 ```
@@ -138,7 +162,7 @@ trace_logging → realip → prometheus → structured_logging → panic_recover
 ```
 Each interceptor is independent and testable. Order matters: rate limiting before license checking, etc.
 
-### 4.5 Config Priority
+### 4.6 Config Priority
 
 CLI flags > environment variables > YAML config file. The `start()` function in `cmd/main.go` tries YAML first (if `-cfg` provided), falls back to `envconfig`.
 
@@ -153,12 +177,12 @@ gRPC Request (CodeGeneratorRequest)
       → getGroup() + getNameAndVersion() — parse plugin name
       → pool.Get() — non-blocking queue submission
         → worker goroutine picks up job
-          → tracedRegistry.Get() — DB lookup + Docker image pull
-            → registry.Get() — PostgreSQL query + docker create/start
+          → tracedRegistry.Get() — DB lookup + load plugin binary
+            → registry.Get() — PostgreSQL query + binary path resolution
           ← Plugin instance
         ← poolPlugin (wrapped with timeout + retry)
       → poolPlugin.Generate() — with timeout + retry
-        → plugin.Generate() — Docker exec: stdin(CodeGeneratorRequest) → stdout(CodeGeneratorResponse)
+        → plugin.Generate() — execute binary: stdin(CodeGeneratorRequest) → stdout(CodeGeneratorResponse)
       ← CodeGeneratorResponse
       → metrics.GenerateCode() — record metrics
       → auditSuccess() — async audit entry via channel

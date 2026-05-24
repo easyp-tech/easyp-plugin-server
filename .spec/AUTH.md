@@ -1,4 +1,4 @@
-<!-- generated: 2026-05-15, template: auth.md -->
+<!-- generated: 2026-05-24, template: auth.md -->
 # Auth & Licensing
 
 Authentication and licensing system for EasyP Service.

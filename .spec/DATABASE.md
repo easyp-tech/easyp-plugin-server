@@ -1,4 +1,4 @@
-<!-- generated: 2026-05-15, template: database.md -->
+<!-- generated: 2026-05-24, template: database.md -->
 # Database
 
 PostgreSQL access patterns for EasyP Service.

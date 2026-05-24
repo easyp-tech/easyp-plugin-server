@@ -1,4 +1,4 @@
-<!-- generated: 2026-05-15, template: clients.md -->
+<!-- generated: 2026-05-24, template: clients.md -->
 # Clients
 
 Client SDKs and tools for EasyP Service.

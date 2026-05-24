@@ -1,4 +1,4 @@
-<!-- generated: 2026-05-15, template: core.md -->
+<!-- generated: 2026-05-24, template: core.md -->
 # Code Style
 
 Project-specific code conventions for EasyP Service.

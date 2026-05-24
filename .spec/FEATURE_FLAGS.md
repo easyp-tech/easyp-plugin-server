@@ -1,4 +1,4 @@
-<!-- generated: 2026-05-15, template: feature-flags.md -->
+<!-- generated: 2026-05-24, template: feature-flags.md -->
 # Feature Flags
 
 Feature gating system for EasyP Service.

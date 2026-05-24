@@ -1,4 +1,4 @@
-<!-- generated: 2026-05-15, template: development.md -->
+<!-- generated: 2026-05-24, template: development.md -->
 # Tools
 
 Reference of commands and project tools.
@@ -8,21 +8,30 @@ Reference of commands and project tools.
 ### Prerequisites
 
 | Tool | Version | Install |
-|------|---------|---------|
+|------|---------|---------
 | Go | 1.26+ | `brew install go` |
 | Docker + Compose | latest | `brew install --cask docker` |
 | Task | v3 | `brew install go-task` |
 | golangci-lint | v2 | `brew install golangci-lint` |
 | easyp | latest | `brew install easyp-tech/tap/easyp` |
+| grpcurl | latest | `brew install grpcurl` |
 
 ### First Run
 
 1. Clone: `git clone github.com/easyp-tech/service && cd service`
-2. Copy env: `cp .env.example .env` — set `DB_POSTGRES_DSN`
-3. Start infrastructure: `task up-minimal` (postgres + docker registry on port 5433)
-4. Build and push required plugin images: `task local-push-required`
-5. Run from source: `task run-local`
-6. Verify: `curl http://localhost:23412/health`
+2. Build plugin binaries: `task build-plugins`
+3. Start full stack: `task up`
+4. Wait for healthy: `curl http://localhost:8082/health`
+5. Register plugins: `task register-plugins`
+6. Verify: `curl http://localhost:8081/metrics`
+
+### Minimal Local Development
+
+1. Start postgres: `task up-minimal` (port 5433)
+2. Build plugins: `task build-plugins`
+3. Run from source: `task run-local` (uses `config.local.yml`)
+4. Register plugins: `./register-plugins.sh localhost:8080`
+5. Generate code: `easyp --cfg easyp.local.yaml generate`
 
 ## 1. Overview
 
@@ -36,12 +45,14 @@ All commands are run via `task` (Taskfile v3). For Go testing and linting, use s
 | Start minimal stack | `task up-minimal` |
 | Stop all | `task down` |
 | Run from source | `task run-local` |
-| Full cycle (down→up→push→logs) | `task run` |
-| Push all plugins | `task local-push-registry` |
-| Push required plugins only | `task local-push-required` |
+| Full cycle (build→up→register→logs) | `task run` |
+| Setup (build→up→register, no logs) | `task setup` |
+| Build plugin binaries | `task build-plugins` |
+| Register plugins via gRPC | `task register-plugins` |
 | Run tests | `go test ./...` |
 | Lint | `golangci-lint run ./...` |
-| Generate protobuf | `easyp --cfg easyp.yaml generate` |
+| Generate protobuf (docker-compose) | `task generate` |
+| Generate protobuf (local) | `task generate-local` |
 | Test MCP server | `task test-mcp` |
 | Smoke test MCP | `task smoke-mcp` |
 
@@ -50,10 +61,10 @@ All commands are run via `task` (Taskfile v3). For Go testing and linting, use s
 ### Infrastructure
 
 ```bash
-# Full 14-service dev stack (postgres, registry, grafana, loki, alloy, tempo, mimir, etc.)
+# Full dev stack (postgres, grafana, loki, alloy, tempo, mimir, pyroscope, traefik, rustfs)
 task up
 
-# Minimal: postgres (port 5433) + docker registry (port 5005) only
+# Minimal: postgres (port 5433) only
 task up-minimal
 
 # Stop everything, remove volumes
@@ -63,23 +74,29 @@ task down
 ### Running
 
 ```bash
-# Full cycle: stop → start → push plugins → tail logs
+# Full cycle: build-plugins → stop → start → register → tail logs
 task run
+
+# Setup only (no log tailing)
+task setup
 
 # Run from source against minimal stack (uses config.local.yml)
 task run-local
 # Equivalent to: go run ./cmd/main.go -cfg config.local.yml -log_level debug
 ```
 
-### Plugin Images
+### Plugin Management
 
 ```bash
-# Build and push ALL plugin Dockerfiles from registry/
-task local-push-registry
-# Uses: ./push.sh localhost:5005 --push
+# Build all plugin binaries from registry/ Dockerfiles
+# Extracts static binaries to plugins/{group}/{name}/{version}/plugin
+task build-plugins
+# Uses: ./build-plugins.sh
 
-# Build and push only required plugins (protocolbuffers/go:v1.36.10, grpc/go:v1.5.1)
-task local-push-required
+# Register all built plugins via gRPC CreatePlugin API
+# Requires running service and grpcurl
+task register-plugins
+# Uses: ./register-plugins.sh [host:port]
 ```
 
 ### Testing
@@ -117,8 +134,13 @@ golangci-lint run --fix ./...
 ### Protobuf
 
 ```bash
-# Generate *.pb.go, *_grpc.pb.go, *.mcp.go
-easyp --cfg easyp.yaml generate
+# Generate *.pb.go, *_grpc.pb.go, *.mcp.go (against docker-compose service)
+task generate
+# Equivalent to: easyp --cfg easyp.yaml generate
+
+# Generate against locally running service
+task generate-local
+# Equivalent to: easyp --cfg easyp.local.yaml generate
 
 # Lint proto files
 easyp lint
@@ -127,7 +149,9 @@ easyp lint
 easyp validate-config
 ```
 
-Config: `easyp.yaml` — single file for lint rules, generation plugins, dependencies.
+Config files:
+- `easyp.yaml` — main config (for docker-compose service)
+- `easyp.local.yaml` — local development config
 
 Generated files:
 - `api/generator/v1/generator.pb.go` — protobuf types
@@ -153,4 +177,5 @@ easyp --cfg easyp.yaml generate  # Ensure codegen is up to date
 | Task | `brew install go-task` |
 | golangci-lint | `brew install golangci-lint` |
 | easyp | `brew install easyp-tech/tap/easyp` |
+| grpcurl | `brew install grpcurl` |
 | GoReleaser | `brew install goreleaser` |

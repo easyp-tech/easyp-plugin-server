@@ -1,4 +1,4 @@
-<!-- generated: 2026-05-15, template: errors.md -->
+<!-- generated: 2026-05-24, template: errors.md -->
 # Errors
 
 Business error catalog for EasyP Service.

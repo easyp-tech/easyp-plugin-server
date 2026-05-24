@@ -1,6 +1,6 @@
 # EasyP API Service
 
-A service for executing protobuf/gRPC code generation plugins running as Docker containers.
+A service for executing protobuf/gRPC code generation plugins as isolated processes.
 
 **Module:** `github.com/easyp-tech/service`
 
@@ -31,12 +31,12 @@ Managing protobuf/gRPC code generation across development teams becomes increasi
 EasyP API Service eliminates these operational headaches by centralizing plugin management:
 
 **🎯 Instant Version Control**
-- Deploy new plugin versions to entire team instantly via stable tags (e.g., `grpc/go:stable`)
+- Deploy new plugin versions to entire team instantly
 - Operations team controls plugin rollouts without touching developer machines
 - Zero developer coordination required for plugin updates
 
 **🔒 Security & Consistency**
-- All plugins run in isolated Docker containers with security constraints
+- All plugins built from auditable Dockerfiles with security constraints
 - Centralized approval process for new plugins
 - Consistent execution environment regardless of developer's local setup
 
@@ -47,23 +47,25 @@ EasyP API Service eliminates these operational headaches by centralizing plugin 
 
 ## Overview
 
-EasyP API Service provides centralized management and execution of protobuf/gRPC plugins as isolated Docker containers. The service accepts `google.protobuf.compiler.CodeGeneratorRequest` via gRPC API and returns generated code by executing plugins in a secure, isolated environment.
+EasyP API Service provides centralized management and execution of protobuf/gRPC plugins. The service accepts `google.protobuf.compiler.CodeGeneratorRequest` via gRPC API and returns generated code by executing plugin binaries in an isolated environment with bounded concurrency.
 
 ### Key Features
 
-- 🐳 **Plugin isolation** in Docker containers
-- 📦 **Self-hosted registry** for plugin Docker images  
+- 🔧 **Plugin binary execution** with bounded worker pool
+- 📦 **Plugin registry** with PostgreSQL metadata storage
 - 🔄 **Plugin versioning** with "latest" support
-- 📊 **Monitoring** with Prometheus and Grafana
+- 📊 **Full observability** with Prometheus, Grafana, OpenTelemetry, Pyroscope
 - 🗄️ **Persistence** with PostgreSQL
-- 🌐 **gRPC + HTTP** API
+- 🌐 **gRPC + MCP** API
 - 📈 **Health checks** and metrics
+- 🔑 **Two-tier licensing** (Community / Enterprise)
+- 📝 **Audit logging** for all operations
 
 ## Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   gRPC Client   │───▶│   API Service   │───▶│ Docker Registry │
+│   gRPC Client   │───▶│   API Service   │───▶│  Plugin Binary   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                │
                                ▼
@@ -72,51 +74,59 @@ EasyP API Service provides centralized management and execution of protobuf/gRPC
                        └─────────────────┘
 ```
 
-The service runs plugins as Docker containers, passing protobuf data through stdin/stdout.
+The service executes plugins as local binaries, passing protobuf data through stdin/stdout.
 
 ## Project Structure
 
 ```
 .
 ├── api/                                 # API contracts (protobuf)
-│   ├── generator/v1/                   # Main code generation API
-│   │   ├── generator.proto
-│   │   ├── generator.pb.go
-│   │   └── generator_grpc.pb.go
-│   └── web/v1/                         # Web API for management
-│       ├── web.proto
-│       ├── web.pb.go
-│       ├── web.pb.gw.go
-│       └── web_grpc.pb.go
+│   └── generator/v1/                   # Main code generation API
+│       ├── generator.proto
+│       ├── generator.pb.go
+│       ├── generator_grpc.pb.go
+│       └── generator.mcp.go
 ├── cmd/
-│   └── main.go                         # Server entry point
+│   ├── main.go                         # Server entry point
+│   └── mcp-smoke/main.go              # MCP smoke test client
 ├── internal/                           # Internal logic
 │   ├── adapters/                       # External system adapters
-│   │   ├── metrics/                    # Prometheus metrics collection
-│   │   └── registry/                   # DB and Docker operations
-│   ├── api/                           # Transport layer (gRPC)
-│   ├── core/                          # Business logic
+│   │   ├── audit/                     # Async audit log writer
+│   │   ├── metrics/                   # Prometheus metrics collection
+│   │   └── registry/                  # DB + binary execution
+│   ├── api/                           # Transport layer (gRPC + MCP)
+│   ├── core/                          # Business logic + domain types
+│   ├── database/                      # DB abstraction (sqlx wrapper)
+│   ├── grpchelper/                    # gRPC server/client factories
+│   ├── license/                       # PASETO v4 licensing
+│   ├── ratelimiter/                   # Per-IP rate limiting
+│   ├── telemetry/                     # OpenTelemetry + tracing decorators
+│   ├── monitor/                       # Context-aware logging
 │   └── flags/                         # CLI flag processing
+├── sdk/                               # Go client SDK
 ├── migrate/                           # SQL migrations
-│   └── 1.init.sql
-├── registry/                          # Plugin Dockerfiles examples
-│   ├── protobuf/go/v1.36.10/
+├── registry/                          # Plugin Dockerfiles (for building)
+│   ├── protocolbuffers/go/v1.36.10/
 │   ├── grpc/go/v1.5.1/
 │   ├── grpc-ecosystem/gateway/v2.27.3/
-│   ├── grpc-ecosystem/openapiv2/v2.27.3/
-│   └── community/pseudomuto-doc/v1.5.1/
-├── docker/
-│   └── Dockerfile                     # Service Dockerfile
-├── infrastructure/                    # Monitoring configurations
-│   ├── grafana/
-│   ├── loki/
-│   ├── prometheus/
-│   └── promtail/
-├── config.yml                        # Service configuration
+│   └── grpc-ecosystem/openapiv2/v2.27.3/
+├── plugins/                           # Built plugin binaries (gitignored)
+├── configs/                           # Observability configs
+│   ├── alloy/                        # OpenTelemetry collector
+│   ├── grafana/                      # Dashboards + datasources
+│   ├── loki/                         # Log aggregation
+│   ├── tempo/                        # Distributed tracing
+│   ├── mimir/                        # Metrics storage
+│   ├── pyroscope/                    # Continuous profiling
+│   └── traefik/                      # Reverse proxy
+├── build-plugins.sh                   # Build plugin binaries from Dockerfiles
+├── register-plugins.sh                # Register plugins via gRPC API
+├── config.yml                        # Docker-compose service config
+├── config.local.yml                  # Local development config
 ├── docker-compose.yml               # Development infrastructure
-├── easyp.yaml                       # easyp configuration
-├── Taskfile.yml                     # Task automation
-└── push.sh                          # Plugin build and push script
+├── easyp.yaml                       # Protobuf lint + generation config
+├── easyp.local.yaml                 # Local easyp config
+└── Taskfile.yml                     # Task automation
 ```
 
 ## Quick Start
@@ -124,33 +134,24 @@ The service runs plugins as Docker containers, passing protobuf data through std
 ### Prerequisites
 
 - Docker and docker-compose
-- [Task](https://taskfile.dev/) (optional)
-- Go 1.24+ (for development)
+- [Task](https://taskfile.dev/) (optional, but recommended)
+- Go 1.26+ (for development)
+- [grpcurl](https://github.com/fullstorydev/grpcurl) (for plugin registration)
 
-### Running Infrastructure
+### Running with Full Stack
 
 ```bash
+# Build plugin binaries from Dockerfiles
+task build-plugins
+
 # Start all services
 task up
 
-# Build and push plugins to local registry
-task local-push-registry
+# Wait for service to be ready, then register plugins
+task register-plugins
 
-# Full run with logs
+# Or do it all at once:
 task run
-```
-
-Or without Task:
-
-```bash
-# Start infrastructure
-docker compose up -d
-
-# Build plugins
-./push.sh localhost:5005 --push
-
-# View service logs
-docker compose logs -f service
 ```
 
 ### Minimal Local Run
@@ -158,26 +159,33 @@ docker compose logs -f service
 For local `easyp generate`, gRPC testing and MCP smoke you do not need the full observability stack.
 
 ```bash
-# 1. Start only postgres and local registry
+# 1. Build plugin binaries
+task build-plugins
+
+# 2. Start only postgres
 # If port 5432 is already occupied, the task uses 5433 by default.
 task up-minimal
-
-# 2. Publish only the plugin images required by easyp.yaml
-task local-push-required
 
 # 3. In a separate terminal run the service from source
 # config.local.yml is tuned for this mode.
 task run-local
 
-# 4. Generate code
-easyp --cfg easyp.yaml mod download
-easyp --cfg easyp.yaml generate
+# 4. Register plugins
+./register-plugins.sh localhost:8080
 
-# 5. Optional MCP smoke check
+# 5. Generate code
+easyp --cfg easyp.local.yaml generate
+
+# 6. Optional MCP smoke check
 go run ./cmd/mcp-smoke --endpoint http://localhost:8083/mcp
 ```
 
-If you want every plugin image in the local registry, use `task local-push-registry` instead of `task local-push-required`.
+### One-Command Setup
+
+```bash
+# Build plugins, start stack, register — no log tailing
+task setup
+```
 
 ### Health Check
 
@@ -197,8 +205,6 @@ open http://localhost:3000
 
 ## API
 
-📖 **[Full API Documentation](docs/api/generator/v1/generator.md)**
-
 ### Generator API (Primary)
 
 **Endpoint:** `localhost:8080` (gRPC)
@@ -206,6 +212,10 @@ open http://localhost:3000
 ```protobuf
 service ServiceAPI {
   rpc GenerateCode(GenerateCodeRequest) returns (GenerateCodeResponse);
+  rpc Plugins(PluginsRequest) returns (PluginsResponse);
+  rpc CreatePlugin(CreatePluginRequest) returns (CreatePluginResponse);
+  rpc UpdatePlugin(UpdatePluginRequest) returns (UpdatePluginResponse);
+  rpc DeletePlugin(DeletePluginRequest) returns (DeletePluginResponse);
 }
 
 message GenerateCodeRequest {
@@ -215,18 +225,6 @@ message GenerateCodeRequest {
 
 message GenerateCodeResponse {
   google.protobuf.compiler.CodeGeneratorResponse code_generator_response = 1;
-}
-```
-
-### Web API (Planned)
-
-**Endpoint:** `localhost:8080` (gRPC) + HTTP Gateway
-
-```protobuf
-service ServiceAPI {
-  rpc Plugins(PluginsRequest) returns (PluginsResponse) {
-    option (google.api.http) = { get: "/v1/plugins" };
-  };
 }
 ```
 
@@ -248,14 +246,14 @@ Testing MCP:
 Plugins are identified in the format: `{group}/{name}:{version}`
 
 ### Examples:
-- `protobuf/go:v1.36.10` - Go protobuf plugin
+- `protocolbuffers/go:v1.36.10` - Go protobuf plugin
 - `grpc/go:v1.5.1` - Go gRPC plugin  
 - `grpc-ecosystem/gateway:v2.27.3` - gRPC Gateway
-- `community/pseudomuto-doc:v1.5.1` - Documentation plugin
-- `protobuf/go:latest` - Latest version of Go plugin
+- `grpc-ecosystem/openapiv2:v2.27.3` - OpenAPI v2 generator
+- `protocolbuffers/go:latest` - Latest version of Go plugin
 
 ### Plugin Groups:
-- `protobuf` - Core protobuf plugins
+- `protocolbuffers` - Core protobuf plugins
 - `grpc` - gRPC plugins 
 - `grpc-ecosystem` - gRPC ecosystem plugins
 - `community` - Community plugins
@@ -276,11 +274,17 @@ SERVER_PORT_MCP=8083
 DB_POSTGRES_DSN="postgres://user:pass@localhost/db"
 DB_MIGRATE_DIR="migrate"
 
-# Docker Registry
-REGISTRY_DOMAIN="localhost:5005"
+# Registry
+REGISTRY_PLUGINS_DIR="./plugins"
+REGISTRY_MAX_OUTPUT_SIZE=67108864
 ```
 
-### Configuration File
+### Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `config.yml` | Docker-compose service config (internal hostnames) |
+| `config.local.yml` | Local development config (localhost, port 5433) |
 
 ```yaml
 server:
@@ -293,25 +297,29 @@ server:
 db:
   migrate_dir: "migrate"
   driver: "postgres"
-  postgres: "postgres://easyp_svc:easyp_pass@postgres:5432/easyp_db?sslmode=disable"
+  postgres: "postgres://easyp_svc:easyp_pass@localhost:5433/easyp_db?sslmode=disable"
 registry:
-  domain: "localhost:5005"
+  plugins_dir: "./plugins"
+  max_output_size: 67108864
+worker_pool:
+  workers: 4
+  queue_size: 16
+  generation_timeout: 120s
+  max_retries: 3
+  shutdown_timeout: 30s
+rate_limit:
+  requests_per_second: 10.0
+  burst: 20
+  cleanup_interval: 10m
 ```
 
 ## Contributing Plugins
 
 We welcome contributions of new plugins! Here's how to add your plugin to the registry:
 
-### 1. Fork and Create Plugin Structure
+### 1. Create Plugin Structure
 
 ```bash
-# Fork the repository
-git fork https://github.com/easyp-tech/easyp-api-service
-
-# Clone your fork
-git clone https://github.com/YOUR_USERNAME/easyp-api-service
-cd easyp-api-service
-
 # Create plugin directory structure
 mkdir -p registry/{group}/{plugin-name}/{version}
 cd registry/{group}/{plugin-name}/{version}
@@ -319,11 +327,10 @@ cd registry/{group}/{plugin-name}/{version}
 
 ### 2. Create Dockerfile
 
-Your plugin must be packaged as a Docker image that:
+Your plugin must be packaged as a Dockerfile that produces a static binary:
 - Reads protobuf `CodeGeneratorRequest` from stdin
 - Writes protobuf `CodeGeneratorResponse` to stdout
-- Runs as a non-root user for security
-- Is optimized for size (use multi-stage builds)
+- Final stage should output the binary for extraction
 
 #### Example: Go-based Plugin
 
@@ -343,184 +350,50 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM scratch
 
-# Copy essential files for non-root user
-COPY --from=build --link /etc/passwd /etc/passwd
-COPY --from=build --link --chown=root:root /go/bin/protoc-gen-yourplugin /protoc-gen-yourplugin
+COPY --from=build --link /go/bin/protoc-gen-yourplugin /plugin
 
-# Run as non-root user
-USER nobody
-
-ENTRYPOINT ["/protoc-gen-yourplugin"]
+ENTRYPOINT ["/plugin"]
 ```
 
-#### Example: Python-based Plugin
-
-```dockerfile
-FROM python:3.11-alpine AS build
-
-# Install your plugin
-RUN pip install --no-cache-dir yourplugin==1.0.0
-
-FROM python:3.11-alpine
-
-# Copy installed packages
-COPY --from=build /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=build /usr/local/bin/protoc-gen-yourplugin /usr/local/bin/
-
-# Create non-root user
-RUN adduser -D -s /bin/sh plugin
-USER plugin
-
-ENTRYPOINT ["/usr/local/bin/protoc-gen-yourplugin"]
-```
-
-#### Example: Node.js-based Plugin
-
-```dockerfile
-FROM node:18-alpine AS build
-
-WORKDIR /app
-RUN npm install -g yourplugin@1.0.0
-
-FROM node:18-alpine
-
-# Copy global node modules
-COPY --from=build /usr/local/lib/node_modules /usr/local/lib/node_modules
-COPY --from=build /usr/local/bin /usr/local/bin
-
-# Create non-root user
-RUN adduser -D -s /bin/sh plugin
-USER plugin
-
-ENTRYPOINT ["protoc-gen-yourplugin"]
-```
-
-### 3. Test Your Plugin Locally
+### 3. Build and Test
 
 ```bash
-# Build the plugin image
-docker build -t localhost:5005/{group}/{plugin-name}:{version} .
+# Build plugin binary
+task build-plugins
 
-# Test with sample protobuf request
-echo "your_protobuf_request_binary_data" | \
-  docker run --rm -i localhost:5005/{group}/{plugin-name}:{version}
+# Start service
+task up-minimal && task run-local
+
+# Register plugin
+./register-plugins.sh localhost:8080
+
+# Test with easyp generate
+easyp --cfg easyp.local.yaml generate
 ```
 
-### 4. Add Database Entry
-
-Create a migration file or add to the existing migration:
-
-```sql
--- Add your plugin to the database
-INSERT INTO plugins (group_name, name, version, created_at)
-VALUES ('{group}', '{plugin-name}', '{version}', now());
-```
-
-### 5. Update Documentation
-
-Add your plugin to this README:
-
-```markdown
-### Available Plugins
-
-- `{group}/{plugin-name}:{version}` - Description of your plugin
-```
-
-### 6. Submit Pull Request
+### 4. Submit Pull Request
 
 ```bash
-# Commit your changes
 git add registry/{group}/{plugin-name}/
 git commit -m "Add {group}/{plugin-name}:{version} plugin"
-
-# Push to your fork
-git push origin main
-
-# Create pull request
-# Include description of what your plugin does and how to use it
 ```
 
 ### Plugin Requirements
 
-**Security:**
-- ✅ Must run as non-root user
-- ✅ No network access required (use `--network=none`)
-- ✅ Limited memory (128MB max)
-- ✅ Limited CPU (1 core max)
-- ✅ Stateless execution
-
-**Performance:**
-- ✅ Fast startup (< 5 seconds)
-- ✅ Small image size (< 100MB preferred)
-- ✅ Efficient memory usage
-
-**Compatibility:**
+**Build:**
+- ✅ Multi-stage Dockerfile (build → scratch or minimal)
+- ✅ Static binary (CGO_ENABLED=0)
+- ✅ UPX compression (recommended)
 - ✅ Supports standard protoc plugin protocol
 - ✅ Reads from stdin, writes to stdout
 - ✅ Returns proper exit codes
-- ✅ Works with linux/amd64 architecture
 
-### Plugin Groups Guidelines
-
-**`protobuf`** - Core Protocol Buffers plugins
-- Official protoc plugins (protoc-gen-go, protoc-gen-cpp, etc.)
-- Language-specific protobuf generators
-
-**`grpc`** - gRPC framework plugins  
-- Official gRPC plugins (protoc-gen-go-grpc, etc.)
-- gRPC service generators
-
-**`grpc-ecosystem`** - gRPC ecosystem tools
-- grpc-gateway, grpc-web, openapi generators
-- Authentication, validation tools
-
-**`community`** - Community-maintained plugins
-- Documentation generators
-- Custom validation tools
-- Framework-specific generators
-
-### Plugin Testing
-
-We provide testing tools to validate your plugin:
-
-```bash
-# Test plugin compatibility
-./scripts/test-plugin.sh {group}/{plugin-name}:{version}
-
-# Validate plugin security
-./scripts/security-scan.sh {group}/{plugin-name}:{version}
-
-# Performance benchmarks
-./scripts/benchmark-plugin.sh {group}/{plugin-name}:{version}
-```
+**Performance:**
+- ✅ Fast startup (< 5 seconds)
+- ✅ Small binary size
+- ✅ Efficient memory usage
 
 ## Development
-
-### Adding New Plugin (Development)
-
-For local development without PR:
-
-```bash
-# Create plugin structure
-mkdir -p registry/{group}/{name}/{version}
-
-# Create Dockerfile
-# ... (see examples above)
-
-# Add to database
-docker exec -it easyp-postgres psql -U easyp_svc -d easyp_db \
-  -c "INSERT INTO plugins (group_name, name, version) VALUES ('{group}', '{name}', '{version}');"
-
-# Build and push
-./push.sh localhost:5005 --push
-```
-
-### Generating Protobuf Code
-
-```bash
-# Generate from proto files
-easyp generate
-```
 
 ### Building Service
 
@@ -528,11 +401,18 @@ easyp generate
 # Local build
 go build -o bin/server ./cmd/main.go
 
-# Docker build
-docker build -f docker/Dockerfile -t easyp-api-service .
-
 # Run
-./bin/server -cfg config.yml -log_level debug
+./bin/server -cfg config.local.yml -log_level debug
+```
+
+### Generating Protobuf Code
+
+```bash
+# Generate from proto files (requires running service)
+easyp --cfg easyp.yaml generate
+
+# Or with local config
+easyp --cfg easyp.local.yaml generate
 ```
 
 ## Monitoring
@@ -542,7 +422,6 @@ docker build -f docker/Dockerfile -t easyp-api-service .
 | Service | URL | Description |
 |---------|-----|-------------|
 | Grafana | http://localhost:3000 | Dashboards (admin/admin) |
-| Prometheus | http://localhost:9090 | Metrics |
 | Health | http://localhost:8082 | Health checks |
 | Metrics | http://localhost:8081 | Prometheus metrics |
 | MCP | http://localhost:8083/mcp | MCP streamable HTTP endpoint |
@@ -550,33 +429,30 @@ docker build -f docker/Dockerfile -t easyp-api-service .
 ### Key Metrics
 
 - `grpc_server_handled_total` - gRPC request count
-- `plugin_generation_total` - Plugin generation count by plugin
-- `plugin_generation_duration_seconds` - Plugin execution time
-- `postgres_queries_total` - Database query count
+- `pool_active_workers` - Active worker goroutines
+- `pool_queue_depth` - Jobs waiting in queue
+- `pool_rejected_total` - Jobs rejected (overloaded)
+- `pool_jobs_total` - Total jobs processed
+- `panics_total` - Recovered panics
 
 ## Client Usage
 
-### Go Client
+### Go SDK
 
 ```go
-import (
-    "github.com/easyp-tech/service/api/generator/v1"
-    "google.golang.org/grpc"
+import "github.com/easyp-tech/service/sdk"
+
+// Create client
+client, err := sdk.New(
+    "localhost:8080",
+    sdk.WithRetry(3, time.Second),
+    sdk.WithHealthCheck(true),
 )
-
-// Connect
-conn, err := grpc.Dial("localhost:8080", grpc.WithInsecure())
-if err != nil {
-    log.Fatal(err)
-}
-defer conn.Close()
-
-client := generator.NewServiceAPIClient(conn)
 
 // Generate code
 response, err := client.GenerateCode(ctx, &generator.GenerateCodeRequest{
     CodeGeneratorRequest: codeGenRequest,
-    PluginName:          "protobuf/go:v1.36.10",
+    PluginName:          "protocolbuffers/go:v1.36.10",
 })
 ```
 
@@ -586,7 +462,7 @@ response, err := client.GenerateCode(ctx, &generator.GenerateCodeRequest{
 # easyp.yaml
 generate:
   plugins:
-    - remote: "localhost:8080/protobuf/go:latest"
+    - remote: "localhost:8080/protocolbuffers/go:latest"
       out: .
       opts:
         paths: source_relative
@@ -596,36 +472,45 @@ generate:
         paths: source_relative
 ```
 
+### MCP Client Configuration
+
+```json
+{
+  "mcpServers": {
+    "easyp": {
+      "url": "http://localhost:8083/mcp"
+    }
+  }
+}
+```
+
 ## Management Commands
 
 ```bash
+# Build plugin binaries
+task build-plugins
+
 # Start infrastructure
 task up
+
+# Register plugins
+task register-plugins
+
+# Full cycle
+task run
 
 # Stop with cleanup
 task down
 
-# Full development cycle  
-task run
-
-# Build plugins
-task local-push-registry
-
-# Manual plugin build
-./push.sh localhost:5005 --push
-
-# View images
-docker images | grep localhost:5005
+# Run from source
+task run-local
 ```
 
 ## Troubleshooting
 
-### Docker Issues
+### Service Issues
 
 ```bash
-# Check Docker network
-docker network ls
-
 # Check running containers  
 docker ps
 
@@ -639,14 +524,17 @@ task down && task up
 ### Plugin Issues
 
 ```bash
-# Check available plugins in registry
-curl -s http://localhost:5005/v2/_catalog
+# Check built plugins
+ls -la plugins/
 
-# Check plugin versions
-curl -s http://localhost:5005/v2/protobuf/go/tags/list
+# Rebuild plugins
+task build-plugins
 
-# Manual plugin execution
-docker run --rm -i localhost:5005/protobuf/go:v1.36.10 < request.bin
+# Re-register plugins
+task register-plugins
+
+# Check registered plugins via grpcurl
+grpcurl -plaintext localhost:8080 api.generator.v1.ServiceAPI/Plugins
 ```
 
 ### Database Issues
@@ -662,39 +550,19 @@ SELECT * FROM plugins;
 \d plugins
 ```
 
-## Roadmap
-
-### Planned Features
-
-- [ ] Implementation of Web API for plugin management
-- [ ] Web interface for plugin management
-- [ ] Result caching  
-- [ ] Automatic plugin updates
-- [ ] Audit logging
-
-### Architectural Improvements
-
-- [ ] Integration tests
-- [ ] CI/CD pipeline setup
-- [ ] Kubernetes manifests
-- [ ] Helm charts
-
-## Available Plugins for testing and example
+## Available Plugins
 
 ### Core Plugins
-- `protobuf/go:v1.36.10` - Go Protocol Buffers compiler
+- `protocolbuffers/go:v1.36.10` - Go Protocol Buffers compiler
 - `grpc/go:v1.5.1` - Go gRPC compiler
 
 ### Ecosystem Plugins  
 - `grpc-ecosystem/gateway:v2.27.3` - gRPC-Gateway HTTP transcoding
 - `grpc-ecosystem/openapiv2:v2.27.3` - OpenAPI v2 documentation generator
 
-### Community Plugins
-- `community/pseudomuto-doc:v1.5.1` - Protocol documentation generator
-
 ## License
 
-This project is developed by the EasyP Tech team.
+Apache 2.0. See [LICENSE](LICENSE) for details.
 
 ## Support
 

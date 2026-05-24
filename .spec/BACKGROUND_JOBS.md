@@ -1,11 +1,11 @@
-<!-- generated: 2026-05-15, template: background-jobs.md -->
+<!-- generated: 2026-05-24, template: background-jobs.md -->
 # Background Jobs
 
 Background workers and async processing in EasyP Service.
 
 ## WorkerPool (`internal/core/pool.go`)
 
-Bounded concurrency for Docker plugin execution.
+Bounded concurrency for plugin binary execution.
 
 ### Architecture
 
@@ -15,7 +15,7 @@ Generate() request
     → WorkerPool.Get() — non-blocking job submission
       → buffered channel (QueueSize)
         → N worker goroutines (Workers)
-          → Registry.Get() → Docker execution
+          → Registry.Get() → local binary execution
         ← Plugin instance (poolPlugin wrapper)
       ← poolPlugin with timeout + retry
     → poolPlugin.Generate() — with timeout + retry
@@ -28,8 +28,8 @@ Generate() request
 worker_pool:
   workers: 4              # Number of concurrent worker goroutines
   queue_size: 16           # Buffered channel capacity
-  generation_timeout: 120s # Per-request Docker execution timeout
-  max_retries: 2           # Retry count for transient errors
+  generation_timeout: 120s # Per-request plugin execution timeout
+  max_retries: 3           # Retry count for transient errors
   shutdown_timeout: 30s    # Graceful shutdown deadline
 ```
 
@@ -39,7 +39,7 @@ worker_pool:
 
 ### Retry Logic
 
-`poolPlugin.Generate()` retries transient Docker errors (see `ERRORS.md` for transient classification):
+`poolPlugin.Generate()` retries transient errors (see `ERRORS.md` for transient classification):
 - Max attempts = `MaxRetries + 1`
 - Metrics: `IncGenerationRetries()` counter incremented on each retry
 

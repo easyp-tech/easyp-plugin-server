@@ -1,20 +1,24 @@
-<!-- generated: 2026-05-15, template: security.md -->
+<!-- generated: 2026-05-24, template: security.md -->
 # Security
 
 Security considerations for EasyP Service.
 
-## Docker Isolation
+## Plugin Isolation
 
-Plugin containers run with strict isolation:
+Plugin binaries are executed as local processes with the following characteristics:
 
-| Constraint | Value |
-|-----------|-------|
-| Network | `--network=none` (no network access) |
-| Memory | `--memory=128m` |
-| CPU | `--cpus=1.0` |
-| User | `nobody` (non-root) |
-| Base image | `scratch` (minimal attack surface) |
-| Binary | Static, compressed with `upx` |
+| Aspect | Detail |
+|--------|--------|
+| Execution | Local binary execution via stdin/stdout |
+| Source | Built from multi-stage Dockerfiles in `registry/` |
+| Binary type | Static, compressed with `upx` |
+| Base image (build) | `golang:alpine` → `scratch` |
+| User (build) | `nobody` (non-root) |
+| Communication | stdin (CodeGeneratorRequest) → stdout (CodeGeneratorResponse) |
+| Timeout | Configurable per-request deadline (`generation_timeout: 120s`) |
+| Output limit | `max_output_size: 67108864` (64MB) |
+
+**Note:** Plugin binaries are built from Dockerfiles but executed as local processes, not in Docker containers at runtime. The WorkerPool limits concurrent executions.
 
 ## Input Validation
 
@@ -45,9 +49,9 @@ Rate limits are integrated with FeatureGate for tier-based configuration.
 ## Secrets Management
 
 - **Database credentials** — via environment variable `DB_POSTGRES_DSN` or YAML config
-- **License keys** — via PASETO v4 tokens (public-key cryptography)
+- **License keys** — via PASETO v4 tokens (public-key cryptography), passed via `LICENSE_KEY` env var
 - **No secrets in source** — `.env.example` provides template; `.gitignore` excludes `.env`
-- **Docker socket** — required mount, represents a security boundary
+- **Plugin binaries** — built from auditable Dockerfiles in `registry/`
 
 ## Error Information Exposure
 
@@ -68,9 +72,10 @@ All operations are audit-logged asynchronously:
 
 See `BACKGROUND_JOBS.md` for audit worker details.
 
-## Docker Socket Access
+## WorkerPool Security
 
-**Security consideration:** the service requires `/var/run/docker.sock` mount. This gives the service full Docker daemon access. In production:
-- Run the service with minimal Docker permissions
-- Consider using Docker-in-Docker or rootless Docker
-- Network policy: restrict outbound from the service host
+The WorkerPool provides execution containment:
+- **Bounded concurrency** — limits parallel plugin executions (default: 4 workers)
+- **Non-blocking backpressure** — returns `ErrServerOverloaded` when queue is full
+- **Timeout enforcement** — per-request deadline prevents runaway processes
+- **Retry limits** — configurable max retries for transient failures

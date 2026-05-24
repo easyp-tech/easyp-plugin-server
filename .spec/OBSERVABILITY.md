@@ -1,4 +1,4 @@
-<!-- generated: 2026-05-15, template: infrastructure.md -->
+<!-- generated: 2026-05-24, template: infrastructure.md -->
 # Observability
 
 OpenTelemetry, Prometheus, and Pyroscope stack for EasyP Service.
@@ -38,7 +38,7 @@ Returns a `shutdownTelemetry` function for graceful cleanup.
 Non-invasive tracing via decorator pattern:
 
 | Decorator | Wraps | Package |
-|-----------|-------|---------|
+|-----------|-------|---------
 | `TracingCore` | `core.Service` | `internal/telemetry/tracing_core.go` |
 | `TracingRegistry` | `core.Registry` | `internal/telemetry/tracing_registry.go` |
 | `TracingPlugin` | `core.Plugin` | `internal/telemetry/tracing_plugin.go` |
@@ -90,13 +90,26 @@ telemetry:
 
 ## Observability Stack (docker-compose)
 
-| Service | Port | Role |
-|---------|------|------|
-| Alloy | 4317-4318 | OpenTelemetry collector (OTLP receiver) |
-| Grafana | 3000 | Dashboards |
-| Loki | 3100 | Log storage |
-| Tempo | 3200 | Trace storage |
-| Mimir | 9009 | Metrics storage |
-| Pyroscope | 4040 | Continuous profiling |
+| Service | Image | Role |
+|---------|-------|------|
+| Alloy | `grafana/alloy:v1.9.1` | OpenTelemetry collector (OTLP receiver, log collection, Prometheus remote write) |
+| Grafana | `grafana/grafana:12.3.0` | Dashboards |
+| Loki | `grafana/loki:3.5.0` | Log storage |
+| Tempo | `grafana/tempo:2.7.2` | Trace storage |
+| Mimir | `grafana/mimir:2.16.0` | Metrics storage (Prometheus-compatible) |
+| Pyroscope | `grafana/pyroscope:1.13.5` | Continuous profiling |
+| RustFS | `rustfs/rustfs:latest` | S3-compatible storage backend for Tempo, Mimir, Loki, Pyroscope |
+| Traefik | `traefik:v3.6` | Reverse proxy with labels-based routing |
 
-Configs: `configs/` directory (Alloy, Grafana datasources, Loki, etc.)
+### Traefik Routes
+
+| Host | Target |
+|------|--------|
+| `easyp.grafana.localhost` | Grafana (port 3000) |
+| `easyp.s3.localhost` | RustFS console (port 9001) |
+
+### S3 Buckets (created by init-buckets)
+
+`tempo`, `mimir-blocks`, `mimir-ruler`, `mimir-alertmanager`, `loki-chunks`, `loki-ruler`, `pyroscope`
+
+Configs: `configs/` directory (alloy, grafana, loki, tempo, mimir, pyroscope, traefik)

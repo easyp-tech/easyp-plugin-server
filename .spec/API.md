@@ -1,4 +1,4 @@
-<!-- generated: 2026-05-15, template: api.md -->
+<!-- generated: 2026-05-24, template: api.md -->
 # API
 
 gRPC API contract for EasyP Service.

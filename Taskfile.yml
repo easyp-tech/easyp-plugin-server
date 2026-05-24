@@ -15,7 +15,7 @@ tasks:
     preconditions:
       - "test -f docker-compose.yml"
     cmds:
-      - "sh -c 'EASYP_POSTGRES_PORT=${EASYP_POSTGRES_PORT:-5433} docker compose up -d postgres registry'"
+      - "sh -c 'EASYP_POSTGRES_PORT=${EASYP_POSTGRES_PORT:-5433} docker compose up -d postgres'"
 
   down:
     dir: "{{.USER_WORKING_DIR}}"
@@ -24,32 +24,42 @@ tasks:
     cmds:
       - "docker compose down --volumes"
 
-  local-push-registry:
+  build-plugins:
+    desc: "Build all plugin binaries from registry/ Dockerfiles"
     dir: "{{.USER_WORKING_DIR}}"
     preconditions:
-      - "test -f push.sh"
+      - "test -f build-plugins.sh"
     cmds:
-      - "./push.sh localhost:5005 --push"
+      - "./build-plugins.sh"
 
-  local-push-required:
+  register-plugins:
+    desc: "Register all built plugins via gRPC CreatePlugin API"
     dir: "{{.USER_WORKING_DIR}}"
     preconditions:
-      - "test -f registry/protocolbuffers/go/v1.36.10/Dockerfile"
-      - "test -f registry/grpc/go/v1.5.1/Dockerfile"
+      - "test -f register-plugins.sh"
     cmds:
-      - "docker build --platform linux/amd64 -t localhost:5005/protocolbuffers/go:v1.36.10 registry/protocolbuffers/go/v1.36.10"
-      - "docker push localhost:5005/protocolbuffers/go:v1.36.10"
-      - "docker build --platform linux/amd64 -t localhost:5005/grpc/go:v1.5.1 registry/grpc/go/v1.5.1"
-      - "docker push localhost:5005/grpc/go:v1.5.1"
+      - "./register-plugins.sh"
 
   run:
+    desc: "Full cycle: build plugins → restart services → register → follow logs"
     dir: "{{.USER_WORKING_DIR}}"
-    deps:
-      - "down"
-      - "up"
-      - "local-push-registry"
     cmds:
+      - task: build-plugins
+      - task: down
+      - task: up
+      - "echo 'Waiting for service to be ready...' && until curl -sf http://localhost:8082/health >/dev/null 2>&1; do sleep 2; done && echo 'Service is ready!'"
+      - task: register-plugins
       - "docker compose logs -f service"
+
+  setup:
+    desc: "Build plugins, start services, register plugins (no logs)"
+    dir: "{{.USER_WORKING_DIR}}"
+    cmds:
+      - task: build-plugins
+      - task: down
+      - task: up
+      - "echo 'Waiting for service to be ready...' && until curl -sf http://localhost:8082/health >/dev/null 2>&1; do sleep 2; done && echo 'Service is ready!'"
+      - task: register-plugins
 
   run-local:
     dir: "{{.USER_WORKING_DIR}}"
@@ -69,3 +79,19 @@ tasks:
       - "up"
     cmds:
       - "go run ./cmd/mcp-smoke --endpoint http://localhost:8083/mcp"
+
+  generate:
+    desc: "Run easyp generate against locally running service (localhost:8080)"
+    dir: "{{.USER_WORKING_DIR}}"
+    preconditions:
+      - "test -f easyp.yaml"
+    cmds:
+      - "easyp --cfg easyp.yaml generate"
+
+  generate-local:
+    desc: "Run easyp generate against local service (localhost:8080)"
+    dir: "{{.USER_WORKING_DIR}}"
+    preconditions:
+      - "test -f easyp.local.yaml"
+    cmds:
+      - "easyp --cfg easyp.local.yaml generate"

@@ -173,6 +173,9 @@ linters:
           - funlen
           - mnd
         path: cmd/mcp-smoke/
+      - linters:
+          - godox
+        path: internal/license/client\.go
     paths:
       - bin
       - config

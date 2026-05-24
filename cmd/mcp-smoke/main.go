@@ -43,6 +43,11 @@ func main() {
 	fmt.Println("MCP smoke check passed")
 }
 
+const (
+	toolPluginsList         = "plugins_list"
+	toolEasypConfigDescribe = "easyp_config_describe"
+)
+
 func runSmoke(ctx context.Context, session *mcp.ClientSession) error {
 	tools, err := session.ListTools(ctx, nil)
 	if err != nil {
@@ -60,7 +65,7 @@ func runSmoke(ctx context.Context, session *mcp.ClientSession) error {
 	}
 	sort.Strings(toolNames)
 
-	requiredTools := []string{"plugins_list", "easyp_config_describe"}
+	requiredTools := []string{toolPluginsList, toolEasypConfigDescribe}
 	for _, name := range requiredTools {
 		if _, ok := nameSet[name]; !ok {
 			return fmt.Errorf("missing required tool %q; got: %s", name, strings.Join(toolNames, ", "))
@@ -68,7 +73,7 @@ func runSmoke(ctx context.Context, session *mcp.ClientSession) error {
 	}
 
 	pluginsRes, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "plugins_list",
+		Name:      toolPluginsList,
 		Arguments: map[string]any{},
 	})
 	if err != nil {
@@ -86,7 +91,7 @@ func runSmoke(ctx context.Context, session *mcp.ClientSession) error {
 	}
 
 	describeRes, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "easyp_config_describe",
+		Name: toolEasypConfigDescribe,
 		Arguments: map[string]any{
 			"path":             "generate.plugins[]",
 			"include_examples": false,
@@ -110,7 +115,7 @@ func runSmoke(ctx context.Context, session *mcp.ClientSession) error {
 	}
 
 	invalidRes, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name: "easyp_config_describe",
+		Name: toolEasypConfigDescribe,
 		Arguments: map[string]any{
 			"path": "unknown.section",
 		},

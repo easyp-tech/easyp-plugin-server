@@ -20,6 +20,8 @@ type Metrics struct {
 	generationRetries  *prometheus.CounterVec
 }
 
+const labelPlugin = "plugin"
+
 // New creates and returns a new Metrics adapter.
 func New(reg *prometheus.Registry, namespace string) *Metrics {
 	metrics := &Metrics{
@@ -29,7 +31,7 @@ func New(reg *prometheus.Registry, namespace string) *Metrics {
 				Name:      "generated_plugin_code_total",
 				Help:      "Total number of generated code requests by plugin.",
 			},
-			[]string{"plugin"},
+			[]string{labelPlugin},
 		),
 		generationDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -37,7 +39,7 @@ func New(reg *prometheus.Registry, namespace string) *Metrics {
 				Name:      "generation_duration_seconds",
 				Help:      "Duration of code generation in seconds.",
 			},
-			[]string{"plugin"},
+			[]string{labelPlugin},
 		),
 		generationErrors: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -45,7 +47,7 @@ func New(reg *prometheus.Registry, namespace string) *Metrics {
 				Name:      "generation_errors_total",
 				Help:      "Total number of generation errors by plugin and error type.",
 			},
-			[]string{"plugin", "error_type"},
+			[]string{labelPlugin, "error_type"},
 		),
 		generationRetries: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -53,7 +55,7 @@ func New(reg *prometheus.Registry, namespace string) *Metrics {
 				Name:      "generation_retries_total",
 				Help:      "Total number of generation retries by plugin.",
 			},
-			[]string{"plugin"},
+			[]string{labelPlugin},
 		),
 	}
 

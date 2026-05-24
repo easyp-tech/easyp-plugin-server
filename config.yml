@@ -10,7 +10,8 @@ db:
   driver: "postgres"
   postgres: "postgres://easyp_svc:easyp_pass@easyp-postgres:5432/easyp_db?sslmode=disable"
 registry:
-  domain: "localhost:5005"
+  plugins_dir: "/plugins"
+  max_output_size: 67108864
 telemetry:
   otlp_endpoint: "easyp-alloy:4317"
   pyroscope_endpoint: "http://easyp-pyroscope:4040"

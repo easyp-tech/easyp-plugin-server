@@ -234,7 +234,7 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 
 	// Create LicenseManager
 	licenseClient := license.NewMockLicenseClient()
-	lm, err := license.NewManager(licenseClient, license.Config{
+	lm, err := license.NewManager(ctx, licenseClient, license.Config{
 		CacheTTL: cfg.License.CacheTTL,
 	}, log, reg, namespace)
 	if err != nil {

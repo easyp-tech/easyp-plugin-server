@@ -11,10 +11,4 @@ RUN --mount=type=cache,target=/go/pkg/mod \
  && upx --best --lzma /go/bin/protoc-gen-openapiv2
 
 FROM scratch
-
-COPY --from=build --link --chown=root:root /etc/passwd /etc/passwd
-COPY --from=build --link /go/bin/protoc-gen-openapiv2 /protoc-gen-openapiv2
-
-USER nobody
-
-ENTRYPOINT [ "/protoc-gen-openapiv2" ]
+COPY --from=build /go/bin/protoc-gen-openapiv2 /plugin

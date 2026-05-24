@@ -10,7 +10,4 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && upx --best --lzma /go/bin/protoc-gen-go-grpc
 
 FROM scratch
-COPY --from=build --link /etc/passwd /etc/passwd
-COPY --from=build --link --chown=root:root /go/bin/protoc-gen-go-grpc /protoc-gen-go-grpc
-USER nobody
-ENTRYPOINT [ "/protoc-gen-go-grpc" ]
+COPY --from=build /go/bin/protoc-gen-go-grpc /plugin

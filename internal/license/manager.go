@@ -33,6 +33,7 @@ type Manager struct {
 // NewManager creates a Manager backed by the given LicenseClient.
 // It performs an initial license fetch; on failure it falls back to community mode.
 func NewManager(
+	ctx context.Context,
 	client core.LicenseClient,
 	cfg Config,
 	logger *slog.Logger,
@@ -58,7 +59,7 @@ func NewManager(
 	}
 
 	// Perform initial fetch so claims are populated before the first request.
-	lm.refresh(context.Background())
+	lm.refresh(ctx)
 
 	return lm, nil
 }

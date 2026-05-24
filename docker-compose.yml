@@ -4,7 +4,6 @@ networks:
     driver: bridge
 
 volumes:
-  registry-data:
   postgres-data:
   rustfs-data:
   grafana-data:
@@ -160,17 +159,6 @@ services:
     networks:
       - easyp_network
 
-  registry:
-    image: registry:3.0.0
-    container_name: easyp-registry
-    restart: unless-stopped
-    volumes:
-      - registry-data:/var/lib/registry
-    ports:
-      - "${EASYP_REGISTRY_PORT:-5005}:5000"
-    networks:
-      - easyp_network
-
   postgres:
     image: postgres:17.7
     container_name: easyp-postgres
@@ -208,7 +196,7 @@ services:
     volumes:
       - "./config.yml:/config.yml:ro"
       - "./migrate:/migrate:ro"
-      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./plugins:/plugins:ro"
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://alloy:4317"
       OTEL_SERVICE_NAME: "easyp-api-service"

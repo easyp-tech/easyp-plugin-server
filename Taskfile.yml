@@ -1,7 +1,6 @@
 version: "3"
 
 tasks:
-
   up:
     desc: "Start all services. For Enterprise: LICENSE_PUBLIC_KEY=... LICENSE_KEY=... task up"
     dir: "{{.USER_WORKING_DIR}}"
@@ -49,7 +48,6 @@ tasks:
       - task: up
       - "echo 'Waiting for service to be ready...' && until curl -sf http://localhost:8082/health >/dev/null 2>&1; do sleep 2; done && echo 'Service is ready!'"
       - task: register-plugins
-      - "docker compose logs -f service"
 
   setup:
     desc: "Build plugins, start services, register plugins (no logs)"

@@ -195,7 +195,6 @@ services:
     command: ["-cfg=/config.yml", "-log_level=debug"]
     volumes:
       - "./config.yml:/config.yml:ro"
-      - "./migrate:/migrate:ro"
       - "./plugins:/plugins:ro"
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://alloy:4317"

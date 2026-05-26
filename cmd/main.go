@@ -32,7 +32,7 @@ import (
 	"github.com/easyp-tech/service/internal/core"
 	"github.com/easyp-tech/service/internal/database"
 	"github.com/easyp-tech/service/internal/database/connectors"
-	"github.com/easyp-tech/service/internal/database/migrations"
+	"github.com/easyp-tech/service/internal/database/goosemigrate"
 	"github.com/easyp-tech/service/internal/flags"
 	"github.com/easyp-tech/service/internal/grpchelper"
 	"github.com/easyp-tech/service/internal/license"
@@ -69,9 +69,8 @@ type (
 		MCP    string `env:"MCP, default=23413"    yaml:"mcp"`
 	}
 	dbConfig struct {
-		MigrateDir string `env:"MIGRATE_DIR, default=migrate" yaml:"migrate_dir"`
-		Driver     string `env:"DRIVER, default=postgres"     yaml:"driver"`
-		Postgres   string `env:"POSTGRES_DSN"                 yaml:"postgres"`
+		Driver   string `env:"DRIVER, default=postgres" yaml:"driver"`
+		Postgres string `env:"POSTGRES_DSN"             yaml:"postgres"`
 	}
 	registryConfig struct {
 		PluginsDir    string `env:"PLUGINS_DIR, default=/plugins"     yaml:"plugins_dir"`
@@ -179,15 +178,10 @@ func run(ctx context.Context, cfg config, reg *prometheus.Registry, namespace st
 	// Update context with new logger
 	ctx = monitor.WithContext(ctx, log)
 
-	// Parse and run migrations before creating the database connection
-	migrates, err := migrations.Parse(cfg.DB.MigrateDir)
+	// Apply database migrations before creating the connection pool
+	err = goosemigrate.Up(ctx, cfg.DB.Postgres)
 	if err != nil {
-		return fmt.Errorf("migrations.Parse: %w", err)
-	}
-
-	err = migrations.Run(ctx, cfg.DB.Driver, &connectors.Raw{Query: cfg.DB.Postgres}, migrations.Up, migrates)
-	if err != nil {
-		return fmt.Errorf("migrations.Run: %w", err)
+		return fmt.Errorf("goosemigrate.Up: %w", err)
 	}
 
 	// Create DAL metrics for database operations

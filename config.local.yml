@@ -6,7 +6,6 @@ server:
     health: 8082
     mcp: 8083
 db:
-  migrate_dir: "migrate"
   driver: "postgres"
   postgres: "postgres://easyp_svc:easyp_pass@localhost:5433/easyp_db?sslmode=disable"
 registry:
@@ -21,3 +20,10 @@ worker_pool:
   generation_timeout: 120s
   max_retries: 3
   shutdown_timeout: 30s
+license:
+  key: ""
+  file: ""
+rate_limit:
+  requests_per_second: 10.0
+  burst: 20
+  cleanup_interval: 10m

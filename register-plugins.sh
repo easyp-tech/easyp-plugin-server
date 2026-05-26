@@ -9,6 +9,7 @@
 set -euo pipefail
 
 GRPC_HOST="${1:-localhost:8080}"
+PLUGINS_PREFIX="${2:-/plugins}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGINS_DIR="${SCRIPT_DIR}/plugins"
 
@@ -40,7 +41,7 @@ for plugin_bin in $(find "${PLUGINS_DIR}" -name plugin -type f | sort); do
 
         # Call CreatePlugin via grpcurl, capture output and exit code
         output=$(grpcurl -plaintext \
-            -d "{\"group\":\"${group}\",\"name\":\"${name}\",\"version\":\"${version}\",\"config\":{\"command\":[\"/plugins/${group}/${name}/${version}/plugin\"]}}" \
+            -d "{\"group\":\"${group}\",\"name\":\"${name}\",\"version\":\"${version}\",\"config\":{\"command\":[\"${PLUGINS_PREFIX}/${group}/${name}/${version}/plugin\"]}}" \
             "${GRPC_HOST}" \
             api.generator.v1.ServiceAPI/CreatePlugin 2>&1) && rc=0 || rc=$?
 

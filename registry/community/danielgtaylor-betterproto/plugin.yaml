@@ -1,0 +1,3 @@
+binary: app/bin/protoc-gen-python_betterproto
+versions:
+    - v1.2.5

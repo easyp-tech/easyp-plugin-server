@@ -1,0 +1,10 @@
+binary: protoc-gen-scalapb-scala
+versions:
+    - v0.11.20
+    - v0.11.19
+    - v0.11.18
+    - v0.11.17
+    - v0.11.15
+    - v0.11.14
+    - v0.11.13
+    - v0.11.12

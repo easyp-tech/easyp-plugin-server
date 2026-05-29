@@ -26,18 +26,14 @@ tasks:
   build-plugins:
     desc: "Build all plugin binaries from registry/ Dockerfiles"
     dir: "{{.USER_WORKING_DIR}}"
-    preconditions:
-      - "test -f build-plugins.sh"
     cmds:
-      - "./build-plugins.sh"
+      - "go run ./cmd/epctl plugins build"
 
   register-plugins:
     desc: "Register all built plugins via gRPC CreatePlugin API"
     dir: "{{.USER_WORKING_DIR}}"
-    preconditions:
-      - "test -f register-plugins.sh"
     cmds:
-      - "./register-plugins.sh"
+      - "go run ./cmd/epctl plugins register"
 
   run:
     desc: "Full cycle: build plugins → restart services → register → follow logs"
@@ -64,7 +60,7 @@ tasks:
     preconditions:
       - "test -f config.local.yml"
     cmds:
-      - "go run ./cmd/main.go -cfg config.local.yml -log_level debug"
+      - "go run ./cmd/easyp/ -cfg config.local.yml -log_level debug"
 
   test-mcp:
     dir: "{{.USER_WORKING_DIR}}"

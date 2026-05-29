@@ -1,0 +1,7 @@
+binary: protoc-gen-connect-rust
+build_args:
+    CRATE_NAME: connectrpc-codegen
+versions:
+    - v0.6.0
+    - v0.5.0
+    - v0.4.2

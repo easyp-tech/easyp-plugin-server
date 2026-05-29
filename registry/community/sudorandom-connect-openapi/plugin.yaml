@@ -1,0 +1,20 @@
+binary: protoc-gen-connect-openapi
+build_args:
+    GO_MODULE: github.com/sudorandom/protoc-gen-connect-openapi
+versions:
+    - v0.25.6
+    - v0.25.5
+    - v0.25.4
+    - v0.25.3
+    - v0.25.2
+    - v0.25.1
+    - v0.25.0
+    - v0.24.0
+    - v0.23.1
+    - v0.22.1
+    - v0.22.0
+    - v0.21.3
+    - v0.21.2
+    - v0.21.1
+    - v0.20.3
+    - v0.19.1

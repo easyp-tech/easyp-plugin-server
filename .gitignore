@@ -6,6 +6,8 @@
 *.dylib
 bin/
 main
+easyp
+epctl
 plugins/
 
 # Test binary, built with `go test -c`

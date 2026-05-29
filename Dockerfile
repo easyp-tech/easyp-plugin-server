@@ -8,7 +8,7 @@ COPY . /app
 
 WORKDIR /app
 
-RUN go build -o easyp ./cmd/main.go
+RUN go build -o easyp ./cmd/easyp/
 
 FROM debian:bookworm-slim
 

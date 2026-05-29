@@ -1,0 +1,5 @@
+binary: protoc-gen-go-json
+build_args:
+    GO_MODULE: github.com/mitchellh/protoc-gen-go-json
+versions:
+    - v1.1.0

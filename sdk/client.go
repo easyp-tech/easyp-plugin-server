@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/pluginpb"
 
 	generator "github.com/easyp-tech/service/api/generator/v1"
@@ -140,4 +141,33 @@ func (c *Client) ListPlugins(ctx context.Context, filter ...PluginFilter) ([]*ge
 	}
 
 	return applyFilter(resp.GetPlugins(), filter[0]), nil
+}
+
+// CreatePlugin registers a new plugin in the service.
+func (c *Client) CreatePlugin(
+	ctx context.Context,
+	group, name, version string,
+	pluginConfig map[string]any,
+	tags []string,
+) (*generator.PluginInfo, error) {
+	ctx, cancel := c.withTimeout(ctx, c.cfg.createPluginTimeout)
+	defer cancel()
+
+	cfgStruct, err := structpb.NewStruct(pluginConfig)
+	if err != nil {
+		return nil, fmt.Errorf("structpb.NewStruct: %w", err)
+	}
+
+	resp, err := c.genClient.CreatePlugin(ctx, &generator.CreatePluginRequest{
+		Group:   group,
+		Name:    name,
+		Version: version,
+		Config:  cfgStruct,
+		Tags:    tags,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("c.genClient.CreatePlugin: %w", err)
+	}
+
+	return resp.GetPlugin(), nil
 }

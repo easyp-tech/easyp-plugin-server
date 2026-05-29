@@ -78,8 +78,6 @@ linters:
           - varnamelen
           - testpackage
           - nilnil
-          - paralleltest
-          - tparallel
           - dogsled
           - err113
         path: _test\.go

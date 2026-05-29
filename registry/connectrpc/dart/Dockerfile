@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1.15
+FROM dart:3.8.1-sdk AS build
+ARG VERSION
+
+WORKDIR /build
+RUN git clone --depth=1 --branch ${VERSION} https://github.com/connectrpc/connect-dart.git
+RUN cd connect-dart/packages/connect \
+ && dart pub get \ 
+ && dart compile exe bin/protoc-gen-connect-dart.dart -o /build/protoc-gen-connect-dart
+
+FROM scratch
+ARG VERSION
+COPY --from=build --link /etc/passwd /etc/passwd
+COPY --from=build --link /runtime/ /
+COPY --from=build --link /build/protoc-gen-connect-dart .
+USER nobody
+ENTRYPOINT [ "/protoc-gen-connect-dart" ]

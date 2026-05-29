@@ -170,7 +170,9 @@ This project includes agent skills in `.agents/skills/`. Each skill provides dom
 | **protobuf-expert-skill** | `.agents/skills/protobuf-expert-skill/SKILL.md` | Writing/reviewing `.proto` files, configuring `easyp.yaml`, lint rules, code generation plugins, proto dependencies, breaking changes, debugging easyp errors. |
 | **protoc-gen-mcp-skill** | `.agents/skills/protoc-gen-mcp-skill/SKILL.md` | Building MCP servers from protobuf definitions, generating MCP tools from proto files, adding MCP annotations, `protoc-gen-mcp` code generation. |
 | **go-code-style** | `.agents/skills/go-code-style/SKILL.md` | Writing or reviewing Go code. Error wrapping, defer patterns, assignment style, naming conventions, import ordering. |
+| **go-testing** | `.agents/skills/go-testing/SKILL.md` | Writing or reviewing Go tests. Table-driven tests, t.Parallel, inline mocks, testify assertions, naming conventions. |
 | **goose-migration** | `.agents/skills/goose-migration/SKILL.md` | Adding database tables/columns, creating migration files, modifying schema, debugging goose migration errors. |
+| **epctl-commands** | `.agents/skills/epctl-commands/SKILL.md` | Adding CLI commands to epctl, creating subcommands, working with `cmd/epctl/` files, urfave/cli v3 patterns, output formatting. |
 
 ### Spec-Driven Development
 

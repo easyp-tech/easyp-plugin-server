@@ -15,7 +15,7 @@
   "branch": "feature/disk-plugin-execution",
   "worktree": ".worktrees/disk-plugin-execution",
   "last_completed_task": null,
-  "finish_action": null,
-  "finished_at": null,
+  "finish_action": "keep",
+  "finished_at": "2026-05-28T19:46:31Z",
   "finish_base": null
 }

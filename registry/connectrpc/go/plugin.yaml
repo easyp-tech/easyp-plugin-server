@@ -1,0 +1,20 @@
+binary: protoc-gen-connect-go
+build_args:
+    GO_MODULE: connectrpc.com/connect/cmd/protoc-gen-connect-go
+versions:
+    - v1.20.0
+    - v1.19.2
+    - v1.19.1
+    - v1.19.0
+    - v1.18.1
+    - v1.18.0
+    - v1.17.0
+    - v1.16.2
+    - v1.16.1
+    - v1.16.0
+    - v1.15.0
+    - v1.14.0
+    - v1.13.0
+    - v1.12.0
+    - v1.11.1
+    - v1.11.0

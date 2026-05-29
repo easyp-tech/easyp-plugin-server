@@ -1,0 +1,4 @@
+binary: app/bin/protoc-gen-nanopb
+versions:
+    - v0.4.9
+    - v0.4.8

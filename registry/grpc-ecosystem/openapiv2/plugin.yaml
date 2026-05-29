@@ -1,0 +1,35 @@
+binary: protoc-gen-openapiv2
+build_args:
+    GO_MODULE: github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2
+versions:
+    - v2.29.0
+    - v2.28.0
+    - v2.27.7
+    - v2.27.6
+    - v2.27.5
+    - v2.27.4
+    - v2.27.3
+    - v2.27.2
+    - v2.27.1
+    - v2.27.0
+    - v2.26.3
+    - v2.26.1
+    - v2.26.0
+    - v2.25.1
+    - v2.24.0
+    - v2.23.0
+    - v2.22.0
+    - v2.21.0
+    - v2.20.0
+    - v2.19.1
+    - v2.19.0
+    - v2.18.1
+    - v2.18.0
+    - v2.17.1
+    - v2.17.0
+    - v2.16.2
+    - v2.16.1
+    - v2.16.0
+    - v2.15.2
+    - v2.15.1
+    - v2.15.0

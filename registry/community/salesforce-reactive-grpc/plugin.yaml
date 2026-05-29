@@ -1,0 +1,3 @@
+binary: protoc-gen-salesforce-reactive-grpc
+versions:
+    - v1.2.4

@@ -1,0 +1,6 @@
+binary: protoc-gen-jsonschema
+versions:
+    - v1.4.1
+    - v1.4.0
+    - v1.3.9
+    - v1.3.10

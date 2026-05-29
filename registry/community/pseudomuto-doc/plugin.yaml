@@ -1,0 +1,5 @@
+binary: protoc-gen-doc
+build_args:
+    GO_MODULE: github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc
+versions:
+    - v1.5.1

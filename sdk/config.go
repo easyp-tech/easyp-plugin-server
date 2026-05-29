@@ -21,8 +21,9 @@ type config struct {
 	retryMaxDelay  time.Duration
 
 	// Timeouts
-	generateCodeTimeout time.Duration
-	listPluginsTimeout  time.Duration
+	generateCodeTimeout  time.Duration
+	listPluginsTimeout   time.Duration
+	createPluginTimeout  time.Duration
 
 	// Interceptors
 	unaryInterceptors []grpc.UnaryClientInterceptor
@@ -41,8 +42,9 @@ func defaultConfig() *config {
 		maxRetries:          3,
 		retryBaseDelay:      100 * time.Millisecond,
 		retryMaxDelay:       5 * time.Second,
-		generateCodeTimeout: 30 * time.Second,
-		listPluginsTimeout:  10 * time.Second,
+		generateCodeTimeout:  30 * time.Second,
+		listPluginsTimeout:   10 * time.Second,
+		createPluginTimeout:  30 * time.Second,
 		healthCheckInterval: 30 * time.Second,
 	}
 }

@@ -1,0 +1,8 @@
+binary: protoc-gen-prost-crate
+build_args:
+    CRATE_NAME: protoc-gen-prost-crate
+versions:
+    - v0.5.0
+    - v0.4.1
+    - v0.4.0
+    - v0.3.1

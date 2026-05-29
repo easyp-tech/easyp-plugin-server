@@ -95,6 +95,36 @@ for _, tt := range tests {
 }
 ```
 
+### Parallel Tests
+
+All table-driven tests MUST use `t.Parallel()` at two levels:
+
+```go
+func TestXxx(t *testing.T) {
+    t.Parallel() // top-level: run alongside other Test* functions
+
+    tests := []struct {
+        name string
+        // ...
+    }{...}
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            t.Parallel() // sub-test: run cases concurrently
+
+            // Create fresh dependencies per sub-test (no shared mutable state)
+            // ...
+        })
+    }
+}
+```
+
+**Rules:**
+- Every table-driven test has `t.Parallel()` at top-level and inside each `t.Run`
+- Each sub-test creates its own mocks/dependencies (no shared mutable state)
+- If a test cannot be parallel, it indicates shared state — refactor the code or test
+- Enforced by `paralleltest` and `tparallel` linters
+
 ### Inline Mocks
 
 Mocks are defined as simple structs in test files — no code generation:

@@ -162,10 +162,13 @@ import (
 type Feature int
 
 const (
-    FeatureCodeGeneration Feature = iota
+    _ Feature = iota
+    FeatureCodeGeneration
     FeaturePluginListing
 )
 ```
+
+**Rule:** zero value (`0`) is always reserved with `_` so that uninitialized enum variables are never silently valid.
 
 ## Interface Rules
 
@@ -210,3 +213,4 @@ Before submitting any Go code, verify:
 - [ ] All exported symbols have godoc comments in English
 - [ ] No inline comments on control flow lines
 - [ ] Domain errors defined only in `core/domain.go`
+- [ ] Enum types use `_ = iota` to reserve zero value

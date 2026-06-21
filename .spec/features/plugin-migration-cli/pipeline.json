@@ -1,10 +1,11 @@
 {
   "feature": "plugin-migration-cli",
-  "phase": "requirements",
+  "phase": "design",
   "created_at": "2026-06-21T16:38:42Z",
-  "current_artifact": ".spec/features/plugin-migration-cli/requirements.md",
+  "current_artifact": ".spec/features/plugin-migration-cli/design.md",
   "history": [
-    {"phase": "explore", "artifact": ".spec/features/plugin-migration-cli/explore.md", "approved_at": "2026-06-21T16:47:29Z"}
+    {"phase": "explore", "artifact": ".spec/features/plugin-migration-cli/explore.md", "approved_at": "2026-06-21T16:47:29Z"},
+    {"phase": "requirements", "artifact": ".spec/features/plugin-migration-cli/requirements.md", "approved_at": "2026-06-21T16:50:03Z"}
   ],
   "review_base_commit": null,
   "branch": null,

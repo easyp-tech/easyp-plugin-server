@@ -46,3 +46,4 @@ test/generated/
 easyp.lock
 .kiro/
 /easyp-svc
+.tmp/

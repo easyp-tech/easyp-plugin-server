@@ -12,13 +12,13 @@ import (
 //
 // Returns error of first service which returned non-nil error, if any.
 func Start(ctx context.Context, services ...func(context.Context) error) error {
-	g, groupCtx := errgroup.WithContext(ctx)
+	group, groupCtx := errgroup.WithContext(ctx)
 
 	for i := range services {
-		g.Go(func() error { return services[i](groupCtx) })
+		group.Go(func() error { return services[i](groupCtx) })
 	}
 
-	err := g.Wait()
+	err := group.Wait()
 	if err != nil {
 		return fmt.Errorf("got error executing %d services: %w", len(services), err)
 	}

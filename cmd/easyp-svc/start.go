@@ -58,7 +58,8 @@ func (m *grpcMetrics) PanicsTotal() prometheus.Counter { //nolint:ireturn // int
 func runServiceStart(ctx context.Context, cfgPath string, logLevelStr string) error {
 	// Parse log level
 	var slogLvl slog.Level
-	if err := slogLvl.UnmarshalText([]byte(logLevelStr)); err != nil {
+	err := slogLvl.UnmarshalText([]byte(logLevelStr))
+	if err != nil {
 		slogLvl = slog.LevelDebug // fallback
 	}
 
@@ -73,23 +74,25 @@ func runServiceStart(ctx context.Context, cfgPath string, logLevelStr string) er
 
 	if cfgPath != "" {
 		// Use flags.File logic manually
-		f := &flags.File{DefaultPath: "", MaxSize: configFileSize}
-		if err := f.Set(cfgPath); err != nil {
+		configFile := &flags.File{DefaultPath: "", MaxSize: configFileSize}
+		err = configFile.Set(cfgPath)
+		if err != nil {
 			return fmt.Errorf("read config file: %w", err)
 		}
 
-		err := yaml.NewDecoder(f).Decode(&cfg)
+		err = yaml.NewDecoder(configFile).Decode(&cfg)
 		if err != nil {
 			return fmt.Errorf("yaml.NewDecoder.Decode: %w", err)
 		}
 	} else {
-		err := envconfig.Process(ctx, &cfg)
+		err = envconfig.Process(ctx, &cfg)
 		if err != nil {
 			return fmt.Errorf("envconfig.Process: %w", err)
 		}
 	}
 
-	if err := cfg.Validate(); err != nil {
+	err = cfg.Validate()
+	if err != nil {
 		return fmt.Errorf("config validation: %w", err)
 	}
 
@@ -97,7 +100,7 @@ func runServiceStart(ctx context.Context, cfgPath string, logLevelStr string) er
 	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	reg.MustRegister(collectors.NewGoCollector())
 
-	err := run(ctx, cfg, reg)
+	err = run(ctx, cfg, reg)
 	if err != nil {
 		return fmt.Errorf("run: %w", err)
 	}
@@ -114,13 +117,13 @@ func run(ctx context.Context, cfg config.Config, reg *prometheus.Registry) error
 	// Update context with the new telemetry-enabled logger
 	ctx = monitor.WithContext(ctx, log)
 
-	r, cleanupInfra, err := initInfrastructure(ctx, cfg, reg, namespace)
+	repo, cleanupInfra, err := initInfrastructure(ctx, cfg, reg, namespace)
 	if err != nil {
 		return err
 	}
 	defer cleanupInfra()
 
-	auditStore := adapter_audit.New(r.DB(), log)
+	auditStore := adapter_audit.New(repo.DB(), log)
 	auditWorker, auditCh := adapter_audit.NewWorker(auditStore, auditChannelCapacity, log, reg, namespace)
 
 	// Since audit worker runs in background, we launch it here.
@@ -132,7 +135,7 @@ func run(ctx context.Context, cfg config.Config, reg *prometheus.Registry) error
 		}
 	}()
 
-	_, pool, _, grpcServer, apiSrv := initApp(ctx, cfg, r, reg, namespace, auditCh)
+	_, pool, _, grpcServer, apiSrv := initApp(ctx, cfg, repo, reg, namespace, auditCh)
 
 	defer func() {
 		lost := pool.Shutdown(cfg.WorkerPool.ShutdownTimeout)
@@ -141,12 +144,12 @@ func run(ctx context.Context, cfg config.Config, reg *prometheus.Registry) error
 		}
 	}()
 
-	h, err := initHealthCheck(r, namespace)
+	healthCheck, err := initHealthCheck(repo, namespace)
 	if err != nil {
 		return fmt.Errorf("initHealthCheck: %w", err)
 	}
 
-	err = serveApp(ctx, log, cfg, reg, grpcServer, apiSrv.MCPHandler(), h)
+	err = serveApp(ctx, log, cfg, reg, grpcServer, apiSrv.MCPHandler(), healthCheck)
 	if err != nil {
 		return fmt.Errorf("serveApp: %w", err)
 	}
@@ -180,7 +183,12 @@ func initObservability(ctx context.Context, cfg config.Config, namespace string,
 	}
 }
 
-func initInfrastructure(ctx context.Context, cfg config.Config, reg *prometheus.Registry, namespace string) (*registry.Registry, func(), error) {
+func initInfrastructure(
+	ctx context.Context,
+	cfg config.Config,
+	reg *prometheus.Registry,
+	namespace string,
+) (*registry.Registry, func(), error) {
 	log := monitor.FromContext(ctx)
 
 	err := goosemigrate.Up(ctx, cfg.DB.Postgres)
@@ -263,6 +271,19 @@ func initApp(
 
 	module := core.New(metricsAdapter, pool, gate, auditCh, log)
 	tracedCore := telemetry.NewTracingCore(module)
+
+	grpcSrv, apiSrv := buildGRPCServer(log, reg, gate, rl, tracedCore)
+
+	return module, pool, gate, grpcSrv, apiSrv
+}
+
+func buildGRPCServer(
+	log *slog.Logger,
+	reg *prometheus.Registry,
+	gate *license.FeatureGate,
+	rl *ratelimiter.RateLimiter,
+	tracedCore *telemetry.TracingCore,
+) (*grpc.Server, *api.API) {
 	serverMetrics := grpchelper.NewServerMetrics(reg, "easyp", "api")
 
 	panicsCounter := prometheus.NewCounter(prometheus.CounterOpts{
@@ -292,7 +313,7 @@ func initApp(
 
 	apiSrv := api.New(grpcSrv, healthSrv, tracedCore, log)
 
-	return module, pool, gate, grpcSrv, apiSrv
+	return grpcSrv, apiSrv
 }
 
 func serveApp(
@@ -302,13 +323,13 @@ func serveApp(
 	reg *prometheus.Registry,
 	grpcServer *grpc.Server,
 	mcpHandler http.Handler,
-	h *health.Health,
+	healthCheck *health.Health,
 ) error {
 	mcpMux := http.NewServeMux()
 	mcpMux.Handle("/mcp", mcpHandler)
 
 	healthMux := http.NewServeMux()
-	healthMux.Handle("/", h.Handler())
+	healthMux.Handle("/", healthCheck.Handler())
 
 	grpcPort, err := strconv.ParseUint(cfg.Server.Port.GRPC, 10, 16)
 	if err != nil {
@@ -351,7 +372,7 @@ func serveApp(
 func initHealthCheck(repo *registry.Registry, namespace string) (*health.Health, error) {
 	const healthTimeout = 5 * time.Second
 
-	h, err := health.New(
+	healthCheck, err := health.New(
 		health.WithComponent(
 			health.Component{
 				Name:    namespace,
@@ -370,7 +391,7 @@ func initHealthCheck(repo *registry.Registry, namespace string) (*health.Health,
 		return nil, fmt.Errorf("health.New: %w", err)
 	}
 
-	return h, nil
+	return healthCheck, nil
 }
 
 func buildLogger(level slog.Level) *slog.Logger {

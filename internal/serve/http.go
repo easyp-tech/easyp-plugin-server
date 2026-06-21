@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -34,7 +35,7 @@ func HTTP(log *slog.Logger, host string, port uint16, handler http.Handler) func
 			err = srv.Shutdown(context.Background()) //nolint:contextcheck
 		}
 
-		if err != nil && err != http.ErrServerClosed {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("srv.ListenAndServe: %w", err)
 		}
 

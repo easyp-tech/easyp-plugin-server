@@ -1,10 +1,10 @@
 {
   "feature": "plugin-migration-cli",
-  "phase": "explore",
+  "phase": "requirements",
   "created_at": "2026-06-21T16:38:42Z",
-  "current_artifact": ".spec/features/plugin-migration-cli/explore.md",
+  "current_artifact": ".spec/features/plugin-migration-cli/requirements.md",
   "history": [
-
+    {"phase": "explore", "artifact": ".spec/features/plugin-migration-cli/explore.md", "approved_at": "2026-06-21T16:47:29Z"}
   ],
   "review_base_commit": null,
   "branch": null,

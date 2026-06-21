@@ -54,7 +54,7 @@ func (m *grpcMetrics) PanicsTotal() prometheus.Counter { //nolint:ireturn // int
 	return m.panics
 }
 
-// runServiceStart initializes and runs the complete service
+// runServiceStart initializes and runs the complete service.
 func runServiceStart(ctx context.Context, cfgPath string, logLevelStr string) error {
 	// Parse log level
 	var slogLvl slog.Level
@@ -165,6 +165,7 @@ func initObservability(ctx context.Context, cfg config.Config, namespace string,
 	shutdownTelemetry, telLog, err := telemetry.Init(ctx, telCfg, baseHandler)
 	if err != nil {
 		(*log).Error("telemetry.Init", "error", err)
+
 		return func(context.Context) {}
 	}
 	*log = telLog

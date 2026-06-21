@@ -20,6 +20,7 @@ const (
 	progressBarWidth     = 20
 	percentMultiplier    = 100
 	spinnerSleepDuration = 50 * time.Millisecond
+	separatorLength      = 40
 )
 
 var (
@@ -40,6 +41,10 @@ type pluginInfo struct {
 	path    string
 }
 
+func getSpinners() []string {
+	return []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+}
+
 func runPluginsMigrate(ctx context.Context, scanPath string, addr string, filter string, pluginsPrefix string, nonInteractive bool) error {
 	plugins, err := scanPlugins(scanPath, filter)
 	if err != nil {
@@ -57,48 +62,28 @@ func runPluginsMigrate(ctx context.Context, scanPath string, addr string, filter
 	if err != nil {
 		return fmt.Errorf("failed to connect to gRPC server at %s: %w", addr, err)
 	}
-	defer func() {
-		_ = client.Close()
-	}()
+	defer func() { _ = client.Close() }()
 
 	isInteractive := !nonInteractive && term.IsTerminal(int(os.Stdout.Fd()))
 
 	var registered, skipped, failed int
-
-	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	spinners := getSpinners()
 	spinIdx := 0
 
-	for i, plg := range plugins {
+	for idx, plg := range plugins {
 		pName := fmt.Sprintf("%s/%s:%s", plg.group, plg.name, plg.version)
 
 		if isInteractive {
-			pct := int(float64(i) / float64(total) * percentMultiplier)
+			pct := int(float64(idx) / float64(total) * percentMultiplier)
 			progressBar := renderProgressBar(pct, progressBarWidth)
-			_, _ = fmt.Fprintf(os.Stdout, "\r\033[K%s %s Регистрация %s... %d%% (%d/%d)", spinners[spinIdx], progressBar, pName, pct, i, total)
+			_, _ = fmt.Fprintf(os.Stdout, "\r\033[K%s %s Регистрация %s... %d%% (%d/%d)", spinners[spinIdx], progressBar, pName, pct, idx, total)
 			spinIdx = (spinIdx + 1) % len(spinners)
 		} else {
 			_, _ = fmt.Fprintf(os.Stdout, "Registering %s...\n", pName)
 		}
 
 		isSkipped, errReg := registerSinglePlugin(ctx, client, plg, pluginsPrefix)
-		if errReg == nil {
-			if isSkipped {
-				skipped++
-				if !isInteractive {
-					_, _ = fmt.Fprintf(os.Stdout, "Skipped (already exists): %s\n", pName)
-				}
-			} else {
-				registered++
-				if !isInteractive {
-					_, _ = fmt.Fprintf(os.Stdout, "Successfully registered %s\n", pName)
-				}
-			}
-		} else {
-			failed++
-			if !isInteractive {
-				_, _ = fmt.Fprintf(os.Stderr, "Error registering %s: %v\n", pName, errReg)
-			}
-		}
+		processMigrationResult(pName, errReg, isSkipped, isInteractive, &registered, &skipped, &failed)
 
 		if isInteractive {
 			time.Sleep(spinnerSleepDuration)
@@ -106,18 +91,55 @@ func runPluginsMigrate(ctx context.Context, scanPath string, addr string, filter
 	}
 
 	if isInteractive {
-		_, _ = fmt.Fprintf(os.Stdout, "\r\033[K%s %s Готово! 100%% (%d/%d)\n", "✓", renderProgressBar(percentMultiplier, progressBarWidth), total, total)
+		progressBar := renderProgressBar(percentMultiplier, progressBarWidth)
+		_, _ = fmt.Fprintf(
+			os.Stdout,
+			"\r\033[K%s %s Готово! 100%% (%d/%d)\n",
+			"✓",
+			progressBar,
+			total,
+			total,
+		)
 	}
 
+	printSummary(total, registered, skipped, failed)
+
+	return nil
+}
+
+func printSummary(total, registered, skipped, failed int) {
 	_, _ = fmt.Fprintln(os.Stdout, "\nРезультаты миграции:")
-	_, _ = fmt.Fprintln(os.Stdout, strings.Repeat("-", 40))
+	_, _ = fmt.Fprintln(os.Stdout, strings.Repeat("-", separatorLength))
 	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Всего плагинов найдено", total)
 	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Успешно зарегистрировано", registered)
 	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Пропущено (уже создано)", skipped)
 	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Ошибка регистрации", failed)
-	_, _ = fmt.Fprintln(os.Stdout, strings.Repeat("-", 40))
+	_, _ = fmt.Fprintln(os.Stdout, strings.Repeat("-", separatorLength))
+}
 
-	return nil
+func processMigrationResult(pName string, errReg error, isSkipped bool, isInteractive bool, registered *int, skipped *int, failed *int) {
+	if errReg != nil {
+		*failed++
+		if !isInteractive {
+			_, _ = fmt.Fprintf(os.Stderr, "Error registering %s: %v\n", pName, errReg)
+		}
+
+		return
+	}
+
+	if isSkipped {
+		*skipped++
+		if !isInteractive {
+			_, _ = fmt.Fprintf(os.Stdout, "Skipped (already exists): %s\n", pName)
+		}
+
+		return
+	}
+
+	*registered++
+	if !isInteractive {
+		_, _ = fmt.Fprintf(os.Stdout, "Successfully registered %s\n", pName)
+	}
 }
 
 func scanPlugins(scanPath string, filter string) ([]pluginInfo, error) {
@@ -177,7 +199,7 @@ func registerSinglePlugin(ctx context.Context, client *sdk.Client, plg pluginInf
 			return true, nil
 		}
 
-		return false, registerErr
+		return false, fmt.Errorf("sdk.Client.CreatePlugin: %w", registerErr)
 	}
 
 	return false, nil

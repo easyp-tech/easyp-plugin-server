@@ -25,7 +25,8 @@ func Up(ctx context.Context, dsn string) error {
 		return fmt.Errorf("sql.Open: %w", err)
 	}
 	defer func() {
-		if err := db.Close(); err != nil {
+		err := db.Close()
+		if err != nil {
 			slog.Error("db.Close", "error", err)
 		}
 	}()
@@ -59,4 +60,3 @@ func Up(ctx context.Context, dsn string) error {
 
 	return nil
 }
-

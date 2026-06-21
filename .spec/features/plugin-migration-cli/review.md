@@ -17,6 +17,8 @@
 | `sdk/config.go` | ⚠️ Unexpected | Исправлено выравнивание полей структуры. |
 | `go.mod` | ✅ Planned | Добавлена зависимость `golang.org/x/term`. |
 | `go.sum` | ✅ Planned | Хеши для `golang.org/x/term`. |
+| `Taskfile.yml` | ✅ Planned | Автоматизирована фоновая миграция в `run-local`, обновлена задача `register-plugins` и добавлена `run-local-test`. |
+
 
 ## Requirements Traceability (Трассировка требований)
 
@@ -104,7 +106,10 @@
 go build -o easyp-svc ./cmd/easyp-svc/
 (Выполнено успешно, код выхода 0, stdout и stderr пусты)
 ```
+- **Task Verification (Проверка через Task):**
+  - Команда `task run-local-test` успешно разворачивает Postgres, создает mock-структуру плагинов в директории `plugins/`, запускает gRPC-сервер, дожидается его готовности и запускает миграцию, после чего очищает временную директорию с помощью `defer`.
 - **Lint:**
+
 ```
 level=warning msg="The linter 'gomodguard' is deprecated (since v2.12.0) due to: new major version. Replaced by gomodguard_v2."
 level=warning msg="Suggested new configuration:\nlinters:\n  enable:\n    - gomodguard_v2\n"

@@ -55,14 +55,43 @@ func main() {
 				Usage: "Manage plugins",
 				Commands: []*cli.Command{
 					{
-						Name:  "migrate",
-						Usage: "Run migrations for plugins",
+						Name:      "migrate",
+						Usage:     "Run migrations for plugins",
+						ArgsUsage: "<path>",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:  "addr",
+								Usage: "gRPC server address",
+								Value: "localhost:8080",
+							},
+							&cli.StringFlag{
+								Name:  "filter",
+								Usage: "glob filter pattern for plugins (e.g. 'connectrpc/*')",
+								Value: "",
+							},
+							&cli.BoolFlag{
+								Name:  "non-interactive",
+								Usage: "disable interactive UI and dynamic progress bars",
+								Value: false,
+							},
+							&cli.StringFlag{
+								Name:  "plugins-prefix",
+								Usage: "prefix directory for plugins on the server",
+								Value: "/plugins",
+							},
+						},
 						Action: func(ctx context.Context, cmd *cli.Command) error {
-							fmt.Println("Running plugin migrations (stub)...")
-							slog.Info("Plugin migrations executed")
+							args := cmd.Args().Slice()
+							if len(args) < 1 {
+								return fmt.Errorf("missing path argument; usage: easyp-svc plugins migrate <path>")
+							}
+							path := args[0]
+							addr := cmd.String("addr")
+							filter := cmd.String("filter")
+							nonInteractive := cmd.Bool("non-interactive")
+							pluginsPrefix := cmd.String("plugins-prefix")
 
-							// TODO: Implement migration logic here
-							return nil
+							return runPluginsMigrate(ctx, path, addr, filter, pluginsPrefix, nonInteractive)
 						},
 					},
 				},

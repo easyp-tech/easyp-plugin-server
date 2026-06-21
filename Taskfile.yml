@@ -60,7 +60,7 @@ tasks:
     preconditions:
       - "test -f config.local.yml"
     cmds:
-      - "go run ./cmd/easyp/ -cfg config.local.yml -log_level debug"
+      - "go run ./cmd/easyp-svc/ service start --cfg config.local.yml --log_level debug"
 
   test-mcp:
     dir: "{{.USER_WORKING_DIR}}"

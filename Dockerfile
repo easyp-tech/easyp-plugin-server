@@ -8,14 +8,14 @@ COPY . /app
 
 WORKDIR /app
 
-RUN go build -o easyp ./cmd/easyp/
+RUN go build -o easyp-svc ./cmd/easyp-svc/
 
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/easyp /easyp
+COPY --from=builder /app/easyp-svc /easyp-svc
 
 VOLUME ["/plugins"]
 
-ENTRYPOINT ["/easyp"]
+ENTRYPOINT ["/easyp-svc"]

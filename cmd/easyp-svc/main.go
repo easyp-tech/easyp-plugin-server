@@ -38,10 +38,7 @@ func main() {
 							logLvl := cmd.String("log_level")
 
 							fmt.Printf("Starting easyp-svc with config: %q, log level: %q\n", cfgPath, logLvl)
-							slog.Info("Service started (stub)")
-
-							// TODO: Port start() logic from legacy main.go here
-							return nil
+							return runServiceStart(ctx, cfgPath, logLvl)
 						},
 					},
 				},

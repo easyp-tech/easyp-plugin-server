@@ -192,7 +192,7 @@ services:
         condition: service_healthy
       alloy:
         condition: service_started
-    command: ["-cfg=/config.yml", "-log_level=debug"]
+    command: ["service", "start", "--cfg=/config.yml", "--log_level=debug"]
     volumes:
       - "./config.yml:/config.yml:ro"
       - "./plugins:/plugins:ro"

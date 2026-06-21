@@ -45,3 +45,4 @@ test/generated/
 # EasyP generated files
 easyp.lock
 .kiro/
+/easyp-svc

@@ -36,10 +36,10 @@ func main() {
 						Action: func(ctx context.Context, cmd *cli.Command) error {
 							cfgPath := cmd.String("cfg")
 							logLvl := cmd.String("log_level")
-							
+
 							fmt.Printf("Starting easyp-svc with config: %q, log level: %q\n", cfgPath, logLvl)
 							slog.Info("Service started (stub)")
-							
+
 							// TODO: Port start() logic from legacy main.go here
 							return nil
 						},
@@ -56,7 +56,7 @@ func main() {
 						Action: func(ctx context.Context, cmd *cli.Command) error {
 							fmt.Println("Running plugin migrations (stub)...")
 							slog.Info("Plugin migrations executed")
-							
+
 							// TODO: Implement migration logic here
 							return nil
 						},

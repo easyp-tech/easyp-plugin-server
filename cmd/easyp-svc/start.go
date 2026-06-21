@@ -2,14 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
+	"strconv"
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/ratelimit"
@@ -17,9 +14,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sethvargo/go-envconfig"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"gopkg.in/yaml.v3"
 
@@ -37,6 +32,7 @@ import (
 	"github.com/easyp-tech/service/internal/license"
 	"github.com/easyp-tech/service/internal/monitor"
 	"github.com/easyp-tech/service/internal/ratelimiter"
+	"github.com/easyp-tech/service/internal/serve"
 	"github.com/easyp-tech/service/internal/telemetry"
 )
 
@@ -59,7 +55,7 @@ func (m *grpcMetrics) PanicsTotal() prometheus.Counter { //nolint:ireturn // int
 }
 
 // runServiceStart initializes and runs the complete service
-func runServiceStart(ctxParent context.Context, cfgPath string, logLevelStr string) error {
+func runServiceStart(ctx context.Context, cfgPath string, logLevelStr string) error {
 	// Parse log level
 	var slogLvl slog.Level
 	if err := slogLvl.UnmarshalText([]byte(logLevelStr)); err != nil {
@@ -68,15 +64,10 @@ func runServiceStart(ctxParent context.Context, cfgPath string, logLevelStr stri
 
 	log := buildLogger(slogLvl)
 
-	ctxParent = monitor.WithContext(ctxParent, log.With(
+	ctx = monitor.WithContext(ctx, log.With(
 		slog.String("version", "dev"),
 		slog.String("app", serviceNamespace),
 	))
-
-	ctx, cancel := signal.NotifyContext(ctxParent, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
-	defer cancel()
-
-	go forceShutdown(ctx)
 
 	cfg := config.Config{}
 
@@ -108,8 +99,7 @@ func runServiceStart(ctxParent context.Context, cfgPath string, logLevelStr stri
 
 	err := run(ctx, cfg, reg)
 	if err != nil {
-		log.Error("shutdown", "error", err)
-		os.Exit(exitCode)
+		return fmt.Errorf("run: %w", err)
 	}
 
 	return nil
@@ -119,43 +109,95 @@ func run(ctx context.Context, cfg config.Config, reg *prometheus.Registry) error
 	namespace := serviceNamespace
 	log := monitor.FromContext(ctx)
 
-	// Initialize telemetry (before anything else)
+	cleanupObservability := initObservability(ctx, cfg, namespace, &log)
+	defer cleanupObservability(ctx)
+	// Update context with the new telemetry-enabled logger
+	ctx = monitor.WithContext(ctx, log)
+
+	r, cleanupInfra, err := initInfrastructure(ctx, cfg, reg, namespace)
+	if err != nil {
+		return err
+	}
+	defer cleanupInfra()
+
+	auditStore := adapter_audit.New(r.DB(), log)
+	auditWorker, auditCh := adapter_audit.NewWorker(auditStore, auditChannelCapacity, log, reg, namespace)
+
+	// Since audit worker runs in background, we launch it here.
+	go auditWorker.Run(ctx)
+	defer func() {
+		lost := auditWorker.Shutdown(componentShutdownTimeout)
+		if lost > 0 {
+			log.Warn("audit events lost on shutdown", "count", lost)
+		}
+	}()
+
+	_, pool, _, grpcServer, apiSrv := initApp(ctx, cfg, r, reg, namespace, auditCh)
+
+	defer func() {
+		lost := pool.Shutdown(cfg.WorkerPool.ShutdownTimeout)
+		if lost > 0 {
+			log.Warn("generation jobs lost on shutdown", "count", lost)
+		}
+	}()
+
+	h, err := initHealthCheck(r, namespace)
+	if err != nil {
+		return fmt.Errorf("initHealthCheck: %w", err)
+	}
+
+	err = serveApp(ctx, log, cfg, reg, grpcServer, apiSrv.MCPHandler(), h)
+	if err != nil {
+		return fmt.Errorf("serveApp: %w", err)
+	}
+
+	return nil
+}
+
+func initObservability(ctx context.Context, cfg config.Config, namespace string, log **slog.Logger) func(context.Context) {
+	// Initialize telemetry
 	telCfg := telemetry.Config{
 		OTLPEndpoint:      cfg.Telemetry.OTLPEndpoint,
 		ServiceName:       namespace,
 		PyroscopeEndpoint: cfg.Telemetry.PyroscopeEndpoint,
 	}
-	baseHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true, Level: slog.LevelDebug})
+	baseHandler := (*log).Handler()
 	shutdownTelemetry, telLog, err := telemetry.Init(ctx, telCfg, baseHandler)
 	if err != nil {
-		return fmt.Errorf("telemetry.Init: %w", err)
+		(*log).Error("telemetry.Init", "error", err)
+		return func(context.Context) {}
 	}
-	log = telLog
-	ctx = monitor.WithContext(ctx, log)
+	*log = telLog
 
-	err = goosemigrate.Up(ctx, cfg.DB.Postgres)
+	return func(ctx context.Context) {
+		shutdownCtx, cancel := context.WithTimeout(ctx, componentShutdownTimeout)
+		defer cancel()
+		err := shutdownTelemetry(shutdownCtx)
+		if err != nil {
+			(*log).Error("failed to shutdown tracer provider", "error", err)
+		}
+	}
+}
+
+func initInfrastructure(ctx context.Context, cfg config.Config, reg *prometheus.Registry, namespace string) (*registry.Registry, func(), error) {
+	log := monitor.FromContext(ctx)
+
+	err := goosemigrate.Up(ctx, cfg.DB.Postgres)
 	if err != nil {
-		return fmt.Errorf("goosemigrate.Up: %w", err)
+		return nil, nil, fmt.Errorf("goosemigrate.Up: %w", err)
 	}
 
 	dalMetrics := database.NewMetrics(reg, namespace, "repo", new(core.Registry))
 	sqlCfg := database.SQLConfig{Metrics: dalMetrics}
 	db, err := database.NewSQL(ctx, cfg.DB.Driver, sqlCfg, &connectors.Raw{Query: cfg.DB.Postgres})
 	if err != nil {
-		return fmt.Errorf("database.NewSQL: %w", err)
+		return nil, nil, fmt.Errorf("database.NewSQL: %w", err)
 	}
 
 	repo, err := registry.New(ctx, db, cfg.Registry.PluginsDir, cfg.Registry.MaxOutputSize)
 	if err != nil {
-		return fmt.Errorf("registry.New: %w", err)
+		return nil, nil, fmt.Errorf("registry.New: %w", err)
 	}
-
-	defer func() {
-		err := repo.Close()
-		if err != nil {
-			log.Error("close database connection", "error", err)
-		}
-	}()
 
 	dbCollector := adapter_metrics.NewDBCollector(repo.DB().UnderlyingDB(), namespace)
 	reg.MustRegister(dbCollector)
@@ -163,17 +205,25 @@ func run(ctx context.Context, cfg config.Config, reg *prometheus.Registry) error
 	businessCollector := adapter_metrics.NewBusinessMetricsCollector(repo.DB().UnderlyingDB(), namespace, log)
 	reg.MustRegister(businessCollector)
 
-	auditStore := adapter_audit.New(repo.DB(), log)
-	auditWorker, auditCh := adapter_audit.NewWorker(auditStore, auditChannelCapacity, log, reg, namespace)
-
-	go auditWorker.Run(ctx)
-
-	defer func() {
-		lost := auditWorker.Shutdown(componentShutdownTimeout)
-		if lost > 0 {
-			log.Warn("audit events lost on shutdown", "count", lost)
+	cleanupRepo := func() {
+		err := repo.Close()
+		if err != nil {
+			log.Error("close database connection", "error", err)
 		}
-	}()
+	}
+
+	return repo, cleanupRepo, nil
+}
+
+func initApp(
+	ctx context.Context,
+	cfg config.Config,
+	repo *registry.Registry,
+	reg *prometheus.Registry,
+	namespace string,
+	auditCh chan<- core.AuditEntry,
+) (*core.Core, *core.WorkerPool, *license.FeatureGate, *grpc.Server, *api.API) {
+	log := monitor.FromContext(ctx)
 
 	licenseClient := license.NewMockLicenseClient()
 	lm, err := license.NewManager(ctx, licenseClient, license.Config{
@@ -210,13 +260,6 @@ func run(ctx context.Context, cfg config.Config, reg *prometheus.Registry) error
 	}, log, metricsAdapter, reg, namespace)
 	pool.Start(ctx)
 
-	defer func() {
-		lost := pool.Shutdown(cfg.WorkerPool.ShutdownTimeout)
-		if lost > 0 {
-			log.Warn("generation jobs lost on shutdown", "count", lost)
-		}
-	}()
-
 	module := core.New(metricsAdapter, pool, gate, auditCh, log)
 	tracedCore := telemetry.NewTracingCore(module)
 	serverMetrics := grpchelper.NewServerMetrics(reg, "easyp", "api")
@@ -248,119 +291,85 @@ func run(ctx context.Context, cfg config.Config, reg *prometheus.Registry) error
 
 	apiSrv := api.New(grpcSrv, healthSrv, tracedCore, log)
 
-	eg, ctx := errgroup.WithContext(ctx)
+	return module, pool, gate, grpcSrv, apiSrv
+}
 
-	eg.Go(func() error {
-		lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.GRPC))
-		if err != nil {
-			return fmt.Errorf("net.Listen gRPC: %w", err)
-		}
-		log.Info("starting gRPC server", "addr", lis.Addr().String())
+func serveApp(
+	ctx context.Context,
+	log *slog.Logger,
+	cfg config.Config,
+	reg *prometheus.Registry,
+	grpcServer *grpc.Server,
+	mcpHandler http.Handler,
+	h *health.Health,
+) error {
+	mcpMux := http.NewServeMux()
+	mcpMux.Handle("/mcp", mcpHandler)
 
-		go func() {
-			<-ctx.Done()
-			grpcSrv.GracefulStop()
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), componentShutdownTimeout)
-			defer cancel()
-			err := shutdownTelemetry(shutdownCtx)
-			if err != nil {
-				log.Error("telemetry shutdown error", "error", err)
-			}
-		}()
+	healthMux := http.NewServeMux()
+	healthMux.Handle("/", h.Handler())
 
-		err = grpcSrv.Serve(lis)
-		if err != nil {
-			return fmt.Errorf("grpcSrv.Serve: %w", err)
-		}
-		return nil
-	})
-
-	eg.Go(func() error {
-		mux := http.NewServeMux()
-		mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
-		srv := &http.Server{
-			Addr:              fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.Metric),
-			Handler:           mux,
-			ReadHeaderTimeout: componentShutdownTimeout,
-		}
-		log.Info("starting metrics server", "addr", srv.Addr)
-
-		go func() {
-			<-ctx.Done()
-			ctxShutdown, cancel := context.WithTimeout(context.Background(), componentShutdownTimeout)
-			defer cancel()
-			_ = srv.Shutdown(ctxShutdown)
-		}()
-
-		err := srv.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("metrics server error: %w", err)
-		}
-		return nil
-	})
-
-	eg.Go(func() error {
-		healthSrv, err := health.New(health.WithChecks(health.Config{
-			Name:    "postgres",
-			Timeout: time.Second,
-			Check:   repo.Health,
-		}))
-		if err != nil {
-			return fmt.Errorf("health.New: %w", err)
-		}
-
-		srv := &http.Server{
-			Addr:              fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.Health),
-			Handler:           healthSrv.Handler(),
-			ReadHeaderTimeout: componentShutdownTimeout,
-		}
-		log.Info("starting health server", "addr", srv.Addr)
-
-		go func() {
-			<-ctx.Done()
-			ctxShutdown, cancel := context.WithTimeout(context.Background(), componentShutdownTimeout)
-			defer cancel()
-			_ = srv.Shutdown(ctxShutdown)
-		}()
-
-		err = srv.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("health server error: %w", err)
-		}
-		return nil
-	})
-
-	eg.Go(func() error {
-		mux := http.NewServeMux()
-		mux.Handle("/mcp", apiSrv.MCPHandler())
-
-		srv := &http.Server{
-			Addr:              fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port.MCP),
-			Handler:           mux,
-			ReadHeaderTimeout: componentShutdownTimeout,
-		}
-		log.Info("starting mcp server", "addr", srv.Addr, "path", "/mcp")
-
-		go func() {
-			<-ctx.Done()
-			ctxShutdown, cancel := context.WithTimeout(context.Background(), componentShutdownTimeout)
-			defer cancel()
-			_ = srv.Shutdown(ctxShutdown)
-		}()
-
-		err := srv.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("mcp server error: %w", err)
-		}
-		return nil
-	})
-
-	err = eg.Wait()
+	grpcPort, err := strconv.ParseUint(cfg.Server.Port.GRPC, 10, 16)
 	if err != nil {
-		return fmt.Errorf("errgroup: %w", err)
+		return fmt.Errorf("invalid grpc port: %w", err)
+	}
+
+	metricPort, err := strconv.ParseUint(cfg.Server.Port.Metric, 10, 16)
+	if err != nil {
+		return fmt.Errorf("invalid metric port: %w", err)
+	}
+
+	mcpPort, err := strconv.ParseUint(cfg.Server.Port.MCP, 10, 16)
+	if err != nil {
+		return fmt.Errorf("invalid mcp port: %w", err)
+	}
+
+	healthPort, err := strconv.ParseUint(cfg.Server.Port.Health, 10, 16)
+	if err != nil {
+		return fmt.Errorf("invalid health port: %w", err)
+	}
+
+	services := []func(context.Context) error{
+		serve.Metrics(log.With("module", "metric"), cfg.Server.Host, uint16(metricPort), reg),
+		serve.GRPC(log.With("module", "gRPC"), cfg.Server.Host, uint16(grpcPort), grpcServer),
+		serve.HTTP(log.With("module", "mcp"), cfg.Server.Host, uint16(mcpPort), mcpMux),
+		serve.HTTP(log.With("module", "health"), cfg.Server.Host, uint16(healthPort), healthMux),
+	}
+
+	err = serve.Start(
+		ctx,
+		services...,
+	)
+	if err != nil {
+		return fmt.Errorf("serve.Start: %w", err)
 	}
 
 	return nil
+}
+
+func initHealthCheck(repo *registry.Registry, namespace string) (*health.Health, error) {
+	const healthTimeout = 5 * time.Second
+
+	h, err := health.New(
+		health.WithComponent(
+			health.Component{
+				Name:    namespace,
+				Version: "dev",
+			},
+		),
+		health.WithChecks(
+			health.Config{
+				Name:    "postgres",
+				Timeout: healthTimeout,
+				Check:   repo.Health,
+			},
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("health.New: %w", err)
+	}
+
+	return h, nil
 }
 
 func buildLogger(level slog.Level) *slog.Logger {

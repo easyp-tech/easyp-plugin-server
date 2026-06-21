@@ -5,11 +5,18 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/urfave/cli/v3"
 )
 
 func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGABRT, syscall.SIGTERM)
+	defer cancel()
+
+	go forceShutdown(ctx)
+
 	app := &cli.Command{
 		Name:  "easyp-svc",
 		Usage: "EasyP Service CLI",
@@ -63,7 +70,7 @@ func main() {
 		},
 	}
 
-	if err := app.Run(context.Background(), os.Args); err != nil {
+	if err := app.Run(ctx, os.Args); err != nil {
 		slog.Error("Failed to run app", "error", err)
 		os.Exit(1)
 	}

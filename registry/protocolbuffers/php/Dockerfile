@@ -30,4 +30,4 @@ ARG VERSION
 COPY --from=base / /
 COPY --from=build --link --chmod=0755 /build/bazel-bin/plugins/protoc-gen-php .
 USER nobody
-ENTRYPOINT ["/protoc-gen-php"]
+ENTRYPOINT ["/plugin"]

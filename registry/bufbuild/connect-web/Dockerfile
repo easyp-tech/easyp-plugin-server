@@ -9,5 +9,9 @@ RUN sed -i -e 's|/usr/bin/env node|/nodejs/bin/node|g' /app/node_modules/@bufbui
 FROM gcr.io/distroless/nodejs18-debian11
 ARG VERSION
 COPY --link --from=build /app /app
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /app/node_modules/.bin/protoc-gen-connect-web "$@"
+EOF
 USER nobody
-ENTRYPOINT [ "/app/node_modules/.bin/protoc-gen-connect-web" ]
+ENTRYPOINT ["/plugin"]

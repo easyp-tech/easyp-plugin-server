@@ -17,6 +17,6 @@ ARG VERSION
 FROM scratch
 ARG VERSION
 COPY --link --from=base / /
-COPY --link --from=build /app/swift-protobuf/.build/release/protoc-gen-swift .
+COPY --link --from=build /app/swift-protobuf/.build/release/protoc-gen-swift /plugin
 USER nobody
-ENTRYPOINT [ "/protoc-gen-swift" ]
+ENTRYPOINT ["/plugin"]

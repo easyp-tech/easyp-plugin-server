@@ -30,4 +30,4 @@ ARG VERSION
 COPY --from=base --link / /
 COPY --from=build --link --chmod=0755 /build/bazel-bin/plugins/protoc-gen-ruby .
 USER nobody
-ENTRYPOINT ["/protoc-gen-ruby"]
+ENTRYPOINT ["/plugin"]

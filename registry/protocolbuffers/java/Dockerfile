@@ -13,6 +13,10 @@ RUN curl -fsSL -o /usr/local/bin/bazelisk https://github.com/bazelbuild/bazelisk
  && chown nobody:nogroup /build \
  && usermod --home /build nobody
 
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /protoc-gen-java "$@"
+EOF
 USER nobody
 WORKDIR /build
 RUN curl -fsSL -o protoc.tar.gz https://github.com/protocolbuffers/protobuf/releases/download/${VERSION}/protobuf-${VERSION#v}.tar.gz \
@@ -36,4 +40,4 @@ COPY --from=base --link / /
 COPY --from=build --link --chmod=0755 /build/bazel-bin/plugins/protoc-gen-java .
 COPY --from=maven-deps /root/.m2/repository /maven-repository
 USER nobody
-ENTRYPOINT ["/protoc-gen-java"]
+ENTRYPOINT ["/plugin"]

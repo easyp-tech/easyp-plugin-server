@@ -12,7 +12,11 @@ RUN source ./bin/activate \
 FROM python:3.11.4-alpine3.18
 ARG VERSION
 COPY --from=build --link /app /app
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /app/bin/protoc-gen-python_betterproto "$@"
+EOF
 USER nobody
 # Plugin uses os.makedirs - needs to run in a directory it can write to
 WORKDIR /tmp
-ENTRYPOINT [ "/app/bin/protoc-gen-python_betterproto" ]
+ENTRYPOINT ["/plugin"]

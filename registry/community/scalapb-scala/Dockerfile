@@ -17,5 +17,9 @@ FROM scratch
 ARG VERSION
 COPY --link --from=base / /
 COPY --link --from=build /protoc-gen-scala.jar .
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /usr/bin/java -jar /protoc-gen-scala.jar "$@"
+EOF
 USER nobody
-ENTRYPOINT ["/usr/bin/java", "-jar", "/protoc-gen-scala.jar"]
+ENTRYPOINT ["/plugin"]

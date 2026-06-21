@@ -27,6 +27,6 @@ ARG VERSION
 FROM scratch
 ARG VERSION
 COPY --from=base --link / /
-COPY --from=build --link --chmod=0755 /build/grpc-web-${VERSION#v}/bazel-bin/javascript/net/grpc/web/generator/protoc-gen-grpc-web .
+COPY --from=build --link --chmod=0755 /build/grpc-web-${VERSION#v}/bazel-bin/javascript/net/grpc/web/generator/protoc-gen-grpc-web /plugin
 USER nobody
-ENTRYPOINT [ "/protoc-gen-grpc-web" ]
+ENTRYPOINT ["/plugin"]

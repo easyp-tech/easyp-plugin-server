@@ -18,6 +18,9 @@ COPY --link --from=base / /
 COPY --link --from=node --chmod=0755 /nodejs/bin/node /nodejs/bin/node
 COPY --link --from=build --chmod=0755 /app/protoc-gen-ts.js /app/protoc-gen-ts.js
 COPY --link --from=build /app/node_modules/typescript /app/node_modules/typescript
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /nodejs/bin/node /app/protoc-gen-ts.js "$@"
+EOF
 USER nobody
-ENTRYPOINT ["/nodejs/bin/node"]
-CMD [ "/app/protoc-gen-ts.js" ]
+ENTRYPOINT ["/plugin"]

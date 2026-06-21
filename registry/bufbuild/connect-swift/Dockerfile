@@ -9,6 +9,6 @@ RUN swift build -c release --product protoc-gen-connect-swift --static-swift-std
 
 FROM gcr.io/distroless/cc-debian11
 ARG VERSION
-COPY --from=build --link /app/connect-swift/.build/release/protoc-gen-connect-swift .
+COPY --from=build --link /app/connect-swift/.build/release/protoc-gen-connect-swift /plugin
 USER nobody
-ENTRYPOINT [ "/protoc-gen-connect-swift" ]
+ENTRYPOINT ["/plugin"]

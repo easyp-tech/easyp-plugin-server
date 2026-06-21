@@ -37,4 +37,4 @@ COPY --from=base --link / /
 COPY --link --from=dotnetrestore /nuget /nuget
 COPY --from=build --link --chmod=0755 /build/bazel-bin/plugins/protoc-gen-csharp .
 USER nobody
-ENTRYPOINT ["/protoc-gen-csharp"]
+ENTRYPOINT ["/plugin"]

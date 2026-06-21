@@ -19,4 +19,4 @@ ARG VERSION
 COPY --link --from=base / /
 COPY --link --from=build /app /app
 USER nobody
-ENTRYPOINT [ "/app/bin/protoc-gen-mypy" ]
+ENTRYPOINT ["/plugin"]

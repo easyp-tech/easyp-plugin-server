@@ -19,6 +19,6 @@ ARG VERSION
 FROM scratch
 ARG VERSION
 COPY --from=base --link / /
-COPY --from=build --link --chmod=0755 /tmp/bin/protoc-gen-js .
+COPY --from=build --link --chmod=0755 /tmp/bin/protoc-gen-js /plugin
 USER nobody
-ENTRYPOINT ["/protoc-gen-js"]
+ENTRYPOINT ["/plugin"]

@@ -18,4 +18,4 @@ ARG VERSION
 COPY --link --from=base / /
 COPY --link --from=build --chmod=0755 /app /app
 USER nobody
-ENTRYPOINT ["/app/bin/protoc-gen-nanopb"]
+ENTRYPOINT ["/plugin"]

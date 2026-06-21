@@ -15,6 +15,6 @@ ARG VERSION
 FROM scratch
 ARG VERSION
 COPY --link --from=base / /
-COPY --link --from=build /app/grpc-swift/.build/release/protoc-gen-grpc-swift .
+COPY --link --from=build /app/grpc-swift/.build/release/protoc-gen-grpc-swift /plugin
 USER nobody
-ENTRYPOINT [ "/protoc-gen-grpc-swift" ]
+ENTRYPOINT ["/plugin"]

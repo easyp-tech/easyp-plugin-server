@@ -21,6 +21,6 @@ ARG VERSION
 FROM scratch
 ARG VERSION
 COPY --from=base --link / /
-COPY --from=build --link --chmod=0755 --chown=root:root /usr/local/bin/protoc-gen-c .
+COPY --from=build --link --chmod=0755 --chown=root:root /usr/local/bin/protoc-gen-c /plugin
 USER nobody
-ENTRYPOINT ["/protoc-gen-c"]
+ENTRYPOINT ["/plugin"]

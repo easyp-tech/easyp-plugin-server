@@ -9,6 +9,6 @@ RUN swift build -c release --product protoc-gen-connect-swift-mocks --static-swi
 
 FROM gcr.io/distroless/cc-debian11
 ARG VERSION
-COPY --from=build --link /app/connect-swift/.build/release/protoc-gen-connect-swift-mocks .
+COPY --from=build --link /app/connect-swift/.build/release/protoc-gen-connect-swift-mocks /plugin
 USER nobody
-ENTRYPOINT [ "/protoc-gen-connect-swift-mocks" ]
+ENTRYPOINT ["/plugin"]

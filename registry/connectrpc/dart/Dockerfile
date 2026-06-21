@@ -12,6 +12,6 @@ FROM scratch
 ARG VERSION
 COPY --from=build --link /etc/passwd /etc/passwd
 COPY --from=build --link /runtime/ /
-COPY --from=build --link /build/protoc-gen-connect-dart .
+COPY --from=build --link /build/protoc-gen-connect-dart /plugin
 USER nobody
-ENTRYPOINT [ "/protoc-gen-connect-dart" ]
+ENTRYPOINT ["/plugin"]

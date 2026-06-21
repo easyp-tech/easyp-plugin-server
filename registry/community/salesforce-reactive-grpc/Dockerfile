@@ -19,5 +19,9 @@ ARG VERSION
 COPY --from=base --link / /
 COPY --from=build --link --chmod=0755 --chown=root:root /app/reactor-grpc-protoc.jar .
 COPY --from=maven-deps /root/.m2/repository /maven-repository
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /usr/bin/java -jar /reactor-grpc-protoc.jar "$@"
+EOF
 USER nobody
-ENTRYPOINT [ "/usr/bin/java", "-jar", "/reactor-grpc-protoc.jar"]
+ENTRYPOINT ["/plugin"]

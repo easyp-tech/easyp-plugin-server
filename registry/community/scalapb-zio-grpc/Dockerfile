@@ -17,5 +17,9 @@ FROM scratch
 ARG VERSION
 COPY --from=base --link / /
 COPY --from=build --link /protoc-gen-zio.jar .
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /usr/bin/java -jar /protoc-gen-zio.jar "$@"
+EOF
 USER nobody
-ENTRYPOINT ["/usr/bin/java", "-jar", "/protoc-gen-zio.jar"]
+ENTRYPOINT ["/plugin"]

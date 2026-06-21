@@ -34,6 +34,6 @@ FROM scratch
 ARG VERSION
 COPY --from=base --link / /
 COPY --from=build --link --chmod=0755 /build/bazel-bin/plugins/protoc-gen-kotlin .
-COPY --from=maven-deps /root/.m2/repository /maven-repository
+COPY --from=maven-deps /root/.m2/repository /plugin
 USER nobody
-ENTRYPOINT ["/protoc-gen-kotlin"]
+ENTRYPOINT ["/plugin"]

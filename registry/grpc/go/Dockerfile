@@ -17,6 +17,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM scratch
 ARG VERSION
 COPY --from=build --link /etc/passwd /etc/passwd
-COPY --from=build --link --chown=root:root /tmp/grpc-go/cmd/protoc-gen-go-grpc/protoc-gen-go-grpc .
+COPY --from=build --link --chown=root:root /tmp/grpc-go/cmd/protoc-gen-go-grpc/protoc-gen-go-grpc /plugin
 USER nobody
-ENTRYPOINT [ "/protoc-gen-go-grpc" ]
+ENTRYPOINT ["/plugin"]

@@ -22,5 +22,9 @@ ARG VERSION
 COPY --link --from=base / /
 COPY --link --from=build --chmod=0644 --chown=root:root /build/protoc-gen-grpc-kotlin.jar .
 COPY --from=maven-deps /root/.m2/repository /maven-repository
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /usr/bin/java -jar /protoc-gen-grpc-kotlin.jar "$@"
+EOF
 USER nobody
-ENTRYPOINT [ "/usr/bin/java", "-jar", "/protoc-gen-grpc-kotlin.jar" ]
+ENTRYPOINT ["/plugin"]

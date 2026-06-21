@@ -10,4 +10,4 @@ ARG VERSION
 COPY --from=build --link --chown=root:root /etc/passwd /etc/passwd
 COPY --from=build --link --chown=root:root /go/bin/protoc-gen-jsonschema /
 USER nobody
-ENTRYPOINT [ "/protoc-gen-jsonschema" ]
+ENTRYPOINT ["/plugin"]

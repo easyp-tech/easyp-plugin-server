@@ -27,6 +27,6 @@ ARG VERSION
 FROM scratch
 ARG VERSION
 COPY --link --from=base / /
-COPY --link --from=build --chmod=0755 /build/grpc/bazel-bin/src/compiler/grpc_ruby_plugin_binary .
+COPY --link --from=build --chmod=0755 /build/grpc/bazel-bin/src/compiler/grpc_ruby_plugin_binary /plugin
 USER nobody
-ENTRYPOINT ["/grpc_ruby_plugin_binary"]
+ENTRYPOINT ["/plugin"]

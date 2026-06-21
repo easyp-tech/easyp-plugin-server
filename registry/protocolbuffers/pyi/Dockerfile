@@ -30,4 +30,4 @@ ARG VERSION
 COPY --from=base / /
 COPY --from=build --link --chmod=0755 /build/bazel-bin/plugins/protoc-gen-pyi .
 USER nobody
-ENTRYPOINT ["/protoc-gen-pyi"]
+ENTRYPOINT ["/plugin"]

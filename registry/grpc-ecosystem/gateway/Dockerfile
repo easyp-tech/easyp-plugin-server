@@ -22,4 +22,4 @@ ARG VERSION
 COPY --from=build --link --chown=root:root /etc/passwd /etc/passwd
 COPY --from=build --link --chown=root:root /go/bin/protoc-gen-grpc-gateway /
 USER nobody
-ENTRYPOINT [ "/protoc-gen-grpc-gateway" ]
+ENTRYPOINT ["/plugin"]

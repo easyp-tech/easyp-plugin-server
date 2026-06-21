@@ -16,4 +16,7 @@ ARG VERSION
 WORKDIR /app
 COPY --from=build /app/protoc-gen-connect-kotlin.jar /app
 COPY --from=maven-deps /root/.m2/repository /maven-repository
-CMD ["/app/protoc-gen-connect-kotlin.jar"]
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /app/protoc-gen-connect-kotlin.jar "$@"
+EOF

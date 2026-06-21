@@ -13,6 +13,10 @@ RUN curl -fsSL -o /usr/local/bin/bazelisk https://github.com/bazelbuild/bazelisk
  && chown nobody:nogroup /build \
  && usermod --home /build nobody
 
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /protoc-gen-python "$@"
+EOF
 USER nobody
 WORKDIR /build
 RUN curl -fsSL -o protoc.tar.gz https://github.com/protocolbuffers/protobuf/releases/download/${VERSION}/protobuf-${VERSION#v}.tar.gz \
@@ -30,4 +34,4 @@ ARG VERSION
 COPY --from=base --link / /
 COPY --from=build --link --chmod=0755 /build/bazel-bin/plugins/protoc-gen-python .
 USER nobody
-ENTRYPOINT ["/protoc-gen-python"]
+ENTRYPOINT ["/plugin"]

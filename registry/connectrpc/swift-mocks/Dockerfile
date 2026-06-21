@@ -15,6 +15,6 @@ ARG VERSION
 FROM scratch
 ARG VERSION
 COPY --link --from=base / /
-COPY --link --from=build /app/connect-swift/.build/release/protoc-gen-connect-swift-mocks .
+COPY --link --from=build /app/connect-swift/.build/release/protoc-gen-connect-swift-mocks /plugin
 USER nobody
-ENTRYPOINT [ "/protoc-gen-connect-swift-mocks" ]
+ENTRYPOINT ["/plugin"]

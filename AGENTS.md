@@ -40,6 +40,7 @@ Purpose: give the agent full project context without reading the entire source c
    - Adding plugins → read `DEPLOYMENT.md`, `SECURITY.md`
 3. **Always follow** rules from `agent-rules.md`
 4. **If docs appear outdated** → suggest regeneration via SDD docs-maintenance workflow
+5. **Complex reasoning & problem solving** → ALWAYS use the `sequentialthinking` MCP server before executing complex tasks, making architectural decisions, or debugging bugs.
 
 ## Project Map
 
@@ -160,6 +161,13 @@ go test ./...            # Standard tests
 | 8083 | MCP | HTTP (`/mcp`) |
 | 5432/5433 | PostgreSQL | TCP |
 
+## Reasoning Process (Sequential Thinking)
+
+For any task that goes beyond a trivial code edit (e.g., bug analysis, architectural planning, breaking down complex requirements), you **MUST** use the `sequentialthinking` MCP server.
+1. Initiate the tool to generate a hypothesis and a step-by-step reasoning plan.
+2. Dynamically adjust your thoughts, revise assumptions, or ask questions to the user as you progress.
+3. Arrive at a verified solution hypothesis before making any codebase changes.
+
 ## Skills
 
 This project includes agent skills in `.agents/skills/`. Each skill provides domain-specific knowledge and workflows.
@@ -173,6 +181,7 @@ This project includes agent skills in `.agents/skills/`. Each skill provides dom
 | **go-testing** | `.agents/skills/go-testing/SKILL.md` | Writing or reviewing Go tests. Table-driven tests, t.Parallel, inline mocks, testify assertions, naming conventions. |
 | **goose-migration** | `.agents/skills/goose-migration/SKILL.md` | Adding database tables/columns, creating migration files, modifying schema, debugging goose migration errors. |
 | **epctl-commands** | `.agents/skills/epctl-commands/SKILL.md` | Adding CLI commands to epctl, creating subcommands, working with `cmd/epctl/` files, urfave/cli v3 patterns, output formatting. |
+| **auto-commit-push** | `.agents/skills/auto-commit-push/SKILL.md` | **MANDATORY**: Automatically commit and push changes to the current branch after every completed logical step. |
 
 ### Spec-Driven Development
 

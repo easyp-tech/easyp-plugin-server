@@ -33,7 +33,8 @@ tasks:
     desc: "Register all built plugins via gRPC CreatePlugin API"
     dir: "{{.USER_WORKING_DIR}}"
     cmds:
-      - "go run ./cmd/epctl plugins register"
+      - "go run ./cmd/easyp-svc/ plugins migrate plugins/ --addr localhost:8080 --plugins-prefix /plugins"
+
 
   run:
     desc: "Full cycle: build plugins → restart services → register → follow logs"
@@ -56,11 +57,34 @@ tasks:
       - task: register-plugins
 
   run-local:
+    desc: "Start local service and automatically migrate plugins"
     dir: "{{.USER_WORKING_DIR}}"
     preconditions:
       - "test -f config.local.yml"
     cmds:
-      - "go run ./cmd/easyp-svc/ service start --cfg config.local.yml --log_level debug"
+      - |
+        (
+          echo "Waiting for local service to be ready..."
+          until curl -sf http://localhost:8082/health >/dev/null 2>&1; do
+            sleep 1
+          done
+          echo "Service is ready! Running plugin migration..."
+          go run ./cmd/easyp-svc/ plugins migrate plugins/ --addr localhost:8080 --plugins-prefix /plugins
+        ) &
+        go run ./cmd/easyp-svc/ service start --cfg config.local.yml --log_level debug
+
+  run-local-test:
+    desc: "Start local service with mock plugins for testing migration CLI"
+    dir: "{{.USER_WORKING_DIR}}"
+    preconditions:
+      - "test -f config.local.yml"
+    cmds:
+      - "mkdir -p plugins/grpc/go/v1.5.1 && touch plugins/grpc/go/v1.5.1/plugin"
+      - "mkdir -p plugins/grpc-ecosystem/gateway/v2.27.3 && touch plugins/grpc-ecosystem/gateway/v2.27.3/plugin"
+      - "mkdir -p plugins/protocolbuffers/go/v1.36.10 && touch plugins/protocolbuffers/go/v1.36.10/plugin"
+      - defer: "rm -rf plugins/grpc plugins/grpc-ecosystem plugins/protocolbuffers"
+      - task: run-local
+
 
   test-mcp:
     dir: "{{.USER_WORKING_DIR}}"

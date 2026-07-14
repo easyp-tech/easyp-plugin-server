@@ -91,12 +91,13 @@ task run-local
 # Build all plugin binaries from registry/ Dockerfiles
 # Extracts static binaries to plugins/{group}/{name}/{version}/plugin
 task build-plugins
-# Uses: ./build-plugins.sh
+# Uses: go run ./cmd/easyp-svc/ plugins build registry --output plugins
+# Flags: --filter <glob>, --parallel <n>, --force, --dry-run, --non-interactive
 
 # Register all built plugins via gRPC CreatePlugin API
-# Requires running service and grpcurl
+# Requires a running service (no external tools needed)
 task register-plugins
-# Uses: ./register-plugins.sh [host:port]
+# Uses: go run ./cmd/easyp-svc/ plugins migrate plugins/ --addr localhost:8080
 ```
 
 ### Testing

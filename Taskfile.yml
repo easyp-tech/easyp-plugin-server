@@ -27,7 +27,13 @@ tasks:
     desc: "Build all plugin binaries from registry/ Dockerfiles"
     dir: "{{.USER_WORKING_DIR}}"
     cmds:
-      - "go run ./cmd/epctl plugins build"
+      - "go run ./cmd/easyp-svc/ plugins build registry --parallel 12 --output plugins "
+
+  build-plugins-filter:
+    desc: "Build a subset of plugins, e.g. FILTER='protocolbuffers/*' task build-plugins-filter"
+    dir: "{{.USER_WORKING_DIR}}"
+    cmds:
+      - "go run ./cmd/easyp-svc/ plugins build registry --output plugins --filter '{{.FILTER}}'"
 
   register-plugins:
     desc: "Register all built plugins via gRPC CreatePlugin API"

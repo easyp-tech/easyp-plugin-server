@@ -5,7 +5,7 @@ ARG VERSION
 ARG GO_MODULE
 ARG BINARY_NAME
 
-RUN apk add upx --no-cache
+RUN apk add upx git --no-cache
 RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 go install -ldflags "-s -w" -trimpath ${GO_MODULE}@${VERSION}
 RUN cp /go/bin/${BINARY_NAME} /plugin 2>/dev/null \

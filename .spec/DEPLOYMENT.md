@@ -23,8 +23,12 @@ Located in `registry/{group}/{name}/{version}/Dockerfile`:
 Plugins are built as local binaries, not pushed to a Docker registry:
 
 ```bash
-# build-plugins.sh extracts binaries from Docker multi-stage builds
-docker build --output=plugins/{group}/{name}/{version}/ registry/{group}/{name}/{version}/
+# `easyp-svc plugins build` extracts binaries from Docker multi-stage builds.
+# For each registry/{group}/{name}/plugin.yaml version it runs, in effect:
+docker build \
+  --build-arg VERSION={version} --build-arg BINARY_NAME={binary} \
+  --output type=local,dest=plugins/{group}/{name}/{version}/ \
+  -f registry/{group}/{name}/Dockerfile registry/{group}/{name}/
 ```
 
 Result: `plugins/{group}/{name}/{version}/plugin` — a static Linux binary.

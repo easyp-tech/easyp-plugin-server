@@ -20,7 +20,7 @@ services:
       - "./configs/traefik/traefik.yml:/etc/traefik/traefik.yml:ro"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     ports:
-      - "${EASYP_TRAEFIK_PORT:-80}:80"
+      - "${EASYP_TRAEFIK_PORT:-4043}:80"
     networks:
       - easyp_network
 

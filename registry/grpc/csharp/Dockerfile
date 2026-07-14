@@ -20,12 +20,14 @@ RUN git clone --depth 1 --branch ${VERSION} https://github.com/grpc/grpc
 WORKDIR /build/grpc
 RUN bazelisk ${BAZEL_OPTS} build //src/compiler:grpc_plugin_support
 RUN bazelisk ${BAZEL_OPTS} build //src/compiler:grpc_csharp_plugin
+RUN cp /build/grpc/bazel-bin/src/compiler/grpc_csharp_plugin_binary /build/grpc_csharp_plugin_binary 2>/dev/null \
+ || cp /build/grpc/bazel-bin/src/compiler/grpc_csharp_plugin /build/grpc_csharp_plugin_binary
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0.419-bookworm-slim@sha256:a9330090b730c2abde8f3f43b3d1e24e4b8cba028de7bab1a7fdcd50cb7a3b7e AS dotnetrestore
 ARG VERSION
 WORKDIR /build
 COPY --link ./build.csproj /build/build.csproj
-RUN mkdir /nuget && dotnet restore --packages /nuget
+RUN mkdir /nuget && dotnet restore --packages /nuget /p:Version=${VERSION#v} /p:AssemblyVersion=${VERSION#v} /p:FileVersion=${VERSION#v} /p:PackageVersion=${VERSION#v}
 
 FROM gcr.io/distroless/cc-debian13:latest@sha256:e1cc90d06703f5dc30ae869fbfce78fce688f21a97efecd226375233a882e62f AS base
 ARG VERSION
@@ -34,6 +36,6 @@ FROM scratch
 ARG VERSION
 COPY --link --from=base / /
 COPY --link --from=dotnetrestore /nuget /nuget
-COPY --link --from=build --chmod=0755 /build/grpc/bazel-bin/src/compiler/grpc_csharp_plugin_binary /plugin
+COPY --link --from=build --chmod=0755 /build/grpc_csharp_plugin_binary /plugin
 USER nobody
 ENTRYPOINT ["/plugin"]

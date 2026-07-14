@@ -3,7 +3,7 @@ FROM debian:trixie-20260316@sha256:55a15a112b42be10bfc8092fcc40b6748dc236f7ef46a
 ARG VERSION
 
 ARG TARGETARCH
-ARG BAZEL_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
+ARG BAZEL_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true --spawn_strategy=local"
 
 RUN apt-get update \
  && apt-get install -y curl git cmake build-essential autoconf clang libc++-dev libtool pkg-config unzip zip
@@ -20,6 +20,8 @@ RUN git clone --depth 1 --branch ${VERSION} https://github.com/grpc/grpc
 WORKDIR /build/grpc
 RUN bazelisk ${BAZEL_OPTS} build //src/compiler:grpc_plugin_support
 RUN bazelisk ${BAZEL_OPTS} build //src/compiler:grpc_cpp_plugin
+RUN cp /build/grpc/bazel-bin/src/compiler/grpc_cpp_plugin_binary /build/grpc_cpp_plugin_binary 2>/dev/null \
+ || cp /build/grpc/bazel-bin/src/compiler/grpc_cpp_plugin /build/grpc_cpp_plugin_binary
 
 FROM gcr.io/distroless/cc-debian13:latest@sha256:e1cc90d06703f5dc30ae869fbfce78fce688f21a97efecd226375233a882e62f AS base
 ARG VERSION
@@ -27,6 +29,6 @@ ARG VERSION
 FROM scratch
 ARG VERSION
 COPY --link --from=base / /
-COPY --link --from=build --chmod=0755 /build/grpc/bazel-bin/src/compiler/grpc_cpp_plugin_binary /plugin
+COPY --link --from=build --chmod=0755 /build/grpc_cpp_plugin_binary /plugin
 USER nobody
 ENTRYPOINT ["/plugin"]

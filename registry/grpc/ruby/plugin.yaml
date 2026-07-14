@@ -1,4 +1,4 @@
-binary: grpc_ruby_plugin_binary
+binary: grpc_ruby_plugin
 versions:
     - v1.80.0
     - v1.78.1

@@ -1,4 +1,4 @@
-binary: grpc_python_plugin_binary
+binary: grpc_python_plugin
 versions:
     - v1.80.0
     - v1.78.1

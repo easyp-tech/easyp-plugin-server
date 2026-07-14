@@ -20,6 +20,8 @@ RUN git clone --depth 1 --branch ${VERSION} https://github.com/grpc/grpc
 WORKDIR /build/grpc
 RUN bazelisk ${BAZEL_OPTS} build //src/compiler:grpc_plugin_support
 RUN bazelisk ${BAZEL_OPTS} build //src/compiler:grpc_php_plugin
+RUN cp /build/grpc/bazel-bin/src/compiler/grpc_php_plugin_binary /build/grpc_php_plugin_binary 2>/dev/null \
+ || cp /build/grpc/bazel-bin/src/compiler/grpc_php_plugin /build/grpc_php_plugin_binary
 
 FROM gcr.io/distroless/cc-debian13:latest@sha256:e1cc90d06703f5dc30ae869fbfce78fce688f21a97efecd226375233a882e62f AS base
 ARG VERSION
@@ -27,6 +29,6 @@ ARG VERSION
 FROM scratch
 ARG VERSION
 COPY --link --from=base / /
-COPY --link --from=build --chmod=0755 /build/grpc/bazel-bin/src/compiler/grpc_php_plugin_binary /plugin
+COPY --link --from=build --chmod=0755 /build/grpc_php_plugin_binary /plugin
 USER nobody
 ENTRYPOINT ["/plugin"]

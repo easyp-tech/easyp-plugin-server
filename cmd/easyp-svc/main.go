@@ -86,6 +86,7 @@ func getPluginsCommand() *cli.Command {
 		Name:  "plugins",
 		Usage: "Manage plugins",
 		Commands: []*cli.Command{
+			getPluginsBuildCommand(),
 			{
 				Name:      "migrate",
 				Usage:     "Run migrations for plugins",
@@ -126,6 +127,71 @@ func getPluginsCommand() *cli.Command {
 					return runPluginsMigrate(ctx, path, addr, filter, pluginsPrefix, nonInteractive)
 				},
 			},
+		},
+	}
+}
+
+func getPluginsBuildCommand() *cli.Command {
+	return &cli.Command{
+		Name:      "build",
+		Usage:     "Build plugin binaries from registry Dockerfiles",
+		ArgsUsage: "<registry-path>",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "output",
+				Aliases: []string{"o"},
+				Usage:   "output directory for built plugin binaries",
+				Value:   "plugins",
+			},
+			&cli.StringFlag{
+				Name:  "filter",
+				Usage: "glob filter pattern for plugins (e.g. 'protocolbuffers/*' or 'grpc/go:v1.5.1')",
+				Value: "",
+			},
+			&cli.IntFlag{
+				Name:    "parallel",
+				Aliases: []string{"p"},
+				Usage:   "number of concurrent docker builds",
+				Value:   defaultBuildParallel,
+			},
+			&cli.BoolFlag{
+				Name:  "force",
+				Usage: "rebuild even if the binary already exists",
+				Value: false,
+			},
+			&cli.BoolFlag{
+				Name:  "dry-run",
+				Usage: "list what would be built without building",
+				Value: false,
+			},
+			&cli.BoolFlag{
+				Name:  "non-interactive",
+				Usage: "disable interactive UI and dynamic progress bars",
+				Value: false,
+			},
+			&cli.BoolFlag{
+				Name:  "keep-going",
+				Usage: "continue building remaining plugins after a failure",
+				Value: true,
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			args := cmd.Args().Slice()
+			if len(args) < 1 {
+				return ErrMissingRegistryPath
+			}
+
+			return runPluginsBuild(
+				ctx,
+				args[0],
+				cmd.String("output"),
+				cmd.String("filter"),
+				cmd.Int("parallel"),
+				cmd.Bool("force"),
+				cmd.Bool("dry-run"),
+				cmd.Bool("non-interactive"),
+				cmd.Bool("keep-going"),
+			)
 		},
 	}
 }

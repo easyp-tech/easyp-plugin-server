@@ -1,4 +1,4 @@
-binary: grpc_php_plugin_binary
+binary: grpc_php_plugin
 versions:
     - v1.80.0
     - v1.78.1

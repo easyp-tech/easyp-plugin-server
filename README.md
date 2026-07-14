@@ -529,6 +529,8 @@ ls -la plugins/
 
 # Rebuild plugins
 task build-plugins
+# or directly, with a filter:
+# go run ./cmd/easyp-svc/ plugins build registry --filter 'protocolbuffers/*'
 
 # Re-register plugins
 task register-plugins

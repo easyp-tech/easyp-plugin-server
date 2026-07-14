@@ -4,6 +4,7 @@ ARG VERSION
 
 ARG TARGETARCH
 ARG BAZEL_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
+ENV USE_BAZEL_VERSION=7.6.1
 
 RUN apt-get update \
  && apt-get install -y curl git cmake build-essential autoconf clang libc++-dev libtool pkg-config unzip zip

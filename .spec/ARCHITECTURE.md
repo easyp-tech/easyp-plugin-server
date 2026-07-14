@@ -108,8 +108,7 @@ service/
 ├── registry/                          # Plugin Dockerfiles (used for building)
 ├── plugins/                           # Built plugin binaries (gitignored)
 ├── configs/                           # Observability configs (alloy, grafana, loki, tempo, mimir, pyroscope, traefik)
-├── build-plugins.sh                   # Build plugin binaries via Docker multi-stage
-├── register-plugins.sh                # Register plugins via gRPC API (requires grpcurl)
+├── cmd/easyp-svc/                     # Service + plugins CLI (service start, plugins build, plugins migrate)
 ├── Taskfile.yml                       # Task runner commands
 ├── docker-compose.yml                 # Dev stack (postgres, grafana, observability, traefik)
 ├── config.yml                         # Docker-compose service config

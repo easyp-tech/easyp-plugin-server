@@ -8,5 +8,7 @@ versions:
     - v1.5.1
     - version: v1.4.0
       skip: true
-    - v1.3.0
-    - v1.2.0
+    - version: v1.3.0
+      skip: true
+    - version: v1.2.0
+      skip: true

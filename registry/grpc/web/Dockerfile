@@ -3,7 +3,8 @@ FROM debian:bookworm-20250908 AS build
 ARG VERSION
 
 ARG TARGETARCH
-ARG BAZEL_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
+ARG BAZEL_STARTUP_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
+ARG BAZEL_BUILD_OPTS="--spawn_strategy=local --repo_contents_cache=/tmp/bazel-repo-cache"
 ENV USE_BAZEL_VERSION=7.6.1
 
 RUN apt-get update \
@@ -20,7 +21,7 @@ RUN curl -fsSL -o grpc-web-src.tar.gz https://github.com/grpc/grpc-web/releases/
  && tar -zxf grpc-web-src.tar.gz \
  && rm grpc-web-src.tar.gz
 WORKDIR /build/grpc-web-${VERSION#v}
-RUN bazelisk ${BAZEL_OPTS} build '//javascript/net/grpc/web/generator:protoc-gen-grpc-web'
+RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} '//javascript/net/grpc/web/generator:protoc-gen-grpc-web'
 
 FROM gcr.io/distroless/cc-debian12:latest@sha256:620d8b11ae800f0dbd7995f89ddc5344ad603269ea98770588b1b07a4a0a6872 AS base
 ARG VERSION

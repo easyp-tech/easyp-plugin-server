@@ -3,7 +3,8 @@ FROM debian:trixie-20260316@sha256:55a15a112b42be10bfc8092fcc40b6748dc236f7ef46a
 ARG VERSION
 
 ARG TARGETARCH
-ARG BAZEL_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
+ARG BAZEL_STARTUP_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
+ARG BAZEL_BUILD_OPTS="--spawn_strategy=local --repo_contents_cache=/tmp/bazel-repo-cache"
 
 RUN apt-get update \
  && apt-get install -y curl git cmake build-essential autoconf clang libc++-dev libtool pkg-config unzip zip
@@ -18,8 +19,8 @@ WORKDIR /build
 
 RUN git clone --depth 1 --branch ${VERSION} https://github.com/grpc/grpc
 WORKDIR /build/grpc
-RUN bazelisk ${BAZEL_OPTS} build //src/compiler:grpc_plugin_support
-RUN bazelisk ${BAZEL_OPTS} build //src/compiler:grpc_objective_c_plugin
+RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} //src/compiler:grpc_plugin_support
+RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} //src/compiler:grpc_objective_c_plugin
 RUN cp /build/grpc/bazel-bin/src/compiler/grpc_objective_c_plugin_binary /build/grpc_objective_c_plugin_binary 2>/dev/null \
  || cp /build/grpc/bazel-bin/src/compiler/grpc_objective_c_plugin /build/grpc_objective_c_plugin_binary
 

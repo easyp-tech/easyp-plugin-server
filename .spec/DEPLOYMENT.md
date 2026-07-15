@@ -13,37 +13,46 @@ Deployment and infrastructure configuration for EasyP Service.
 
 ### Plugin Dockerfiles
 
-Located in `registry/{group}/{name}/{version}/Dockerfile`:
-- Multi-stage build (`golang:alpine` → `scratch`)
-- Static binary with `upx` compression
-- Used for building binaries only (via `docker build --output`)
+Located in `registry/{group}/{name}/Dockerfile` (versions listed in `plugin.yaml`):
+- Multi-stage build → final image with entrypoint at **`/plugin`**
+- Optional sidecars (`/app`, `/nodejs`, jars, …) allowed next to the entrypoint
+- Used for building local artifacts only (via `docker build --output`)
 
 ### Plugin Build Process
 
-Plugins are built as local binaries, not pushed to a Docker registry:
+Plugins are built as local binaries, not pushed to a Docker registry.
+
+**Contract:** every successful build produces:
+
+```text
+plugins/{group}/{name}/{version}/plugin   # required entrypoint
+plugins/{group}/{name}/{version}/…        # optional sidecars
+```
 
 ```bash
-# `easyp-svc plugins build` extracts binaries from Docker multi-stage builds.
-# For each registry/{group}/{name}/plugin.yaml version it runs, in effect:
+# `easyp-svc plugins build` extracts the image filesystem from multi-stage builds.
+# For each version in registry/{group}/{name}/plugin.yaml it runs, in effect:
 docker build \
-  --build-arg VERSION={version} --build-arg BINARY_NAME={binary} \
+  --build-arg VERSION={version} \
+  --build-arg KEY=value   # from optional plugin.yaml build_args \
   --output type=local,dest=plugins/{group}/{name}/{version}/ \
   -f registry/{group}/{name}/Dockerfile registry/{group}/{name}/
 ```
 
-Result: `plugins/{group}/{name}/{version}/plugin` — a static Linux binary.
+`plugin.yaml` no longer carries a runtime binary name. Dockerfiles that need an
+upstream tool name set a default `ARG BINARY_NAME=…` (or take it from `build_args`).
 
-At runtime, the service executes these binaries directly via stdin/stdout (configured via `registry.plugins_dir`).
+At runtime, the service executes `command` from the DB (after migrate: path ending in `/plugin`) via stdin/stdout (`registry.plugins_dir`).
 
 ### Plugin Registration
 
 Plugins must be registered in PostgreSQL before use:
 
 ```bash
-# Requires grpcurl and a running service
-./register-plugins.sh [host:port]
+# Prefer the CLI (scans plugins/ for files named "plugin")
+easyp-svc plugins migrate plugins/ --addr localhost:8080 --plugins-prefix /plugins
 
-# Registers via gRPC CreatePlugin API with config containing command path
+# Or via gRPC CreatePlugin with config.command pointing at the entrypoint
 grpcurl -plaintext -d '{"group":"grpc","name":"go","version":"v1.5.1","config":{"command":["/plugins/grpc/go/v1.5.1/plugin"]}}' \
   localhost:8080 api.generator.v1.ServiceAPI/CreatePlugin
 ```

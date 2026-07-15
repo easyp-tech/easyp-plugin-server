@@ -3,8 +3,7 @@ FROM golang:1.26-alpine3.22 AS build
 
 ARG VERSION
 ARG GO_MODULE
-ARG BINARY_NAME
-
+ARG BINARY_NAME=protoc-gen-pubsub
 RUN apk add upx --no-cache
 RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 go install -ldflags "-s -w" -trimpath ${GO_MODULE}@${VERSION}

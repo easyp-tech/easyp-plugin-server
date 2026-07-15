@@ -1,8 +1,7 @@
 # syntax=docker/dockerfile:1.23
 FROM swift:6.3.2-bookworm@sha256:40918972df286d15aa47f4686c98a211f0a6152ca1d48b3dbccd6f56a3c34815 AS build
 ARG VERSION
-ARG BINARY_NAME
-
+ARG BINARY_NAME=protoc-gen-grpc-swift-2
 RUN apt-get update \
  && apt-get install -y unzip
 WORKDIR /app

@@ -17,5 +17,9 @@ FROM scratch
 ARG VERSION
 COPY --link --from=base / /
 COPY --link --from=build --chmod=0755 /app /app
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /app/bin/protoc-gen-nanopb "$@"
+EOF
 USER nobody
 ENTRYPOINT ["/plugin"]

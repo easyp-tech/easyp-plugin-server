@@ -14,6 +14,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM scratch
 ARG VERSION
 COPY --from=build --link --chown=root:root /etc/passwd /etc/passwd
-COPY --from=build --link --chown=root:root /go/bin/protoc-gen-php-grpc /
+COPY --from=build --link --chown=root:root /go/bin/protoc-gen-php-grpc /plugin
 USER nobody
 ENTRYPOINT ["/plugin"]

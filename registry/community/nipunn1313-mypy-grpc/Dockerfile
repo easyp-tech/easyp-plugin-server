@@ -18,5 +18,9 @@ FROM scratch
 ARG VERSION
 COPY --link --from=base / /
 COPY --link --from=build /app /app
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /app/bin/protoc-gen-mypy_grpc "$@"
+EOF
 USER nobody
 ENTRYPOINT ["/plugin"]

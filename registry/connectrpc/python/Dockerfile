@@ -10,3 +10,9 @@ RUN python -m venv venv && \
 
 FROM scratch
 COPY --from=build /app /app
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /app/venv/bin/protoc-gen-connect-python "$@"
+EOF
+USER nobody
+ENTRYPOINT ["/plugin"]

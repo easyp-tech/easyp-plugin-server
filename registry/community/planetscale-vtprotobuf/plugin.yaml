@@ -1,7 +1,6 @@
-binary: protoc-gen-go-vtproto
 build_args:
-    GO_MODULE: github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
+  GO_MODULE: github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
 versions:
-    - v0.6.0
-    - v0.5.0
-    - v0.4.0
+- v0.6.0
+- v0.5.0
+- v0.4.0

@@ -1,6 +1,5 @@
-binary: protoc-gen-buffa
 build_args:
-    CRATE_NAME: protoc-gen-buffa
+  CRATE_NAME: protoc-gen-buffa
 versions:
-    - v0.6.0
-    - v0.5.2
+- v0.6.0
+- v0.5.2

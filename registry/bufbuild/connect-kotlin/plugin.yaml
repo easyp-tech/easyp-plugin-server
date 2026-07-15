@@ -1,14 +1,13 @@
-binary: protoc-gen-connect-kotlin
 versions:
-    - v0.1.9
-    - v0.1.8
-    - v0.1.7
-    - v0.1.6
-    - v0.1.5
-    - v0.1.10
-    - version: v0.1.4
-      skip: true
-    - version: v0.1.2
-      skip: true
-    - version: v0.1.1
-      skip: true
+- v0.1.9
+- v0.1.8
+- v0.1.7
+- v0.1.6
+- v0.1.5
+- v0.1.10
+- version: v0.1.4
+  skip: true
+- version: v0.1.2
+  skip: true
+- version: v0.1.1
+  skip: true

@@ -1,11 +1,10 @@
-binary: protoc-gen-bq-schema
 build_args:
-    GO_MODULE: github.com/GoogleCloudPlatform/protoc-gen-bq-schema/v3
+  GO_MODULE: github.com/GoogleCloudPlatform/protoc-gen-bq-schema/v3
 versions:
-    - version: v3.1.0
-    - version: v2.0.1
-      build_args:
-        GO_MODULE: github.com/GoogleCloudPlatform/protoc-gen-bq-schema/v2
-    - version: v1.1.0
-      build_args:
-        GO_MODULE: github.com/GoogleCloudPlatform/protoc-gen-bq-schema
+- v3.1.0
+- version: v2.0.1
+  build_args:
+    GO_MODULE: github.com/GoogleCloudPlatform/protoc-gen-bq-schema/v2
+- version: v1.1.0
+  build_args:
+    GO_MODULE: github.com/GoogleCloudPlatform/protoc-gen-bq-schema

@@ -1,6 +1,5 @@
-binary: protoc-gen-pluginrpc-go
 build_args:
-    GO_MODULE: pluginrpc.com/pluginrpc/cmd/protoc-gen-pluginrpc-go
+  GO_MODULE: pluginrpc.com/pluginrpc/cmd/protoc-gen-pluginrpc-go
 versions:
-    - v0.5.0
-    - v0.3.0
+- v0.5.0
+- v0.3.0

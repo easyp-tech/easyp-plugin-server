@@ -1,9 +1,8 @@
-binary: protoc-gen-grpc-web
 versions:
-    - v2.0.2
-    - v2.0.1
-    - v2.0.0
-    - version: v1.5.0
-      skip: true
-    - version: v1.4.2
-      skip: true
+- v2.0.2
+- v2.0.1
+- v2.0.0
+- version: v1.5.0
+  skip: true
+- version: v1.4.2
+  skip: true

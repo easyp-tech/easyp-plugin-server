@@ -39,7 +39,6 @@ func TestVersionEntry_UnmarshalYAML(t *testing.T) {
 `,
 			want: versionEntry{
 				version:    "v2.0.0",
-				binary:     "protoc-gen-grpc-swift",
 				buildArgs:  map[string]string{"GO_MODULE": "github.com/foo/bar/v2"},
 				dockerfile: "Dockerfile.legacy",
 				args:       []string{"--network=none"},
@@ -90,11 +89,11 @@ func TestJobsFromConfig(t *testing.T) {
 	t.Parallel()
 
 	cfg := pluginConfig{
-		Binary:    "protoc-gen-default",
+		Binary:    "protoc-gen-default", // deprecated, ignored
 		BuildArgs: map[string]string{"GO_MODULE": "github.com/default", "SHARED": "top"},
 		Versions: []versionEntry{
 			{version: "v1.0.0"}, // inherits defaults
-			{version: "v2.0.0", binary: "protoc-gen-v2", buildArgs: map[string]string{"GO_MODULE": "github.com/v2"}},
+			{version: "v2.0.0", buildArgs: map[string]string{"GO_MODULE": "github.com/v2"}},
 			{version: "v2.1.0", skip: true},
 			{version: "v2.0.0", buildArgs: map[string]string{"GO_MODULE": "github.com/v2"}},
 		},
@@ -114,18 +113,12 @@ func TestJobsFromConfig(t *testing.T) {
 
 	// v1.0.0 inherits defaults.
 	j0 := jobs[0]
-	if j0.binary != "protoc-gen-default" {
-		t.Errorf("v1.0.0 binary: expected default, got %q", j0.binary)
-	}
 	if got, want := j0.buildArgs, map[string]string{"GO_MODULE": "github.com/default", "SHARED": "top"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("v1.0.0 buildArgs: expected %v, got %v", want, got)
 	}
 
-	// v2.0.0 overrides binary and GO_MODULE, keeps SHARED.
+	// v2.0.0 overrides GO_MODULE, keeps SHARED.
 	j1 := jobs[1]
-	if j1.binary != "protoc-gen-v2" {
-		t.Errorf("v2.0.0 binary: expected protoc-gen-v2, got %q", j1.binary)
-	}
 	if got, want := j1.buildArgs, map[string]string{"GO_MODULE": "github.com/v2", "SHARED": "top"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("v2.0.0 buildArgs: expected %v, got %v", want, got)
 	}
@@ -143,7 +136,6 @@ func TestJobsFromConfig_Filter(t *testing.T) {
 	t.Parallel()
 
 	cfg := pluginConfig{
-		Binary: "p",
 		Versions: []versionEntry{
 			{version: "v1.5.1"},
 			{version: "v1.4.0", skip: true},

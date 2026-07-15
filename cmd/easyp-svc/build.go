@@ -48,10 +48,13 @@ var (
 
 // pluginConfig mirrors the structure of a registry plugin.yaml file.
 //
-// `binary`, `build_args`, `dockerfile` and `args` are top-level defaults shared by
-// every version unless a version overrides them.
+// Build artifacts are always normalized to the filename "plugin". Dockerfiles
+// must COPY the entrypoint to /plugin (optionally with sidecar files such as
+// /app or /nodejs). Optional fields: build_args, dockerfile, args.
+//
+// The legacy "binary" key is accepted for backward compatibility but ignored.
 type pluginConfig struct {
-	Binary     string            `yaml:"binary"`
+	Binary     string            `yaml:"binary"` // deprecated, ignored
 	BuildArgs  map[string]string `yaml:"build_args"`
 	Dockerfile string            `yaml:"dockerfile"`
 	Args       []string          `yaml:"args"`
@@ -59,15 +62,15 @@ type pluginConfig struct {
 }
 
 // versionEntry accepts both scalar (`- v1.2.3`) and mapping forms. The mapping
-// form allows per-version overrides for binary, build_args, dockerfile and
-// args, plus a `skip` flag to exclude a single version from builds without
-// removing it from the registry.
+// form allows per-version overrides for build_args, dockerfile and args, plus
+// a `skip` flag to exclude a single version from builds without removing it
+// from the registry.
 //
-// A mapping entry may set any subset of: version, binary, build_args,
-// dockerfile, args, skip. Unset fields inherit the top-level defaults.
+// A mapping entry may set any subset of: version, build_args, dockerfile,
+// args, skip. Unset fields inherit the top-level defaults. The legacy "binary"
+// key is accepted and ignored.
 type versionEntry struct {
 	version    string
-	binary     string
 	buildArgs  map[string]string
 	dockerfile string
 	args       []string
@@ -83,7 +86,7 @@ func (v *versionEntry) UnmarshalYAML(node *yaml.Node) error {
 	case yaml.MappingNode:
 		var m struct {
 			Version    string            `yaml:"version"`
-			Binary     string            `yaml:"binary"`
+			Binary     string            `yaml:"binary"` // deprecated, ignored
 			BuildArgs  map[string]string `yaml:"build_args"`
 			Dockerfile string            `yaml:"dockerfile"`
 			Args       []string          `yaml:"args"`
@@ -93,7 +96,6 @@ func (v *versionEntry) UnmarshalYAML(node *yaml.Node) error {
 			return fmt.Errorf("decode version entry: %w", err)
 		}
 		v.version = m.Version
-		v.binary = m.Binary
 		v.buildArgs = m.BuildArgs
 		v.dockerfile = m.Dockerfile
 		v.args = m.Args
@@ -110,7 +112,6 @@ type buildJob struct {
 	group      string
 	name       string
 	version    string
-	binary     string
 	buildArgs  map[string]string
 	dockerfile string
 	args       []string
@@ -123,20 +124,11 @@ func (j buildJob) key() string {
 }
 
 // cached reports whether the plugin version has already been built.
+// The canonical artifact is always <outputDir>/plugin.
 func (j buildJob) cached() bool {
-	for _, p := range []string{
-		filepath.Join(j.outputDir, pluginBinaryName),
-		filepath.Join(j.outputDir, j.binary),
-	} {
-		if _, err := os.Stat(p); err == nil {
-			return true
-		}
-	}
-	if info, err := os.Stat(filepath.Join(j.outputDir, "app")); err == nil && info.IsDir() {
-		return true
-	}
+	_, err := os.Stat(filepath.Join(j.outputDir, pluginBinaryName))
 
-	return false
+	return err == nil
 }
 
 func runPluginsBuild(
@@ -305,7 +297,6 @@ func jobsFromConfig(
 			group:      group,
 			name:       name,
 			version:    v.version,
-			binary:     overrideString(cfg.Binary, v.binary),
 			buildArgs:  mergeBuildArgs(cfg.BuildArgs, v.buildArgs),
 			dockerfile: overrideString(cfg.Dockerfile, v.dockerfile),
 			args:       mergeArgs(cfg.Args, v.args),
@@ -448,7 +439,6 @@ func runDockerBuild(ctx context.Context, job buildJob) ([]byte, error) {
 	args := []string{
 		"build", "--progress=plain",
 		"--build-arg", "VERSION=" + job.version,
-		"--build-arg", "BINARY_NAME=" + job.binary,
 	}
 
 	keys := make([]string, 0, len(job.buildArgs))
@@ -495,29 +485,16 @@ func dockerfilePath(job buildJob) string {
 
 // normalizeOutput ensures the built artifact is available as <outputDir>/plugin
 // and returns a short human-readable description of the result.
+// Dockerfiles must emit the entrypoint at /plugin (sidecar files are optional).
 func normalizeOutput(job buildJob) (string, error) {
 	pluginFile := filepath.Join(job.outputDir, pluginBinaryName)
-	if info, err := os.Stat(pluginFile); err == nil {
-		_ = os.Chmod(pluginFile, binPermissions)
-
-		return formatSize(info.Size()), nil
+	info, err := os.Stat(pluginFile)
+	if err != nil {
+		return "", ErrNoOutputBinary
 	}
+	_ = os.Chmod(pluginFile, binPermissions)
 
-	binaryFile := filepath.Join(job.outputDir, job.binary)
-	if info, err := os.Stat(binaryFile); err == nil {
-		if err := os.Rename(binaryFile, pluginFile); err != nil {
-			return "", fmt.Errorf("rename binary to plugin: %w", err)
-		}
-		_ = os.Chmod(pluginFile, binPermissions)
-
-		return formatSize(info.Size()), nil
-	}
-
-	if info, err := os.Stat(filepath.Join(job.outputDir, "app")); err == nil && info.IsDir() {
-		return "app dir", nil
-	}
-
-	return "", ErrNoOutputBinary
+	return formatSize(info.Size()), nil
 }
 
 func writeBuildLog(job buildJob, output []byte, cause error) {

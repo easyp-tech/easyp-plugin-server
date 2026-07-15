@@ -3,7 +3,8 @@ FROM debian:trixie-20260505@sha256:e2d08da6f42ef4b09b165d55528a12727aeed8240dc9e
 ARG VERSION
 
 ARG TARGETARCH
-ARG BAZEL_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
+ARG BAZEL_STARTUP_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
+ARG BAZEL_BUILD_OPTS="--spawn_strategy=local --repo_contents_cache=/tmp/bazel-repo-cache"
 
 RUN apt-get update \
  && apt-get install -y curl git cmake build-essential autoconf clang libc++-dev libtool pkg-config unzip zip
@@ -13,10 +14,6 @@ RUN curl -fsSL -o /usr/local/bin/bazelisk https://github.com/bazelbuild/bazelisk
  && chown nobody:nogroup /build \
  && usermod --home /build nobody
 
-COPY --chmod=0755 <<"EOF" /plugin
-#!/bin/sh
-exec /protoc-gen-python "$@"
-EOF
 USER nobody
 WORKDIR /build
 RUN curl -fsSL -o protoc.tar.gz https://github.com/protocolbuffers/protobuf/releases/download/${VERSION}/protobuf-python-${VERSION#v}.tar.gz \
@@ -24,9 +21,9 @@ RUN curl -fsSL -o protoc.tar.gz https://github.com/protocolbuffers/protobuf/rele
  || curl -fsSL -o protoc.tar.gz https://github.com/protocolbuffers/protobuf/releases/download/${VERSION}/protobuf-all-${VERSION#v}.tar.gz \
  && tar --strip-components=1 -zxf protoc.tar.gz \
  && rm protoc.tar.gz
-RUN bazelisk ${BAZEL_OPTS} build '//:protoc_lib'
+RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} '//:protoc_lib'
 COPY --link BUILD python.cc plugins/
-RUN bazelisk ${BAZEL_OPTS} build '//plugins:protoc-gen-python.stripped'
+RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} '//plugins:protoc-gen-python.stripped'
 
 FROM gcr.io/distroless/cc-debian13:latest@sha256:8b5d1db6d2253036a53cb8362d3e3fa82a7caf84c247772c46a023166c64e977 AS base
 ARG VERSION
@@ -34,6 +31,6 @@ ARG VERSION
 FROM scratch
 ARG VERSION
 COPY --from=base --link / /
-COPY --from=build --link --chmod=0755 /build/bazel-bin/plugins/protoc-gen-python .
+COPY --from=build --link --chmod=0755 /build/bazel-bin/plugins/protoc-gen-python /plugin
 USER nobody
 ENTRYPOINT ["/plugin"]

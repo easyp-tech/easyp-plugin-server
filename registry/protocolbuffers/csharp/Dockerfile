@@ -3,7 +3,8 @@ FROM debian:trixie-20260505@sha256:e2d08da6f42ef4b09b165d55528a12727aeed8240dc9e
 ARG VERSION
 
 ARG TARGETARCH
-ARG BAZEL_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
+ARG BAZEL_STARTUP_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
+ARG BAZEL_BUILD_OPTS="--spawn_strategy=local --repo_contents_cache=/tmp/bazel-repo-cache"
 
 RUN apt-get update \
  && apt-get install -y curl git cmake build-essential autoconf clang libc++-dev libtool pkg-config unzip zip
@@ -20,15 +21,15 @@ RUN curl -fsSL -o protoc.tar.gz https://github.com/protocolbuffers/protobuf/rele
  || curl -fsSL -o protoc.tar.gz https://github.com/protocolbuffers/protobuf/releases/download/${VERSION}/protobuf-all-${VERSION#v}.tar.gz \
  && tar --strip-components=1 -zxf protoc.tar.gz \
  && rm protoc.tar.gz
-RUN bazelisk ${BAZEL_OPTS} build '//:protoc_lib'
+RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} '//:protoc_lib'
 COPY --link BUILD csharp.cc plugins/
-RUN bazelisk ${BAZEL_OPTS} build '//plugins:protoc-gen-csharp.stripped'
+RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} '//plugins:protoc-gen-csharp.stripped'
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0.421-bookworm-slim@sha256:ebecce75fb42c4c14db108f88054d20a93b0b9e6dfbacad56c8f744c342cf9ef AS dotnetrestore
 ARG VERSION
 WORKDIR /build
 COPY --link ./build.csproj /build/build.csproj
-RUN mkdir /nuget && dotnet restore --packages /nuget
+RUN mkdir /nuget && dotnet restore --packages /nuget /p:Version=${VERSION#v} /p:AssemblyVersion=${VERSION#v} /p:FileVersion=${VERSION#v} /p:PackageVersion=${VERSION#v}
 
 FROM gcr.io/distroless/cc-debian13:latest@sha256:8b5d1db6d2253036a53cb8362d3e3fa82a7caf84c247772c46a023166c64e977 AS base
 ARG VERSION
@@ -37,6 +38,6 @@ FROM scratch
 ARG VERSION
 COPY --from=base --link / /
 COPY --link --from=dotnetrestore /nuget /nuget
-COPY --from=build --link --chmod=0755 /build/bazel-bin/plugins/protoc-gen-csharp .
+COPY --from=build --link --chmod=0755 /build/bazel-bin/plugins/protoc-gen-csharp /plugin
 USER nobody
 ENTRYPOINT ["/plugin"]

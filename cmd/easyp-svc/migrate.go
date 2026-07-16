@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -12,7 +13,9 @@ import (
 	"golang.org/x/term"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"gopkg.in/yaml.v3"
 
+	"github.com/easyp-tech/service/internal/config"
 	"github.com/easyp-tech/service/sdk"
 )
 
@@ -21,6 +24,8 @@ const (
 	percentMultiplier    = 100
 	spinnerSleepDuration = 50 * time.Millisecond
 	separatorLength      = 40
+	// defaultPluginsPrefix is used when neither --cfg nor an explicit --plugins-prefix is set.
+	defaultPluginsPrefix = "/plugins"
 )
 
 var (
@@ -32,13 +37,43 @@ var (
 	ErrPathOutsideBase = errors.New("path outside base directory")
 	// ErrInvalidStructure is returned when the path structure is invalid.
 	ErrInvalidStructure = errors.New("does not match expected structure")
+	// ErrEmptyPluginsDir is returned when config has an empty registry.plugins_dir.
+	ErrEmptyPluginsDir = errors.New("registry.plugins_dir is empty in config")
 )
 
 type pluginInfo struct {
 	group   string
 	name    string
 	version string
-	path    string
+}
+
+// resolvePluginsPrefix picks the server-side plugins root for CreatePlugin command paths.
+// Priority: explicit --plugins-prefix > registry.plugins_dir from --cfg > defaultPluginsPrefix.
+func resolvePluginsPrefix(cfgPath string, prefixFlag string, prefixExplicit bool) (string, error) {
+	if prefixExplicit {
+		return filepath.Clean(prefixFlag), nil
+	}
+
+	if cfgPath == "" {
+		return defaultPluginsPrefix, nil
+	}
+
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return "", fmt.Errorf("os.ReadFile: %w", err)
+	}
+
+	var cfg config.Config
+	err = yaml.Unmarshal(data, &cfg)
+	if err != nil {
+		return "", fmt.Errorf("yaml.Unmarshal: %w", err)
+	}
+
+	if cfg.Registry.PluginsDir == "" {
+		return "", fmt.Errorf("%w: %s", ErrEmptyPluginsDir, cfgPath)
+	}
+
+	return filepath.Clean(cfg.Registry.PluginsDir), nil
 }
 
 func getSpinners() []string {
@@ -172,7 +207,6 @@ func scanPlugins(scanPath string, filter string) ([]pluginInfo, error) {
 					group:   group,
 					name:    name,
 					version: version,
-					path:    path,
 				})
 			}
 		}
@@ -187,7 +221,8 @@ func scanPlugins(scanPath string, filter string) ([]pluginInfo, error) {
 }
 
 func registerSinglePlugin(ctx context.Context, client *sdk.Client, plg pluginInfo, pluginsPrefix string) (bool, error) {
-	targetPath := pluginsPrefix + "/" + plg.group + "/" + plg.name + "/" + plg.version + "/plugin"
+	// path.Join keeps forward slashes for server-side command paths (Linux container/local).
+	targetPath := path.Join(filepath.ToSlash(pluginsPrefix), plg.group, plg.name, plg.version, "plugin")
 	configMap := map[string]any{
 		"command": []any{targetPath},
 	}

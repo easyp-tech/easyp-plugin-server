@@ -89,13 +89,18 @@ func getPluginsCommand() *cli.Command {
 			getPluginsBuildCommand(),
 			{
 				Name:      "migrate",
-				Usage:     "Run migrations for plugins",
+				Usage:     "Register built plugin binaries with a running service via CreatePlugin",
 				ArgsUsage: "<path>",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:  "addr",
 						Usage: "gRPC server address",
 						Value: "localhost:8080",
+					},
+					&cli.StringFlag{
+						Name:  "cfg",
+						Usage: "path to service config YAML; registry.plugins_dir is used as --plugins-prefix when that flag is not set",
+						Value: "",
 					},
 					&cli.StringFlag{
 						Name:  "filter",
@@ -109,8 +114,8 @@ func getPluginsCommand() *cli.Command {
 					},
 					&cli.StringFlag{
 						Name:  "plugins-prefix",
-						Usage: "prefix directory for plugins on the server",
-						Value: "/plugins",
+						Usage: "prefix directory for plugins on the server (overrides registry.plugins_dir from --cfg)",
+						Value: defaultPluginsPrefix,
 					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -118,13 +123,24 @@ func getPluginsCommand() *cli.Command {
 					if len(args) < 1 {
 						return ErrMissingPath
 					}
-					path := args[0]
-					addr := cmd.String("addr")
-					filter := cmd.String("filter")
-					nonInteractive := cmd.Bool("non-interactive")
-					pluginsPrefix := cmd.String("plugins-prefix")
 
-					return runPluginsMigrate(ctx, path, addr, filter, pluginsPrefix, nonInteractive)
+					pluginsPrefix, err := resolvePluginsPrefix(
+						cmd.String("cfg"),
+						cmd.String("plugins-prefix"),
+						cmd.IsSet("plugins-prefix"),
+					)
+					if err != nil {
+						return err
+					}
+
+					return runPluginsMigrate(
+						ctx,
+						args[0],
+						cmd.String("addr"),
+						cmd.String("filter"),
+						pluginsPrefix,
+						cmd.Bool("non-interactive"),
+					)
 				},
 			},
 		},

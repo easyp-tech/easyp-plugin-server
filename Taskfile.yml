@@ -39,7 +39,7 @@ tasks:
     desc: "Register all built plugins via gRPC CreatePlugin API"
     dir: "{{.USER_WORKING_DIR}}"
     cmds:
-      - "go run ./cmd/easyp-svc/ plugins migrate plugins/ --addr localhost:8080 --plugins-prefix /plugins"
+      - "go run ./cmd/easyp-svc/ plugins migrate plugins/ --addr localhost:8080 --cfg config.yml"
 
 
   run:
@@ -75,7 +75,7 @@ tasks:
             sleep 1
           done
           echo "Service is ready! Running plugin migration..."
-          go run ./cmd/easyp-svc/ plugins migrate plugins/ --addr localhost:8080 --plugins-prefix ./plugins
+          go run ./cmd/easyp-svc/ plugins migrate plugins/ --addr localhost:8080 --cfg config.local.yml
         ) &
         go run ./cmd/easyp-svc/ service start --cfg config.local.yml --log_level debug
 

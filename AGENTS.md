@@ -105,7 +105,7 @@ go test ./...            # Standard tests
 - **Plugins are local binaries** — service executes plugins from `plugins/` directory, not Docker containers at runtime
 - **Entrypoint is always named `plugin`** — build output and migrate scan require `plugins/{group}/{name}/{version}/plugin`; Dockerfiles must `COPY` the entrypoint to `/plugin` (sidecars optional)
 - **`easyp-svc plugins build <registry-path>`** — uses Docker multi-stage builds to extract image filesystems to the output directory (`plugins/` by default); supports `--filter`, `--parallel`, `--force`, `--dry-run`
-- **`easyp-svc plugins migrate <path>`** — registers built plugins via gRPC `CreatePlugin` API against a running service
+- **`easyp-svc plugins migrate <path>`** — registers built plugins via gRPC `CreatePlugin`; prefer `--cfg config.yml` so `registry.plugins_dir` becomes the server command prefix (`--plugins-prefix` overrides)
 - **Port 5432 conflict** — if postgres already runs locally, minimal stack uses port 5433 (`EASYP_POSTGRES_PORT`)
 - **Plugin binaries must exist** — run `task build-plugins` before the service can generate code
 - **License:** `MockLicenseClient` always returns Enterprise (production placeholder; TODO: replace with real gRPC client when license server is ready)

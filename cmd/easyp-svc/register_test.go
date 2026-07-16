@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -66,6 +67,59 @@ func TestResolvePluginsPrefix(t *testing.T) {
 			t.Fatal("expected error for missing cfg")
 		}
 	})
+}
+
+func TestPluginCommandPath(t *testing.T) {
+	t.Parallel()
+
+	plg := pluginInfo{group: "grpc", name: "go", version: "v1.5.1"}
+	got := pluginCommandPath("./plugins", plg)
+	want := "plugins/grpc/go/v1.5.1/plugin"
+	if got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+
+	got = pluginCommandPath("/plugins", plg)
+	want = "/plugins/grpc/go/v1.5.1/plugin"
+	if got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+}
+
+func TestFailOnError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		failOnError bool
+		failed      int
+		wantErr     bool
+	}{
+		{name: "fail on errors", failOnError: true, failed: 2, wantErr: true},
+		{name: "no failures", failOnError: true, failed: 0, wantErr: false},
+		{name: "ignore failures", failOnError: false, failed: 3, wantErr: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := registrationBatchError(tc.failOnError, tc.failed)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				if !errors.Is(err, ErrRegisterFailed) {
+					t.Fatalf("expected ErrRegisterFailed, got %v", err)
+				}
+
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
 }
 
 func writeTempConfig(t *testing.T, pluginsDir string) string {

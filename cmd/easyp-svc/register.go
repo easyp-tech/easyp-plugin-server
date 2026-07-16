@@ -8,7 +8,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"golang.org/x/term"
 	"google.golang.org/grpc/codes"
@@ -22,10 +21,10 @@ import (
 const (
 	progressBarWidth     = 20
 	percentMultiplier    = 100
-	spinnerSleepDuration = 50 * time.Millisecond
 	separatorLength      = 40
-	// defaultPluginsPrefix is used when neither --cfg nor an explicit --plugins-prefix is set.
 	defaultPluginsPrefix = "/plugins"
+	// defaultPluginsScanPath is used when no path argument is given.
+	defaultPluginsScanPath = "plugins"
 )
 
 var (
@@ -39,6 +38,8 @@ var (
 	ErrInvalidStructure = errors.New("does not match expected structure")
 	// ErrEmptyPluginsDir is returned when config has an empty registry.plugins_dir.
 	ErrEmptyPluginsDir = errors.New("registry.plugins_dir is empty in config")
+	// ErrRegisterFailed is returned when one or more plugins failed registration and fail-on-error is set.
+	ErrRegisterFailed = errors.New("plugin registration failed")
 )
 
 type pluginInfo struct {
@@ -76,11 +77,29 @@ func resolvePluginsPrefix(cfgPath string, prefixFlag string, prefixExplicit bool
 	return filepath.Clean(cfg.Registry.PluginsDir), nil
 }
 
+// pluginCommandPath builds the server-side command path for a plugin binary.
+func pluginCommandPath(pluginsPrefix string, plg pluginInfo) string {
+	return path.Join(filepath.ToSlash(pluginsPrefix), plg.group, plg.name, plg.version, "plugin")
+}
+
+func pluginDisplayName(plg pluginInfo) string {
+	return fmt.Sprintf("%s/%s:%s", plg.group, plg.name, plg.version)
+}
+
 func getSpinners() []string {
 	return []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 }
 
-func runPluginsMigrate(ctx context.Context, scanPath string, addr string, filter string, pluginsPrefix string, nonInteractive bool) error {
+func runPluginsRegister(
+	ctx context.Context,
+	scanPath string,
+	addr string,
+	filter string,
+	pluginsPrefix string,
+	nonInteractive bool,
+	dryRun bool,
+	failOnError bool,
+) error {
 	plugins, err := scanPlugins(scanPath, filter)
 	if err != nil {
 		return err
@@ -91,6 +110,10 @@ func runPluginsMigrate(ctx context.Context, scanPath string, addr string, filter
 		_, _ = fmt.Fprintln(os.Stdout, "No plugins found matching the criteria.")
 
 		return nil
+	}
+
+	if dryRun {
+		return runPluginsRegisterDryRun(plugins, pluginsPrefix)
 	}
 
 	client, err := sdk.NewClient(addr, sdk.WithInsecure())
@@ -106,30 +129,42 @@ func runPluginsMigrate(ctx context.Context, scanPath string, addr string, filter
 	spinIdx := 0
 
 	for idx, plg := range plugins {
-		pName := fmt.Sprintf("%s/%s:%s", plg.group, plg.name, plg.version)
+		if err := ctx.Err(); err != nil {
+			return interruptRegister(isInteractive, total, registered, skipped, failed, err)
+		}
+
+		pName := pluginDisplayName(plg)
 
 		if isInteractive {
 			pct := int(float64(idx) / float64(total) * percentMultiplier)
 			progressBar := renderProgressBar(pct, progressBarWidth)
-			_, _ = fmt.Fprintf(os.Stdout, "\r\033[K%s %s Регистрация %s... %d%% (%d/%d)", spinners[spinIdx], progressBar, pName, pct, idx, total)
+			_, _ = fmt.Fprintf(
+				os.Stdout,
+				"\r\033[K%s %s Registering %s... %d%% (%d/%d)",
+				spinners[spinIdx],
+				progressBar,
+				pName,
+				pct,
+				idx,
+				total,
+			)
 			spinIdx = (spinIdx + 1) % len(spinners)
 		} else {
 			_, _ = fmt.Fprintf(os.Stdout, "Registering %s...\n", pName)
 		}
 
 		isSkipped, errReg := registerSinglePlugin(ctx, client, plg, pluginsPrefix)
-		processMigrationResult(pName, errReg, isSkipped, isInteractive, &registered, &skipped, &failed)
-
-		if isInteractive {
-			time.Sleep(spinnerSleepDuration)
+		if errReg != nil && isContextAbort(errReg, ctx) {
+			return interruptRegister(isInteractive, total, registered, skipped, failed, contextAbortErr(errReg, ctx))
 		}
+		processRegistrationResult(pName, errReg, isSkipped, isInteractive, &registered, &skipped, &failed)
 	}
 
 	if isInteractive {
 		progressBar := renderProgressBar(percentMultiplier, progressBarWidth)
 		_, _ = fmt.Fprintf(
 			os.Stdout,
-			"\r\033[K%s %s Готово! 100%% (%d/%d)\n",
+			"\r\033[K%s %s Done! 100%% (%d/%d)\n",
 			"✓",
 			progressBar,
 			total,
@@ -137,22 +172,82 @@ func runPluginsMigrate(ctx context.Context, scanPath string, addr string, filter
 		)
 	}
 
-	printSummary(total, registered, skipped, failed)
+	printRegisterSummary(total, registered, skipped, failed)
+
+	return registrationBatchError(failOnError, failed)
+}
+
+// registrationBatchError returns ErrRegisterFailed when fail-on-error is set and any plugin failed.
+func registrationBatchError(failOnError bool, failed int) error {
+	if failOnError && failed > 0 {
+		return fmt.Errorf("%w: %d plugin(s) failed registration", ErrRegisterFailed, failed)
+	}
 
 	return nil
 }
 
-func printSummary(total, registered, skipped, failed int) {
-	_, _ = fmt.Fprintln(os.Stdout, "\nРезультаты миграции:")
+func runPluginsRegisterDryRun(plugins []pluginInfo, pluginsPrefix string) error {
+	_, _ = fmt.Fprintln(os.Stdout, "Dry-run: would register the following plugins")
 	_, _ = fmt.Fprintln(os.Stdout, strings.Repeat("-", separatorLength))
-	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Всего плагинов найдено", total)
-	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Успешно зарегистрировано", registered)
-	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Пропущено (уже создано)", skipped)
-	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Ошибка регистрации", failed)
+	for _, plg := range plugins {
+		cmdPath := pluginCommandPath(pluginsPrefix, plg)
+		_, _ = fmt.Fprintf(os.Stdout, "%-40s  command: %s\n", pluginDisplayName(plg), cmdPath)
+	}
+	_, _ = fmt.Fprintln(os.Stdout, strings.Repeat("-", separatorLength))
+	_, _ = fmt.Fprintf(os.Stdout, "Would register: %d plugin(s)\n", len(plugins))
+
+	return nil
+}
+
+func isContextAbort(err error, ctx context.Context) bool {
+	if ctx.Err() != nil {
+		return true
+	}
+
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+func contextAbortErr(err error, ctx context.Context) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return err
+}
+
+func interruptRegister(
+	isInteractive bool,
+	total, registered, skipped, failed int,
+	err error,
+) error {
+	if isInteractive {
+		_, _ = fmt.Fprintln(os.Stdout)
+	}
+	_, _ = fmt.Fprintf(os.Stdout, "Interrupted (%v)\n", err)
+	printRegisterSummary(total, registered, skipped, failed)
+
+	return fmt.Errorf("plugins register interrupted: %w", err)
+}
+
+func printRegisterSummary(total, registered, skipped, failed int) {
+	_, _ = fmt.Fprintln(os.Stdout, "\nRegistration results:")
+	_, _ = fmt.Fprintln(os.Stdout, strings.Repeat("-", separatorLength))
+	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Plugins found", total)
+	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Registered", registered)
+	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Skipped (already exists)", skipped)
+	_, _ = fmt.Fprintf(os.Stdout, "%-25s : %d\n", "Failed", failed)
 	_, _ = fmt.Fprintln(os.Stdout, strings.Repeat("-", separatorLength))
 }
 
-func processMigrationResult(pName string, errReg error, isSkipped bool, isInteractive bool, registered *int, skipped *int, failed *int) {
+func processRegistrationResult(
+	pName string,
+	errReg error,
+	isSkipped bool,
+	isInteractive bool,
+	registered *int,
+	skipped *int,
+	failed *int,
+) {
 	if errReg != nil {
 		*failed++
 		if !isInteractive {
@@ -221,17 +316,23 @@ func scanPlugins(scanPath string, filter string) ([]pluginInfo, error) {
 }
 
 func registerSinglePlugin(ctx context.Context, client *sdk.Client, plg pluginInfo, pluginsPrefix string) (bool, error) {
-	// path.Join keeps forward slashes for server-side command paths (Linux container/local).
-	targetPath := path.Join(filepath.ToSlash(pluginsPrefix), plg.group, plg.name, plg.version, "plugin")
+	targetPath := pluginCommandPath(pluginsPrefix, plg)
 	configMap := map[string]any{
 		"command": []any{targetPath},
 	}
 
 	_, registerErr := client.CreatePlugin(ctx, plg.group, plg.name, plg.version, configMap, nil)
 	if registerErr != nil {
+		if errors.Is(registerErr, context.Canceled) || errors.Is(registerErr, context.DeadlineExceeded) {
+			return false, registerErr
+		}
+
 		st, ok := status.FromError(registerErr)
 		if ok && st.Code() == codes.AlreadyExists {
 			return true, nil
+		}
+		if ok && (st.Code() == codes.Canceled || st.Code() == codes.DeadlineExceeded) {
+			return false, registerErr
 		}
 
 		return false, fmt.Errorf("sdk.Client.CreatePlugin: %w", registerErr)

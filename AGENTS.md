@@ -78,7 +78,7 @@ task run                 # Full cycle: build-plugins → down → up → registe
 task setup               # Same as run but without tailing logs
 task run-local           # go run from source against minimal stack
 task build-plugins       # Build all plugin binaries from registry/ Dockerfiles (easyp-svc plugins build)
-task register-plugins    # Register all built plugins via gRPC CreatePlugin API (easyp-svc plugins migrate)
+task register-plugins    # Register all built plugins via gRPC CreatePlugin API (easyp-svc plugins register)
 task generate            # easyp generate against running service (easyp.yaml)
 task generate-local      # easyp generate with local config (easyp.local.yaml)
 go test ./...            # Standard tests
@@ -95,7 +95,7 @@ go test ./...            # Standard tests
 - `api.ErrorToStatus()` maps domain errors → gRPC status codes
 - **Plugin name format:** `{group}/{name}:{version}` — validated by `^[a-z][a-z0-9-]*/[a-z][a-z0-9-]*:(v\d+\.\d+\.\d+|latest)$`
 - **Plugin execution:** local binary execution from `plugins/` directory (built by `easyp-svc plugins build`)
-- **Plugin registration:** via gRPC `CreatePlugin` API (automated by `easyp-svc plugins migrate`)
+- **Plugin registration:** via gRPC `CreatePlugin` API (automated by `easyp-svc plugins register`)
 - **Testing:** standard `go test`, no external framework; mocks defined in test files
 - **Config priority:** CLI flags > env vars > YAML file. See [docs/configuration.md](docs/configuration.md)
 - **Comments:** English only; every exported symbol must have a godoc comment starting with its name; no inline comments on `if`/`for`/`return` lines unless genuinely non-obvious. See [.spec/CODE_STYLE.md](.spec/CODE_STYLE.md) §11.
@@ -105,7 +105,7 @@ go test ./...            # Standard tests
 - **Plugins are local binaries** — service executes plugins from `plugins/` directory, not Docker containers at runtime
 - **Entrypoint is always named `plugin`** — build output and migrate scan require `plugins/{group}/{name}/{version}/plugin`; Dockerfiles must `COPY` the entrypoint to `/plugin` (sidecars optional)
 - **`easyp-svc plugins build <registry-path>`** — uses Docker multi-stage builds to extract image filesystems to the output directory (`plugins/` by default); supports `--filter`, `--parallel`, `--force`, `--dry-run`
-- **`easyp-svc plugins migrate <path>`** — registers built plugins via gRPC `CreatePlugin`; prefer `--cfg config.yml` so `registry.plugins_dir` becomes the server command prefix (`--plugins-prefix` overrides)
+- **`easyp-svc plugins register [path]`** — registers built plugins via gRPC `CreatePlugin` (default path `plugins`); use `--cfg` for `registry.plugins_dir` as command prefix, `--dry-run`, `--fail-on-error` (default true)
 - **Port 5432 conflict** — if postgres already runs locally, minimal stack uses port 5433 (`EASYP_POSTGRES_PORT`)
 - **Plugin binaries must exist** — run `task build-plugins` before the service can generate code
 - **License:** `MockLicenseClient` always returns Enterprise (production placeholder; TODO: replace with real gRPC client when license server is ready)

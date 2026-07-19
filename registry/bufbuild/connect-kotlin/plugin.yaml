@@ -6,8 +6,8 @@ versions:
 - v0.1.5
 - v0.1.10
 - version: v0.1.4
-  skip: true
+  dockerfile: Dockerfile.github
 - version: v0.1.2
-  skip: true
+  dockerfile: Dockerfile.source
 - version: v0.1.1
-  skip: true
+  dockerfile: Dockerfile.source

@@ -1,5 +1,6 @@
 build_args:
   PIP_PACKAGE: protoc-gen-connect-python
+  BINARY_NAME: protoc-gen-connect-python
 versions:
 - v0.9.0
 - v0.8.1
@@ -8,7 +9,9 @@ versions:
 - v0.7.0
 - v0.6.0
 - v0.5.0
-- version: v0.4.2
-  skip: true
+# v0.4.2 never shipped as a protoc plugin (first public release is 0.5.0);
+# removed rather than skip — there is no artifact to build.
 - version: v0.10.0
-  skip: true
+  build_args:
+    PIP_PACKAGE: protoc-gen-connectrpc
+    BINARY_NAME: protoc-gen-connectrpc

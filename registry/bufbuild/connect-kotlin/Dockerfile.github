@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.22
+# Download protoc-gen-connect-kotlin.jar from GitHub Releases (used when Maven
+# Central has no artifact, e.g. v0.1.4).
+FROM debian:bullseye-20230814 AS build
+ARG VERSION
+RUN apt-get update \
+ && apt-get install -y curl \
+ && mkdir -p /app \
+ && curl -fsSL -o /app/protoc-gen-connect-kotlin.jar \
+      "https://github.com/connectrpc/connect-kotlin/releases/download/${VERSION}/protoc-gen-connect-kotlin.jar"
+
+FROM maven:3.9.11-eclipse-temurin-21 AS maven-deps
+ARG VERSION
+COPY pom.xml /tmp/pom.xml
+RUN cd /tmp && mvn -f pom.xml dependency:go-offline
+
+FROM gcr.io/distroless/java17-debian11
+ARG VERSION
+WORKDIR /app
+COPY --from=build /app/protoc-gen-connect-kotlin.jar /app
+COPY --from=maven-deps /root/.m2/repository /maven-repository
+COPY --chmod=0755 <<"EOF" /plugin
+#!/bin/sh
+exec /app/protoc-gen-connect-kotlin.jar "$@"
+EOF

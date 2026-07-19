@@ -3,16 +3,16 @@ FROM python:3.13-alpine AS build
 
 ARG VERSION
 ARG PIP_PACKAGE
+ARG BINARY_NAME=protoc-gen-connect-python
 
 WORKDIR /app
-RUN python -m venv venv && \
-    ./venv/bin/pip install --no-cache-dir "${PIP_PACKAGE}==${VERSION#v}"
+RUN python -m venv venv \
+ && ./venv/bin/pip install --no-cache-dir "${PIP_PACKAGE}==${VERSION#v}" \
+ && test -x "./venv/bin/${BINARY_NAME}" \
+ && cp "./venv/bin/${BINARY_NAME}" /plugin \
+ && chmod 0755 /plugin
 
 FROM scratch
-COPY --from=build /app /app
-COPY --chmod=0755 <<"EOF" /plugin
-#!/bin/sh
-exec /app/venv/bin/protoc-gen-connect-python "$@"
-EOF
+COPY --from=build /plugin /plugin
 USER nobody
 ENTRYPOINT ["/plugin"]

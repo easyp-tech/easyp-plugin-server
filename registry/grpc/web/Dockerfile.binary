@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1.18
+# Prebuilt binary path for releases that ship platform binaries but no source tarball
+# (grpc-web v1.4.x / v1.5.x).
+FROM debian:bookworm-20250908 AS build
+ARG VERSION
+ARG TARGETARCH
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# Release assets use aarch64/x86_64, not docker's arm64/amd64.
+RUN case "${TARGETARCH}" in \
+      amd64) ARCH=x86_64 ;; \
+      arm64) ARCH=aarch64 ;; \
+      *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL -o /plugin \
+      "https://github.com/grpc/grpc-web/releases/download/${VERSION#v}/protoc-gen-grpc-web-${VERSION#v}-linux-${ARCH}" \
+ && chmod 0755 /plugin
+
+FROM scratch
+ARG VERSION
+COPY --from=build --link --chmod=0755 /plugin /plugin
+USER nobody
+ENTRYPOINT ["/plugin"]

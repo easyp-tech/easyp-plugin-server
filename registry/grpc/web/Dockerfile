@@ -4,7 +4,7 @@ ARG VERSION
 
 ARG TARGETARCH
 ARG BAZEL_STARTUP_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
-ARG BAZEL_BUILD_OPTS="--spawn_strategy=local --repo_contents_cache=/tmp/bazel-repo-cache"
+ARG BAZEL_BUILD_OPTS="--spawn_strategy=local"
 ENV USE_BAZEL_VERSION=7.6.1
 
 RUN apt-get update \

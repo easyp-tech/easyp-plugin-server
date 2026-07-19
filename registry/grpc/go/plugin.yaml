@@ -1,13 +1,8 @@
 versions:
 - v1.6.2
-- version: v1.6.1
-  skip: true
-- version: v1.6.0
-  skip: true
+- v1.6.1
+- v1.6.0
 - v1.5.1
-- version: v1.4.0
-  skip: true
-- version: v1.3.0
-  skip: true
-- version: v1.2.0
-  skip: true
+- v1.4.0
+- v1.3.0
+- v1.2.0

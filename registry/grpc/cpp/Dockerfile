@@ -4,14 +4,15 @@ ARG VERSION
 
 ARG TARGETARCH
 ARG BAZEL_STARTUP_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
-ARG BAZEL_BUILD_OPTS="--spawn_strategy=local --features=-layering_check --host_features=-layering_check"
+ARG BAZEL_JOBS=4
+ARG BAZEL_BUILD_OPTS="--spawn_strategy=local --jobs=${BAZEL_JOBS} --features=-layering_check --host_features=-layering_check --disk_cache=/build/.cache/bazel-disk --repository_cache=/build/.cache/bazel-repo"
 
 RUN apt-get update \
  && apt-get install -y curl git cmake build-essential autoconf clang libc++-dev libtool pkg-config unzip zip
 RUN curl -fsSL -o /usr/local/bin/bazelisk https://github.com/bazelbuild/bazelisk/releases/download/v1.26.0/bazelisk-linux-${TARGETARCH} \
  && chmod +x /usr/local/bin/bazelisk \
- && mkdir /build \
- && chown nobody:nogroup /build \
+ && mkdir -p /build/.cache \
+ && chown -R nobody:nogroup /build \
  && usermod --home /build nobody
 
 USER nobody
@@ -19,7 +20,10 @@ WORKDIR /build
 
 RUN git clone --depth 1 --branch ${VERSION} https://github.com/grpc/grpc
 WORKDIR /build/grpc
-RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} //src/compiler:grpc_plugin_support \
+RUN --mount=type=cache,id=bazel-grpc-disk,target=/build/.cache/bazel-disk,uid=65534,gid=65534,sharing=shared \
+    --mount=type=cache,id=bazel-grpc-repo,target=/build/.cache/bazel-repo,uid=65534,gid=65534,sharing=shared \
+    --mount=type=cache,id=bazelisk-grpc,target=/build/.cache/bazelisk,uid=65534,gid=65534,sharing=shared \
+    bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} //src/compiler:grpc_plugin_support \
  && bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} //src/compiler:grpc_cpp_plugin
 RUN cp /build/grpc/bazel-bin/src/compiler/grpc_cpp_plugin_binary /build/grpc_cpp_plugin_binary 2>/dev/null \
  || cp /build/grpc/bazel-bin/src/compiler/grpc_cpp_plugin /build/grpc_cpp_plugin_binary

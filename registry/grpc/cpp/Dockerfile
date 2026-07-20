@@ -4,7 +4,7 @@ ARG VERSION
 
 ARG TARGETARCH
 ARG BAZEL_STARTUP_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
-ARG BAZEL_BUILD_OPTS="--spawn_strategy=local"
+ARG BAZEL_BUILD_OPTS="--spawn_strategy=local --features=-layering_check --host_features=-layering_check"
 
 RUN apt-get update \
  && apt-get install -y curl git cmake build-essential autoconf clang libc++-dev libtool pkg-config unzip zip
@@ -19,8 +19,8 @@ WORKDIR /build
 
 RUN git clone --depth 1 --branch ${VERSION} https://github.com/grpc/grpc
 WORKDIR /build/grpc
-RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} //src/compiler:grpc_plugin_support
-RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} //src/compiler:grpc_cpp_plugin
+RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} //src/compiler:grpc_plugin_support \
+ && bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} //src/compiler:grpc_cpp_plugin
 RUN cp /build/grpc/bazel-bin/src/compiler/grpc_cpp_plugin_binary /build/grpc_cpp_plugin_binary 2>/dev/null \
  || cp /build/grpc/bazel-bin/src/compiler/grpc_cpp_plugin /build/grpc_cpp_plugin_binary
 

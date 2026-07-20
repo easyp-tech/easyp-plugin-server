@@ -4,7 +4,7 @@ ARG VERSION
 
 ARG TARGETARCH
 ARG BAZEL_STARTUP_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
-ARG BAZEL_BUILD_OPTS="--spawn_strategy=local"
+ARG BAZEL_BUILD_OPTS="--spawn_strategy=local --features=-layering_check --host_features=-layering_check"
 ENV USE_BAZEL_VERSION=7.6.1
 
 RUN apt-get update \

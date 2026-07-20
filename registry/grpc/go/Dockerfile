@@ -5,11 +5,6 @@ ARG TARGETOS TARGETARCH
 
 WORKDIR /tmp
 RUN git clone --depth 1 --branch cmd/protoc-gen-go-grpc/${VERSION} https://github.com/grpc/grpc-go.git
-WORKDIR /tmp/grpc-go
-# Inject separate_package support without version-locked patches (grpc-go layout
-# differs across v1.2–v1.6; a single git apply does not cover all releases).
-COPY apply_separate_package.go /tmp/apply_separate_package.go
-RUN go run /tmp/apply_separate_package.go
 WORKDIR /tmp/grpc-go/cmd/protoc-gen-go-grpc
 RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \

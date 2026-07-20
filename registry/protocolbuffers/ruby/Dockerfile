@@ -4,14 +4,15 @@ ARG VERSION
 
 ARG TARGETARCH
 ARG BAZEL_STARTUP_OPTS="--host_jvm_args=-Djava.net.preferIPv4Stack=true"
-ARG BAZEL_BUILD_OPTS="--spawn_strategy=local --repo_contents_cache=/tmp/bazel-repo-cache"
+ARG BAZEL_JOBS=4
+ARG BAZEL_BUILD_OPTS="--spawn_strategy=local --jobs=${BAZEL_JOBS} --repo_contents_cache=/tmp/bazel-repo-cache --disk_cache=/build/.cache/bazel-disk --repository_cache=/build/.cache/bazel-repo"
 
 RUN apt-get update \
  && apt-get install -y curl git cmake build-essential autoconf clang libc++-dev libtool pkg-config unzip zip
 RUN curl -fsSL -o /usr/local/bin/bazelisk https://github.com/bazelbuild/bazelisk/releases/download/v1.28.1/bazelisk-linux-${TARGETARCH} \
  && chmod +x /usr/local/bin/bazelisk \
- && mkdir /build \
- && chown nobody:nogroup /build \
+ && mkdir -p /build/.cache \
+ && chown -R nobody:nogroup /build \
  && usermod --home /build nobody
 
 USER nobody
@@ -21,9 +22,15 @@ RUN curl -fsSL -o protoc.tar.gz https://github.com/protocolbuffers/protobuf/rele
  || curl -fsSL -o protoc.tar.gz https://github.com/protocolbuffers/protobuf/releases/download/${VERSION}/protobuf-all-${VERSION#v}.tar.gz \
  && tar --strip-components=1 -zxf protoc.tar.gz \
  && rm protoc.tar.gz
-RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} '//:protoc_lib'
+RUN --mount=type=cache,id=bazel-protoc-disk,target=/build/.cache/bazel-disk,uid=65534,gid=65534,sharing=shared \
+    --mount=type=cache,id=bazel-protoc-repo,target=/build/.cache/bazel-repo,uid=65534,gid=65534,sharing=shared \
+    --mount=type=cache,id=bazelisk-protoc,target=/build/.cache/bazelisk,uid=65534,gid=65534,sharing=shared \
+    bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} '//:protoc_lib'
 COPY --link BUILD ruby.cc plugins/
-RUN bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} '//plugins:protoc-gen-ruby.stripped'
+RUN --mount=type=cache,id=bazel-protoc-disk,target=/build/.cache/bazel-disk,uid=65534,gid=65534,sharing=shared \
+    --mount=type=cache,id=bazel-protoc-repo,target=/build/.cache/bazel-repo,uid=65534,gid=65534,sharing=shared \
+    --mount=type=cache,id=bazelisk-protoc,target=/build/.cache/bazelisk,uid=65534,gid=65534,sharing=shared \
+    bazelisk ${BAZEL_STARTUP_OPTS} build ${BAZEL_BUILD_OPTS} '//plugins:protoc-gen-ruby.stripped'
 
 FROM gcr.io/distroless/cc-debian13:latest@sha256:8b5d1db6d2253036a53cb8362d3e3fa82a7caf84c247772c46a023166c64e977 AS base
 ARG VERSION
